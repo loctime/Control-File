@@ -14,7 +14,7 @@ El build automático falló porque no tienes Android SDK instalado localmente.
 
 ### **Opción 2: Instalar Android SDK**
 ```bash
-# Instalar Android Studio completo
+# Instalar Android Studio completo.
 # Descargar desde: https://developer.android.com/studio
 
 # O instalar solo SDK via command line:
