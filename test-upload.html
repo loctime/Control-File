@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Upload</title>
+</head>
+<body>
+    <h1>Test de Subida de Archivos</h1>
+    <input type="file" id="fileInput" multiple>
+    <button onclick="uploadFiles()">Subir Archivos</button>
+    <div id="status"></div>
+
+    <script>
+        async function uploadFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const statusDiv = document.getElementById('status');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                statusDiv.innerHTML = '<p>Por favor selecciona archivos</p>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<p>Subiendo archivos...</p>';
+
+            for (let file of files) {
+                try {
+                    console.log('📤 Subiendo archivo:', file.name);
+                    
+                    // Simular la solicitud de presign
+                    const response = await fetch('http://localhost:3001/api/uploads/presign', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer test-token'
+                        },
+                        body: JSON.stringify({
+                            name: file.name,
+                            size: file.size,
+                            mime: file.type,
+                            parentId: null
+                        })
+                    });
+
+                    console.log('📤 Response status:', response.status);
+                    const data = await response.text();
+                    console.log('📤 Response data:', data);
+
+                    if (response.ok) {
+                        statusDiv.innerHTML += `<p>✅ ${file.name} - Presign exitoso</p>`;
+                    } else {
+                        statusDiv.innerHTML += `<p>❌ ${file.name} - Error: ${response.status} - ${data}</p>`;
+                    }
+
+                } catch (error) {
+                    console.error('❌ Error:', error);
+                    statusDiv.innerHTML += `<p>❌ ${file.name} - Error: ${error.message}</p>`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

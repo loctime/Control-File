@@ -1,0 +1,239 @@
+const express = require('express');
+const router = express.Router();
+const admin = require('firebase-admin');
+const b2Service = require('../services/b2');
+
+// Create share
+router.post('/create', async (req, res) => {
+  try {
+    const { fileId, expiresIn = 24 } = req.body; // expiresIn in hours
+    const { uid } = req.user;
+
+    if (!fileId) {
+      return res.status(400).json({ error: 'ID de archivo requerido' });
+    }
+
+    // Get file from Firestore
+    const fileRef = admin.firestore().collection('files').doc(fileId);
+    const fileDoc = await fileRef.get();
+
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const fileData = fileDoc.data();
+    if (fileData.uid !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    if (fileData.isDeleted) {
+      return res.status(404).json({ error: 'Archivo eliminado' });
+    }
+
+    // Generate share token
+    const shareToken = Math.random().toString(36).substr(2, 15) + 
+                      Math.random().toString(36).substr(2, 15);
+
+    // Calculate expiration
+    const expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000);
+
+    // Create share record
+    const shareRef = admin.firestore().collection('shares').doc(shareToken);
+    await shareRef.set({
+      token: shareToken,
+      fileId,
+      uid,
+      fileName: fileData.name,
+      fileSize: fileData.size,
+      mime: fileData.mime,
+      expiresAt,
+      createdAt: new Date(),
+      isActive: true,
+      downloadCount: 0,
+    });
+
+    // Generate share URL
+    const shareUrl = `${process.env.FRONTEND_URL}/share/${shareToken}`;
+
+    res.json({
+      shareToken,
+      shareUrl,
+      expiresAt,
+      fileName: fileData.name,
+    });
+  } catch (error) {
+    console.error('Error creating share:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Get share info (public)
+router.get('/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Get share from Firestore
+    const shareRef = admin.firestore().collection('shares').doc(token);
+    const shareDoc = await shareRef.get();
+
+    if (!shareDoc.exists) {
+      return res.status(404).json({ error: 'Enlace de compartir no encontrado' });
+    }
+
+    const shareData = shareDoc.data();
+
+    // Check if share is expired
+    if (shareData.expiresAt.toDate() < new Date()) {
+      return res.status(410).json({ error: 'Enlace expirado' });
+    }
+
+    // Check if share is active
+    if (!shareData.isActive) {
+      return res.status(410).json({ error: 'Enlace revocado' });
+    }
+
+    res.json({
+      fileName: shareData.fileName,
+      fileSize: shareData.fileSize,
+      mime: shareData.mime,
+      expiresAt: shareData.expiresAt,
+      downloadCount: shareData.downloadCount,
+    });
+  } catch (error) {
+    console.error('Error getting share info:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Download shared file
+router.post('/:token/download', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Get share from Firestore
+    const shareRef = admin.firestore().collection('shares').doc(token);
+    const shareDoc = await shareRef.get();
+
+    if (!shareDoc.exists) {
+      return res.status(404).json({ error: 'Enlace de compartir no encontrado' });
+    }
+
+    const shareData = shareDoc.data();
+
+    // Check if share is expired
+    if (shareData.expiresAt.toDate() < new Date()) {
+      return res.status(410).json({ error: 'Enlace expirado' });
+    }
+
+    // Check if share is active
+    if (!shareData.isActive) {
+      return res.status(410).json({ error: 'Enlace revocado' });
+    }
+
+    // Get file from Firestore
+    const fileRef = admin.firestore().collection('files').doc(shareData.fileId);
+    const fileDoc = await fileRef.get();
+
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const fileData = fileDoc.data();
+
+    if (fileData.isDeleted) {
+      return res.status(404).json({ error: 'Archivo eliminado' });
+    }
+
+    // Generate presigned URL
+    const downloadUrl = await b2Service.createPresignedGetUrl(fileData.bucketKey, 300); // 5 minutes
+
+    // Update download count
+    await shareRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    res.json({
+      downloadUrl,
+      fileName: fileData.name,
+      fileSize: fileData.size,
+    });
+  } catch (error) {
+    console.error('Error downloading shared file:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Revoke share
+router.post('/revoke', async (req, res) => {
+  try {
+    const { shareToken } = req.body;
+    const { uid } = req.user;
+
+    if (!shareToken) {
+      return res.status(400).json({ error: 'Token de compartir requerido' });
+    }
+
+    // Get share from Firestore
+    const shareRef = admin.firestore().collection('shares').doc(shareToken);
+    const shareDoc = await shareRef.get();
+
+    if (!shareDoc.exists) {
+      return res.status(404).json({ error: 'Enlace de compartir no encontrado' });
+    }
+
+    const shareData = shareDoc.data();
+    if (shareData.uid !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    // Revoke share
+    await shareRef.update({
+      isActive: false,
+      revokedAt: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Enlace revocado exitosamente',
+    });
+  } catch (error) {
+    console.error('Error revoking share:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// List user's shares
+router.get('/', async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    // Get user's shares
+    const sharesSnapshot = await admin.firestore()
+      .collection('shares')
+      .where('uid', '==', uid)
+      .where('isActive', '==', true)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const shares = [];
+    sharesSnapshot.forEach(doc => {
+      const shareData = doc.data();
+      shares.push({
+        token: shareData.token,
+        fileName: shareData.fileName,
+        fileSize: shareData.fileSize,
+        expiresAt: shareData.expiresAt,
+        createdAt: shareData.createdAt,
+        downloadCount: shareData.downloadCount,
+        shareUrl: `${process.env.FRONTEND_URL}/share/${shareData.token}`,
+      });
+    });
+
+    res.json({ shares });
+  } catch (error) {
+    console.error('Error listing shares:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+module.exports = router;

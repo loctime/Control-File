@@ -1,0 +1,159 @@
+name: Build Mobile APK
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'capacitor.config.ts'
+      - 'capacitor.config.prod.ts'
+      - 'next.config.js'
+      - 'next.config.prod.js'
+      - 'package.json'
+  workflow_dispatch: # Permitir ejecución manual
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Debug: Show file structure
+      run: |
+        echo "📁 Current directory structure:"
+        ls -la
+        echo "📁 Android directory:"
+        ls -la android/ || echo "❌ Android directory not found"
+        echo "📁 Config files:"
+        ls -la *.js *.ts || echo "❌ Config files not found"
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        echo "📦 Installing dependencies..."
+        npm ci
+        echo "✅ Dependencies installed"
+      
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Debug: Check Android SDK
+      run: |
+        echo "🔍 Android SDK info:"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        ls -la $ANDROID_HOME || echo "❌ ANDROID_HOME not found"
+        
+    - name: Verify config files exist
+      run: |
+        echo "🔍 Verifying configuration files..."
+        if [ ! -f "next.config.prod.js" ]; then
+          echo "❌ next.config.prod.js not found!"
+          exit 1
+        fi
+        if [ ! -f "capacitor.config.prod.ts" ]; then
+          echo "❌ capacitor.config.prod.ts not found!"
+          exit 1
+        fi
+        echo "✅ All config files found"
+        
+    - name: Build Next.js for production
+      run: |
+        echo "🏗️ Building Next.js for production..."
+        cp next.config.prod.js next.config.js
+        echo "📋 Next.js config copied"
+        npm run build
+        echo "✅ Next.js build completed"
+        
+    - name: Debug: Check Next.js build
+      run: |
+        echo "📁 Checking Next.js build output:"
+        ls -la out/ || echo "❌ out directory not found"
+        ls -la .next/ || echo "❌ .next directory not found"
+        
+    - name: Setup Capacitor for production
+      run: |
+        echo "📱 Setting up Capacitor for production..."
+        cp capacitor.config.prod.ts capacitor.config.ts
+        echo "📋 Capacitor config copied"
+        npx cap sync
+        echo "✅ Capacitor sync completed"
+        
+    - name: Debug: Check Capacitor setup
+      run: |
+        echo "📁 Checking Capacitor setup:"
+        ls -la android/app/src/main/assets/ || echo "❌ Capacitor assets not found"
+        cat capacitor.config.ts || echo "❌ Capacitor config not found"
+        
+    - name: Build APK Debug first
+      run: |
+        echo "🔨 Building debug APK first..."
+        cd android
+        ./gradlew assembleDebug --stacktrace --info
+        echo "✅ Debug APK build completed"
+        
+    - name: Build APK Release
+      run: |
+        echo "🔨 Building release APK..."
+        cd android
+        ./gradlew assembleRelease --stacktrace --info
+        echo "✅ Release APK build completed"
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: controlfile-apk-release
+        path: android/app/build/outputs/apk/release/app-release.apk
+        retention-days: 30
+        
+    - name: Upload debug APK (backup)
+      uses: actions/upload-artifact@v4
+      with:
+        name: controlfile-apk-debug
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+        
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          android/app/build/outputs/apk/release/app-release.apk
+          android/app/build/outputs/apk/debug/app-debug.apk
+        tag_name: mobile-v${{ github.run_number }}
+        name: ControlFile Mobile v${{ github.run_number }}
+        body: |
+          ## 📱 ControlFile Mobile APK
+          
+          **Build:** #${{ github.run_number }}
+          **Commit:** ${{ github.sha }}
+          **Date:** ${{ github.event.head_commit.timestamp }}
+          
+          ### 📦 Archivos incluidos:
+          - `app-release.apk` - Versión de producción (firmada)
+          - `app-debug.apk` - Versión de desarrollo
+          
+          ### 🚀 Instalación:
+          1. Descarga el APK correspondiente
+          2. Habilita "Fuentes desconocidas" en Android
+          3. Instala la aplicación
+          
+          ### ⚠️ Nota:
+          La versión de producción requiere configuración adicional de firma digital para distribución en Play Store.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

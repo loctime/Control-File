@@ -1,0 +1,75 @@
+name: Debug Mobile Build
+
+on:
+  workflow_dispatch: # Solo ejecución manual para debugging
+
+jobs:
+  debug-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Show environment
+      run: |
+        echo "🖥️ System info:"
+        uname -a
+        echo "📁 Working directory:"
+        pwd
+        echo "📁 Directory contents:"
+        ls -la
+        echo "📁 Android directory:"
+        ls -la android/ || echo "❌ Android directory not found"
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        echo "📦 Installing dependencies..."
+        npm ci
+        echo "✅ Dependencies installed"
+        echo "📋 Package.json scripts:"
+        npm run
+      
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Check Android setup
+      run: |
+        echo "🔍 Android SDK info:"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "JAVA_HOME: $JAVA_HOME"
+        ls -la $ANDROID_HOME || echo "❌ ANDROID_HOME not found"
+        echo "📋 Java version:"
+        java -version
+        echo "📋 Gradle version:"
+        cd android && ./gradlew --version || echo "❌ Gradle not found"
+        
+    - name: Test Capacitor sync
+      run: |
+        echo "📱 Testing Capacitor sync..."
+        npx cap sync
+        echo "✅ Capacitor sync completed"
+        echo "📁 Android assets:"
+        ls -la android/app/src/main/assets/ || echo "❌ Assets not found"
+        
+    - name: Build debug APK only
+      run: |
+        echo "🔨 Building debug APK..."
+        cd android
+        ./gradlew assembleDebug --stacktrace --info
+        echo "✅ Debug APK build completed"
+        echo "📁 APK location:"
+        ls -la app/build/outputs/apk/debug/ || echo "❌ APK not found"
