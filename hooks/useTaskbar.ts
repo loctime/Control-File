@@ -15,13 +15,15 @@ interface TaskbarItem {
 export function useTaskbar() {
   const { addToast } = useUIStore();
   const [taskbarItems, setTaskbarItems] = useState<TaskbarItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const hasLoadedTaskbarRef = useRef(false);
 
   // Cargar items del taskbar desde el backend
   useEffect(() => {
-    if (hasLoadedTaskbarRef.current) return;
+    if (hasLoadedTaskbarRef.current || isLoading) return;
     
     (async () => {
+      setIsLoading(true);
       try {
         const authHeader = await (async () => {
           try {
@@ -64,16 +66,30 @@ export function useTaskbar() {
 
           setTaskbarItems(normalized);
           console.log('✅ Taskbar items cargados:', normalized.length);
+          hasLoadedTaskbarRef.current = true;
+        } else if (res.status === 429) {
+          // Manejar específicamente el error de rate limiting
+          console.warn('⚠️ Rate limit alcanzado para taskbar, reintentando en 30 segundos...');
+          hasLoadedTaskbarRef.current = true;
+          
+          // Reintentar después de 30 segundos
+          setTimeout(() => {
+            hasLoadedTaskbarRef.current = false;
+            // Forzar re-render para intentar cargar nuevamente
+            setTaskbarItems(prev => [...prev]);
+          }, 30000);
         } else {
           console.log('❌ Error cargando taskbar items:', res.status, res.statusText);
+          hasLoadedTaskbarRef.current = true;
         }
       } catch (error) {
         console.error('❌ Error loading taskbar items:', error);
-      } finally {
         hasLoadedTaskbarRef.current = true;
+      } finally {
+        setIsLoading(false);
       }
     })();
-  }, []);
+  }, [isLoading]);
 
   // Guardar items del taskbar en el backend
   const saveTaskbarItems = async (items: TaskbarItem[]) => {
@@ -110,6 +126,16 @@ export function useTaskbar() {
 
       if (res.ok) {
         console.log('✅ Taskbar items guardados correctamente');
+      } else if (res.status === 429) {
+        console.warn('⚠️ Rate limit alcanzado al guardar taskbar, reintentando en 30 segundos...');
+        // Reintentar después de 30 segundos
+        setTimeout(async () => {
+          try {
+            await saveTaskbarItems(items);
+          } catch (retryError) {
+            console.error('❌ Error en reintento de guardado:', retryError);
+          }
+        }, 30000);
       } else {
         console.log('❌ Error guardando taskbar items:', res.status, res.statusText);
       }
@@ -120,6 +146,7 @@ export function useTaskbar() {
 
   return {
     taskbarItems,
-    saveTaskbarItems
+    saveTaskbarItems,
+    isLoading
   };
 }

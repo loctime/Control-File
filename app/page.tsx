@@ -32,12 +32,9 @@ export default function HomePage() {
     if (!loading && !user) {
       console.log('🔄 Redirecting to auth page - usuario no autenticado');
       router.push('/auth');
-    } else if (!loading && user) {
-      // Usar username si existe, o generar uno temporal para compatibilidad
-      const username = user.username || (user.email ? user.email.split('@')[0].toLowerCase().replace(/[^\w]/g, '') : 'usuario');
-      console.log('✅ Usuario autenticado, redirigiendo a perfil de usuario');
-      router.push(`/${username}`);
     }
+    // Remover la redirección automática a /[username] para evitar bucle
+    // El usuario puede navegar manualmente a su perfil si lo desea
   }, [user, loading, router]);
 
   if (loading) {

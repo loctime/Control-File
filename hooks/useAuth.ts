@@ -11,6 +11,44 @@ import { getDefaultFreeQuotaBytes } from '@/lib/plans';
 const googleProvider = new GoogleAuthProvider();
 const DEFAULT_QUOTA_BYTES = getDefaultFreeQuotaBytes();
 
+// Función para sincronizar información del usuario con Google
+async function syncUserWithGoogle(firebaseUser: any, currentUser: User, setUser: (user: User) => void) {
+  if (!db) {
+    console.error('❌ Firestore no disponible para sincronización');
+    return;
+  }
+
+  try {
+    console.log('🔄 Sincronizando información de Google...');
+    
+    const userRef = doc(db, 'users', firebaseUser.uid);
+    
+    // Actualizar solo los campos que pueden cambiar en Google
+    const updateData = {
+      displayName: firebaseUser.displayName,
+      photoURL: firebaseUser.photoURL,
+      email: firebaseUser.email,
+      lastGoogleSync: new Date() // Timestamp de la última sincronización
+    };
+    
+    await setDoc(userRef, updateData, { merge: true });
+    
+    // Actualizar el store local
+    const updatedUser = {
+      ...currentUser,
+      displayName: firebaseUser.displayName,
+      photoURL: firebaseUser.photoURL,
+      email: firebaseUser.email
+    };
+    
+    setUser(updatedUser);
+    
+    console.log('✅ Información de Google sincronizada exitosamente');
+  } catch (error) {
+    console.error('❌ Error sincronizando con Google:', error);
+  }
+}
+
 export function useAuth() {
   const { user, loading, setUser, setLoading, updateQuota } = useAuthStore();
   const [isOnline, setIsOnline] = useState(true);
@@ -118,9 +156,23 @@ export function useAuth() {
             }))
           });
 
-          // Si ya tenemos el mismo usuario cargado, no hacer nada
+          // Si ya tenemos el mismo usuario cargado, verificar si hay cambios en Google
           if (user && user.uid === firebaseUser.uid) {
-            console.log('ℹ️ Usuario ya cargado, saltando...');
+            console.log('ℹ️ Usuario ya cargado, verificando cambios en Google...');
+            
+            // Verificar si hay cambios en la información de Google
+            const hasChanges = (
+              user.displayName !== firebaseUser.displayName ||
+              user.photoURL !== firebaseUser.photoURL ||
+              user.email !== firebaseUser.email
+            );
+            
+            if (hasChanges) {
+              console.log('🔄 Cambios detectados en Google, sincronizando...');
+              await syncUserWithGoogle(firebaseUser, user, setUser);
+            } else {
+              console.log('✅ No hay cambios en Google');
+            }
             return;
           }
           
@@ -170,6 +222,42 @@ export function useAuth() {
               // User exists, get data
               const data = userSnap.data();
               console.log('📋 Datos existentes del usuario:', data);
+              
+              // Si el usuario no tiene username, generarlo y actualizarlo
+              let username = data.username;
+              if (!username) {
+                console.log('🔄 Usuario sin username, generando uno...');
+                const baseUsername = firebaseUser.email?.split('@')[0] || 'user';
+                const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
+                username = cleanUsername;
+                
+                // Verificar unicidad del username
+                let counter = 1;
+                while (true) {
+                  try {
+                    const existingUserQuery = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
+                    if (existingUserQuery.empty) {
+                      console.log('✅ Username único generado:', username);
+                      break;
+                    }
+                    username = `${cleanUsername}${counter}`;
+                    counter++;
+                    console.log('🔄 Username ocupado, probando:', username);
+                  } catch (queryError) {
+                    console.error('❌ Error verificando username:', queryError);
+                    break;
+                  }
+                }
+                
+                // Actualizar el usuario con el username generado
+                try {
+                  await setDoc(userRef, { username }, { merge: true });
+                  console.log('✅ Username agregado al usuario:', username);
+                } catch (updateError) {
+                  console.error('❌ Error actualizando username:', updateError);
+                }
+              }
+              
               userData = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email!,
@@ -179,6 +267,7 @@ export function useAuth() {
                 usedBytes: data.usedBytes || 0,
                 pendingBytes: data.pendingBytes || 0,
                 createdAt: data.createdAt?.toDate() || new Date(),
+                username: username,
               };
             } else {
               // New user, create document
@@ -235,11 +324,15 @@ export function useAuth() {
                   pendingBytes: userData.pendingBytes,
                   createdAt: userData.createdAt,
                   username: userData.username,
+                  email: userData.email,
+                  displayName: userData.displayName,
+                  photoURL: userData.photoURL,
+                  lastGoogleSync: new Date(), // Timestamp de la última sincronización
                   metadata: {
                     bio: '',
                     website: '',
                     location: '',
-                    isPublic: false,
+                    isPublic: true, // Perfil público por defecto
                     customFields: {}
                   }
                 });
