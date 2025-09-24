@@ -79,7 +79,7 @@ export function useProxyUpload() {
         console.log('🔁 Confirmación de subida...');
 
         // 3. Confirm upload
-        await backendApiCall('/uploads/confirm', {
+        const confirmResponse = await backendApiCall('/uploads/confirm', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -95,7 +95,7 @@ export function useProxyUpload() {
         });
 
         updateUpload(sessionId, { progress: 100, status: 'complete' });
-        console.log('🎉 Subida confirmada y completada', { sessionId, name: file.name });
+        console.log('🎉 Subida confirmada y completada', { sessionId, name: file.name, fileId: confirmResponse.fileId });
         
         // Refresh quota and file list
         await refreshUserQuota();
@@ -117,6 +117,7 @@ export function useProxyUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
+            fileId: confirmResponse.fileId, // Incluir el ID del archivo recién creado
           },
         });
 

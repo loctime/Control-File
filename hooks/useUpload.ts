@@ -74,7 +74,7 @@ export function useUpload() {
         updateUpload(sessionId, { progress: 90, status: 'processing' });
 
         // 3. Confirm upload
-        await backendApiCall('/uploads/confirm', {
+        const confirmResponse = await backendApiCall('/uploads/confirm', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -106,6 +106,7 @@ export function useUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
+            fileId: confirmResponse.fileId, // Incluir el ID del archivo recién creado
           },
         });
 
