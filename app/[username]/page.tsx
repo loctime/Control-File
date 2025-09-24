@@ -12,7 +12,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { setCurrentFolderId, setBreadcrumb } = useDriveStore();
+  const { setCurrentFolder } = useDriveStore();
   const { addToast } = useUIStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -8,7 +8,7 @@ import { DriveFolder } from '@/types';
 export function useNavigation() {
   const router = useRouter();
   const { user } = useAuth();
-  const { setCurrentFolder, setBreadcrumb, items } = useDriveStore();
+  const { setCurrentFolder, items } = useDriveStore();
 
   // Verificación de seguridad para evitar errores durante la carga inicial
   if (!user) {

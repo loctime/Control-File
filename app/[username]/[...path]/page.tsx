@@ -13,7 +13,7 @@ export default function FolderPage() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { setCurrentFolderId, setBreadcrumb, items } = useDriveStore();
+  const { setCurrentFolder, items } = useDriveStore();
   const { addToast } = useUIStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,10 +54,9 @@ export default function FolderPage() {
         );
 
         if (targetFolder) {
-          setCurrentFolderId(targetFolder.id);
           // Construir breadcrumb
           const breadcrumb = buildBreadcrumbFromPath(parsed.path);
-          setBreadcrumb(breadcrumb);
+          setCurrentFolder(targetFolder.id, breadcrumb);
         } else {
           setError('Carpeta no encontrada');
         }

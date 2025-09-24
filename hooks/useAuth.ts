@@ -1,7 +1,7 @@
 // hooks/useAuth.ts
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, query, collection, where } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuthStore } from '@/lib/stores/auth';
 import { User } from '@/types';
@@ -150,8 +150,11 @@ export function useAuth() {
 
             // Get user document from Firestore
             if (!db) {
+              console.error('❌ Firestore no está disponible');
               throw new Error('Firestore no está disponible');
             }
+            
+            console.log('🔍 Firestore disponible, continuando...');
             const userRef = doc(db, 'users', firebaseUser.uid);
             console.log('🔍 Buscando documento de usuario:', firebaseUser.uid);
             
@@ -180,18 +183,31 @@ export function useAuth() {
             } else {
               // New user, create document
               console.log('🆕 Usuario nuevo, creando documento en Firestore...');
+              console.log('🔍 Firebase User UID:', firebaseUser.uid);
+              console.log('🔍 Firebase User Email:', firebaseUser.email);
               // Generate username from email
               const baseUsername = firebaseUser.email?.split('@')[0] || 'user';
               const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
               let username = cleanUsername;
               
               // Check for username uniqueness
+              console.log('🔍 Verificando unicidad del username:', username);
               let counter = 1;
               while (true) {
-                const existingUser = await getDoc(doc(db, 'users', username));
-                if (!existingUser.exists()) break;
-                username = `${cleanUsername}${counter}`;
-                counter++;
+                try {
+                  const existingUserQuery = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
+                  if (existingUserQuery.empty) {
+                    console.log('✅ Username único:', username);
+                    break;
+                  }
+                  username = `${cleanUsername}${counter}`;
+                  counter++;
+                  console.log('🔄 Username ocupado, probando:', username);
+                } catch (queryError) {
+                  console.error('❌ Error verificando username:', queryError);
+                  // Si hay error en la consulta, usar el username base
+                  break;
+                }
               }
 
               userData = {
@@ -207,6 +223,12 @@ export function useAuth() {
               };
               
               try {
+                console.log('📝 Creando documento de usuario con datos:', {
+                  uid: firebaseUser.uid,
+                  username: userData.username,
+                  email: userData.email
+                });
+                
                 await setDoc(userRef, {
                   planQuotaBytes: userData.planQuotaBytes,
                   usedBytes: userData.usedBytes,
@@ -221,11 +243,13 @@ export function useAuth() {
                     customFields: {}
                   }
                 });
-                console.log('✅ Documento de usuario creado exitosamente');
+                console.log('✅ Documento de usuario creado exitosamente en Firestore');
               } catch (createError: any) {
                 console.error('❌ Error creando usuario en Firestore:', {
                   code: createError.code,
-                  message: createError.message
+                  message: createError.message,
+                  uid: firebaseUser.uid,
+                  username: userData.username
                 });
               }
             }
