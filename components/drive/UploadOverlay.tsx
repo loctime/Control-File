@@ -1,6 +1,6 @@
 'use client';
 
-import { Upload, Cloud, CheckCircle, XCircle } from 'lucide-react';
+import { Upload, Cloud, CheckCircle, XCircle, X } from 'lucide-react';
 import { useUIStore } from '@/lib/stores/ui';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -50,9 +50,19 @@ export function UploadOverlay({ isVisible, onClose }: UploadOverlayProps) {
       {/* Backdrop con efecto glassmorphism */}
       <div 
         className="absolute inset-0 bg-background/80 backdrop-blur-xl"
-        onClick={onClose}
       />
       
+      {/* Botón de cancelación */}
+      {!showSuccess && activeUploads.length > 0 && (
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background/90 transition-colors"
+          title="Cancelar carga (el archivo continuará subiéndose en segundo plano)"
+        >
+          <X className="w-5 h-5 text-muted-foreground" />
+        </button>
+      )}
+
       {/* Contenido del overlay */}
       <div className="relative z-10">
         {showSuccess ? (
@@ -144,6 +154,9 @@ function UploadAnimation({ uploads }: { uploads: any[] }) {
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             Por favor, no cierres esta ventana
+          </p>
+          <p className="text-xs text-muted-foreground/80 mt-1">
+            El archivo continuará subiéndose aunque cierres esta ventana
           </p>
         </div>
       </div>
