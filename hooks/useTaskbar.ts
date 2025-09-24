@@ -27,15 +27,27 @@ export function useTaskbar() {
           try {
             const { auth } = await import('@/lib/firebase');
             const u = auth?.currentUser;
-            if (!u) return null;
+            if (!u) {
+              console.log('🔐 No hay usuario autenticado, saltando carga del taskbar');
+              return null;
+            }
             const t = await u.getIdToken();
             return `Bearer ${t}`;
-          } catch (e) { return null; }
+          } catch (e) { 
+            console.log('🔐 Error obteniendo token de autenticación:', e);
+            return null; 
+          }
         })();
+        
+        if (!authHeader) {
+          console.log('🔐 Sin token de autenticación, saltando carga del taskbar');
+          hasLoadedTaskbarRef.current = true;
+          return;
+        }
         
         const res = await fetch('/api/user/taskbar', {
           method: 'GET',
-          headers: authHeader ? { 'Authorization': authHeader } : {},
+          headers: { 'Authorization': authHeader },
         });
         
         if (res.ok) {
@@ -51,9 +63,12 @@ export function useTaskbar() {
           }));
 
           setTaskbarItems(normalized);
+          console.log('✅ Taskbar items cargados:', normalized.length);
+        } else {
+          console.log('❌ Error cargando taskbar items:', res.status, res.statusText);
         }
       } catch (error) {
-        console.error('Error loading taskbar items:', error);
+        console.error('❌ Error loading taskbar items:', error);
       } finally {
         hasLoadedTaskbarRef.current = true;
       }
@@ -67,81 +82,44 @@ export function useTaskbar() {
         try {
           const { auth } = await import('@/lib/firebase');
           const u = auth?.currentUser;
-          if (!u) return null;
+          if (!u) {
+            console.log('🔐 No hay usuario autenticado, saltando guardado del taskbar');
+            return null;
+          }
           const t = await u.getIdToken();
           return `Bearer ${t}`;
-        } catch (e) { return null; }
+        } catch (e) { 
+          console.log('🔐 Error obteniendo token para guardar:', e);
+          return null; 
+        }
       })();
 
-      await fetch('/api/user/taskbar', {
+      if (!authHeader) {
+        console.log('🔐 Sin token de autenticación, saltando guardado del taskbar');
+        return;
+      }
+
+      const res = await fetch('/api/user/taskbar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(authHeader ? { 'Authorization': authHeader } : {}),
+          'Authorization': authHeader,
         },
         body: JSON.stringify({ items }),
       });
+
+      if (res.ok) {
+        console.log('✅ Taskbar items guardados correctamente');
+      } else {
+        console.log('❌ Error guardando taskbar items:', res.status, res.statusText);
+      }
     } catch (error) {
-      console.error('Error saving taskbar items:', error);
+      console.error('❌ Error saving taskbar items:', error);
     }
-  };
-
-  // Anclar una carpeta al taskbar
-  const pinFolder = (folderId: string, folderName: string) => {
-    // Verificar si ya está en el taskbar
-    const exists = taskbarItems.some(item => item.id === folderId);
-    if (exists) {
-      addToast({
-        title: 'Ya está en el Taskbar',
-        description: 'Esta carpeta ya está anclada en el taskbar.',
-        type: 'warning'
-      });
-      return;
-    }
-
-    const newItem: TaskbarItem = {
-      id: folderId,
-      name: folderName,
-      icon: 'Folder',
-      color: 'text-purple-600',
-      type: 'folder',
-      isCustom: false, // Es una carpeta real, no personalizada
-    };
-    
-    const updatedItems = [...taskbarItems, newItem];
-    setTaskbarItems(updatedItems);
-    saveTaskbarItems(updatedItems);
-    
-    addToast({
-      title: 'Carpeta Anclada',
-      description: `${folderName} ha sido añadida al taskbar.`,
-      type: 'success'
-    });
-  };
-
-  // Desanclar una carpeta del taskbar
-  const unpinFolder = (folderId: string) => {
-    const updatedItems = taskbarItems.filter(item => item.id !== folderId);
-    setTaskbarItems(updatedItems);
-    saveTaskbarItems(updatedItems);
-    
-    addToast({
-      title: 'Carpeta Desanclada',
-      description: 'La carpeta ha sido removida del taskbar.',
-      type: 'success'
-    });
-  };
-
-  // Verificar si una carpeta está en el taskbar
-  const isFolderPinned = (folderId: string) => {
-    return taskbarItems.some(item => item.id === folderId);
   };
 
   return {
     taskbarItems,
-    pinFolder,
-    unpinFolder,
-    isFolderPinned,
     saveTaskbarItems
   };
 }

@@ -128,7 +128,7 @@ export function Taskbar() {
       if (item.id.startsWith('taskbar-') || item.id.startsWith('custom-')) {
         addToast({
           title: 'Item del Taskbar',
-          description: 'Este es un favorito del taskbar. Crea una carpeta real desde el Navbar para navegar.',
+          message: 'Este es un favorito del taskbar. Crea una carpeta real desde el Navbar para navegar.',
           type: 'info'
         });
         return;
