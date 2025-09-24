@@ -12,9 +12,11 @@ interface FolderListItemProps {
   itemIndex?: number;
   onShiftRangeSelect?: (itemIndex: number) => void;
   onSetAnchor?: (itemIndex: number) => void;
+  // Para selección por arrastre
+  itemRef?: (ref: HTMLDivElement | null) => void;
 }
 
-export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftRangeSelect, onSetAnchor }: FolderListItemProps) {
+export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FolderListItemProps) {
   const { toggleItemSelection } = useDriveStore();
   const { setDetailsPanelOpen, iconSize } = useUIStore();
 
@@ -63,6 +65,7 @@ export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftR
 
   return (
     <div
+      ref={itemRef}
       className={`
         flex items-center p-3 rounded-lg cursor-pointer
         hover:bg-accent/50 transition-colors group relative

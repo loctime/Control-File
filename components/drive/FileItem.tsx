@@ -14,9 +14,11 @@ interface FileItemProps {
   itemIndex?: number;
   onShiftRangeSelect?: (itemIndex: number) => void;
   onSetAnchor?: (itemIndex: number) => void;
+  // Para selección por arrastre
+  itemRef?: React.RefObject<HTMLDivElement>;
 }
 
-export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor }: FileItemProps) {
+export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FileItemProps) {
   const { toggleItemSelection } = useDriveStore();
   const { setDetailsPanelOpen, viewMode, iconSize, autoplayVideoThumbnails, videoPreviewOnHover } = useUIStore();
   const { downloadUrl, loading } = useFileDownloadUrl(
@@ -91,6 +93,7 @@ export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSe
   if (viewMode === 'list') {
     return (
       <div
+        ref={itemRef}
         className={`
           flex items-center p-3 rounded-lg cursor-pointer
           hover:bg-accent/50 transition-colors group relative
@@ -160,6 +163,7 @@ export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSe
   // Vista de iconos (grid)
   return (
     <div
+      ref={itemRef}
       className={`
         flex flex-col items-center p-4 rounded-lg cursor-pointer
         hover:bg-accent/50 transition-colors group relative

@@ -12,9 +12,11 @@ interface FolderIconProps {
   itemIndex?: number;
   onShiftRangeSelect?: (itemIndex: number) => void;
   onSetAnchor?: (itemIndex: number) => void;
+  // Para selección por arrastre
+  itemRef?: React.RefObject<HTMLDivElement>;
 }
 
-export function FolderIcon({ folder, onClick, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor }: FolderIconProps) {
+export function FolderIcon({ folder, onClick, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FolderIconProps) {
   const { toggleItemSelection } = useDriveStore();
   const { setDetailsPanelOpen, iconSize } = useUIStore();
 
@@ -86,6 +88,7 @@ export function FolderIcon({ folder, onClick, isSelected, itemIndex, onShiftRang
 
   return (
     <div
+      ref={itemRef}
       className={`
         flex flex-col items-center p-4 rounded-lg cursor-pointer
         hover:bg-accent/50 transition-colors group relative

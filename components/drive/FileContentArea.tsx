@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useProxyUpload } from '@/hooks/useProxyUpload';
+import { useDragSelection } from '@/hooks/useDragSelection';
 import { formatFileSize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { 
@@ -34,6 +35,7 @@ import { FolderIcon } from './FolderIcon';
 import { EmptyState } from './EmptyState';
 import { DragDropLoader } from './DragDropLoader';
 import { FolderListItem } from './FolderListItem';
+import { SelectionRectangle } from './SelectionRectangle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { collection, query as fsQuery, where, orderBy, getDocs } from 'firebase/firestore';
@@ -73,6 +75,19 @@ export function FileContentArea({
   // Estado de orden
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'type' | 'modifiedAt' | 'createdAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  
+  // Referencias para selección por arrastre
+  const containerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Hook de selección por arrastre
+  const { dragState, handleMouseDown: handleDragMouseDown } = useDragSelection({
+    onSelectionChange: setSelectedItems,
+    containerRef,
+    itemRefs,
+    selectedItems,
+    multiSelect: true
+  });
 
   // Archivos ordenados según preferencia
   const sortedFiles = useMemo(() => {
@@ -144,6 +159,15 @@ export function FileContentArea({
 
   const handleSetAnchor = useCallback((idx: number) => {
     setAnchorIndex(idx);
+  }, []);
+
+  // Función para registrar referencias de elementos
+  const registerItemRef = useCallback((itemId: string, element: HTMLDivElement | null) => {
+    if (element) {
+      itemRefs.current.set(itemId, element);
+    } else {
+      itemRefs.current.delete(itemId);
+    }
   }, []);
 
   // Drag and drop for file upload
@@ -295,11 +319,13 @@ export function FileContentArea({
 
   return (
     <div
+      ref={containerRef}
       {...getRootProps()}
       className={`flex-1 flex relative ${
         isDragActive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
       }`}
       onClick={onBackgroundClick}
+      onMouseDown={handleDragMouseDown}
     >
       <input {...getInputProps()} />
       <input
@@ -475,6 +501,7 @@ export function FileContentArea({
                         itemIndex={folderIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
+                        itemRef={(ref) => registerItemRef(folder.id, ref)}
                       />
                     ))}
                     {sortedFiles.map((file, fileIdx) => (
@@ -485,6 +512,7 @@ export function FileContentArea({
                         itemIndex={sortedFolders.length + fileIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
+                        itemRef={(ref) => registerItemRef(file.id, ref)}
                       />
                     ))}
                   </div>
@@ -530,6 +558,7 @@ export function FileContentArea({
                         itemIndex={folderIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
+                        itemRef={(ref) => registerItemRef(folder.id, ref)}
                       />
                     ))}
                     {sortedFiles.map((file, fileIdx) => (
@@ -540,6 +569,7 @@ export function FileContentArea({
                         itemIndex={sortedFolders.length + fileIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
+                        itemRef={(ref) => registerItemRef(file.id, ref)}
                       />
                     ))}
                   </div>
@@ -560,6 +590,12 @@ export function FileContentArea({
       <DragDropLoader 
         isDragOver={isDragActive} 
         files={draggedFiles}
+      />
+
+      {/* Selection Rectangle */}
+      <SelectionRectangle 
+        rect={dragState.selectionRect}
+        isVisible={dragState.isSelecting}
       />
     </div>
   );
