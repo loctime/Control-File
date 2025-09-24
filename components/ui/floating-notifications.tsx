@@ -51,7 +51,7 @@ export function FloatingNotifications() {
           >
             {/* Animación de impacto */}
             <ImpactAnimation 
-              type={toast.type} 
+              type={toast.type === 'success' ? 'success' : 'error'} 
               className="scale-75"
             />
             
