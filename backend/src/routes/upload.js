@@ -94,10 +94,12 @@ router.post('/presign', async (req, res) => {
     }
 
     // Resolve parent and ancestors (auto-create app root if needed)
+    console.log('📁 Resolving parent folder:', { parentId, uid, appCode: APP_CODE });
     const resolved = await resolveParentAndAncestors(uid, parentId);
     const parentPath = resolved.path || '';
     const effectiveParentId = resolved.parentId || parentId || null;
     const ancestors = resolved.ancestors || [];
+    console.log('📁 Resolved parent info:', { parentPath, effectiveParentId, ancestors });
 
     // Generate file key
     const fileKey = generateFileKey(uid, parentPath, name);

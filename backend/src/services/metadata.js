@@ -58,7 +58,23 @@ async function getOrCreateAppRootFolder(uid) {
 async function resolveParentAndAncestors(uid, parentId) {
   if (parentId) {
     const parent = await getFolderDoc(parentId);
-    if (!parent) throw new Error('Carpeta padre no encontrada');
+    if (!parent) {
+      console.warn(`⚠️ Carpeta padre no encontrada: ${parentId}, usando carpeta raíz por defecto`);
+      // En lugar de fallar, usar la carpeta raíz por defecto
+      if (APP_CODE === 'controlfile') {
+        return {
+          parentId: null,
+          path: '',
+          ancestors: [],
+        };
+      }
+      const root = await getOrCreateAppRootFolder(uid);
+      return {
+        parentId: root.id,
+        path: root.data.path || `/${APP_CODE}`,
+        ancestors: [root.id],
+      };
+    }
     const parentAncestors = Array.isArray(parent.data.ancestors) ? parent.data.ancestors : [];
     return {
       parentId,
