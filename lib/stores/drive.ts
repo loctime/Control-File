@@ -101,11 +101,30 @@ export const useDriveStore = create<DriveState>()(
           }
         }),
       selectAll: () =>
-        set((state) => ({
-          selectedItems: state.items
-            .filter(item => !item.deletedAt) // Excluir elementos en la papelera
-            .map(item => item.id)
-        })),
+        set((state) => {
+          // Si estamos en una carpeta específica, seleccionar solo elementos de esa carpeta
+          if (state.currentFolderId) {
+            return {
+              selectedItems: state.items
+                .filter(item => 
+                  !item.deletedAt && // Excluir elementos en la papelera
+                  item.parentId === state.currentFolderId // Solo elementos de la carpeta actual
+                )
+                .map(item => item.id)
+            };
+          }
+          
+          // Si no hay carpeta actual, seleccionar solo archivos en la raíz (no carpetas principales)
+          return {
+            selectedItems: state.items
+              .filter(item => 
+                !item.deletedAt && // Excluir elementos en la papelera
+                !item.metadata?.isMainFolder && // Excluir carpetas principales del navbar
+                item.parentId === null // Solo elementos en la raíz
+              )
+              .map(item => item.id)
+          };
+        }),
       clearSelection: () => set({ selectedItems: [] }),
       setCurrentFolder: (folderId, breadcrumb) =>
         set({ currentFolderId: folderId, breadcrumb }),
