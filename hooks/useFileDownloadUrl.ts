@@ -19,7 +19,7 @@ export function useFileDownloadUrl(fileId: string | null, enabled: boolean = tru
       }
 
       const token = await currentUser.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
       const response = await fetch(`${backendUrl}/api/files/presign-get`, {
         method: 'POST',

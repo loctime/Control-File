@@ -47,7 +47,7 @@ async function testUpload() {
   try {
     console.log('🧪 Probando endpoint de test sin autenticación...');
     
-    const testResponse = await makeRequest('http://localhost:3002/api/test-upload', {
+    const testResponse = await makeRequest('http://localhost:3001/api/test-upload', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
