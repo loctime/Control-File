@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useTaskbar } from '@/hooks/useTaskbar';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { 
@@ -35,9 +36,10 @@ interface TaskbarItem {
 }
 
 export function Taskbar() {
-  const { setCurrentFolderId, currentFolderId, getTrashItems, createMainFolder } = useDriveStore();
+  const { setCurrentFolderId, currentFolderId, getTrashItems } = useDriveStore();
   const { isTrashView, toggleTrashView, closeTrashView, addToast } = useUIStore();
   const { logOut } = useAuth();
+  const { taskbarItems, saveTaskbarItems } = useTaskbar();
   const router = useRouter();
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -47,106 +49,10 @@ export function Taskbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const hasLoadedTaskbarRef = useRef<boolean>(false);
 
-  // Items fijos de la barra de tareas
-  const [taskbarItems, setTaskbarItems] = useState<TaskbarItem[]>([]);
+  // El taskbar ahora se maneja a través del hook useTaskbar
 
-  // Cargar items personalizados desde backend (sincronizado por usuario)
-  useEffect(() => {
-    (async () => {
-      try {
-        const authHeader = await (async () => {
-          try {
-            const { auth } = await import('@/lib/firebase');
-            const u = auth?.currentUser;
-            if (!u) return null;
-            const t = await u.getIdToken();
-            return `Bearer ${t}`;
-          } catch (e) { return null; }
-        })();
-        const res = await fetch('/api/user/taskbar', {
-          method: 'GET',
-          headers: authHeader ? { 'Authorization': authHeader } : {},
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const items = Array.isArray(data.items) ? data.items : [];
-          let normalized = items.map((it: any) => ({
-            id: it.id,
-            name: it.name,
-            icon: typeof it.icon === 'string' ? it.icon : 'Folder',
-            color: it.color || 'text-purple-600',
-            type: it.type === 'app' || it.type === 'folder' ? it.type : 'folder',
-            isCustom: typeof it.isCustom === 'boolean' ? it.isCustom : true,
-          }));
-
-          // Migración: si algún item personalizado apunta a un id temporal (custom-),
-          // crear una carpeta real y actualizar el id para que funcione con el FileExplorer/Sidebar.
-          normalized = normalized.map((it: any) => {
-            if (it.type === 'folder' && (it.isCustom || (it.id && it.id.startsWith('custom-')))) {
-              if (it.id && it.id.startsWith('custom-')) {
-                const newId = createMainFolder(it.name, it.icon || 'Folder', it.color || 'text-purple-600');
-                return { ...it, id: newId, isCustom: true };
-              }
-            }
-            return it;
-          });
-          setTaskbarItems(prev => [
-            ...prev.filter(item => !((item as any).isCustom ?? (item.id?.startsWith('custom-')))),
-            ...normalized
-          ]);
-        }
-      } catch (error) {
-        console.error('Error loading taskbar items:', error);
-      }
-      finally {
-        hasLoadedTaskbarRef.current = true;
-      }
-    })();
-  }, []);
-
-  // Guardar items personalizados en backend
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!hasLoadedTaskbarRef.current) return; // Evitar sobreescribir antes de cargar
-        const authHeader = await (async () => {
-          try {
-            const { auth } = await import('@/lib/firebase');
-            const u = auth?.currentUser;
-            if (!u) return null;
-            const t = await u.getIdToken();
-            return `Bearer ${t}`;
-          } catch (e) { return null; }
-        })();
-        if (!authHeader) return;
-        const customItems = taskbarItems
-          .filter(item => (item as any).isCustom ?? (item.id?.startsWith('custom-')))
-          .map(item => ({
-            id: item.id,
-            name: item.name,
-            // Persistir icono como string para que sea serializable
-            icon: typeof item.icon === 'string' ? item.icon : 'Folder',
-            color: item.color,
-            type: item.type,
-            isCustom: true,
-          }));
-        // Si no hay cambios/custom items, evitar POST vacío innecesario
-        if (!customItems.length) return;
-        await fetch('/api/user/taskbar', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader,
-          },
-          body: JSON.stringify({ items: customItems }),
-        });
-      } catch (error) {
-        console.error('Error saving taskbar items:', error);
-      }
-    })();
-  }, [taskbarItems]);
+  // El guardado de items ahora se maneja en el hook useTaskbar
 
   // Actualizar reloj
   useEffect(() => {
@@ -218,6 +124,17 @@ export function Taskbar() {
 
   const handleItemClick = (item: TaskbarItem) => {
     if (item.type === 'folder') {
+      // Si es un item del taskbar (no una carpeta real), no navegamos
+      if (item.id.startsWith('taskbar-') || item.id.startsWith('custom-')) {
+        addToast({
+          title: 'Item del Taskbar',
+          description: 'Este es un favorito del taskbar. Crea una carpeta real desde el Navbar para navegar.',
+          type: 'info'
+        });
+        return;
+      }
+      
+      // Solo navegar si es una carpeta real
       setCurrentFolderId(item.id);
       // Cerrar la papelera si está abierta
       closeTrashView();
@@ -230,29 +147,31 @@ export function Taskbar() {
 
   const handleAddFolder = () => {
     if (newFolderName.trim()) {
-      // Crear carpeta real en el sistema y obtener su ID
-      const realFolderId = createMainFolder(newFolderName.trim(), 'Folder', 'text-purple-600');
+      // Crear solo un item del taskbar (no una carpeta real)
+      const taskbarItemId = `taskbar-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const newItem: TaskbarItem = {
-        id: realFolderId,
+        id: taskbarItemId,
         name: newFolderName.trim(),
-        // Guardar como string para que sea persistente/serializable
         icon: 'Folder',
         color: 'text-purple-600',
         type: 'folder',
         isCustom: true,
       };
-      setTaskbarItems(prev => [...prev, newItem]);
+      // Usar la función del hook para guardar
+      const updatedItems = [...taskbarItems, newItem];
+      saveTaskbarItems(updatedItems);
       setNewFolderName('');
       setIsAddingFolder(false);
-      // Abrir la carpeta recién creada
-      setCurrentFolderId(realFolderId);
+      // No abrimos ninguna carpeta ya que es solo un item del taskbar
       closeTrashView();
     }
   };
 
   const handleRemoveItem = (itemId: string) => {
-    setTaskbarItems(prev => prev.filter(item => item.id !== itemId));
+    const updatedItems = taskbarItems.filter(item => item.id !== itemId);
+    saveTaskbarItems(updatedItems);
   };
+
 
   // Funciones para la papelera
   const handleToggleTrashView = () => {
@@ -452,8 +371,8 @@ export function Taskbar() {
                   <span className="text-sm">{item.name}</span>
                 </Button>
                 
-                {/* Botón de eliminar (solo para items personalizados) */}
-                {item.id.startsWith('custom-') && (
+                {/* Botón de eliminar (solo para items del taskbar) */}
+                {(item.id.startsWith('custom-') || item.id.startsWith('taskbar-')) && (
                   <button
                     onClick={() => handleRemoveItem(item.id)}
                     className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"

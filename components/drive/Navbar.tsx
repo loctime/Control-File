@@ -4,8 +4,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useTaskbar } from '@/hooks/useTaskbar';
 import { Button } from '@/components/ui/button';
-import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
+import { Folder, Image, FileText, User, Monitor, Plus, Pin } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { ContextMenu } from '@/components/drive/ContextMenu';
 import { DriveItem, DriveFolder } from '@/types';
@@ -14,6 +15,7 @@ export function Navbar() {
   const { setCurrentFolderId, createMainFolder, items, toggleItemSelection, moveToTrash } = useDriveStore();
   const { sidebarOpen, closeTrashView } = useUIStore();
   const { user } = useAuth();
+  const { pinFolder, isFolderPinned } = useTaskbar();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
@@ -151,16 +153,34 @@ export function Navbar() {
                 onPasteItems={handlePasteItems}
                 onSelectAll={handleSelectAll}
               >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleFolderClick(folder.id)}
-                  onContextMenu={() => toggleItemSelection(folder.id)}
-                  className="flex items-center space-x-2 px-3 py-2"
-                >
-                  <IconComponent className={`w-4 h-4 ${color}`} />
-                  <span>{folder.name}</span>
-                </Button>
+                <div className="relative group">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleFolderClick(folder.id)}
+                    onContextMenu={() => toggleItemSelection(folder.id)}
+                    className="flex items-center space-x-2 px-3 py-2"
+                  >
+                    <IconComponent className={`w-4 h-4 ${color}`} />
+                    <span>{folder.name}</span>
+                  </Button>
+                  
+                  {/* Botón de pin (solo visible en hover) */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pinFolder(folder.id, folder.name);
+                    }}
+                    className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center ${
+                      isFolderPinned(folder.id) 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted text-muted-foreground hover:bg-accent'
+                    }`}
+                    title={isFolderPinned(folder.id) ? 'Ya está en el taskbar' : 'Anclar al taskbar'}
+                  >
+                    <Pin className={`w-3 h-3 ${isFolderPinned(folder.id) ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
               </ContextMenu>
             );
           })}
