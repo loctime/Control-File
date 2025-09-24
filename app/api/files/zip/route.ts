@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Lista de archivos requerida' }, { status: 400 });
     }
 
-    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002').replace(/\/$/, '');
     const upstream = await fetch(`${backendUrl}/api/files/zip`, {
       method: 'POST',
       headers: {

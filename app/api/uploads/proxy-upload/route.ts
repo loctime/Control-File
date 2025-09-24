@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     console.log('📤 Next.js proxy upload endpoint called');
 
     // Redirigir la petición al backend (configurable por entorno)
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3002';
     console.log('📤 Backend URL:', backendUrl);
 
     // Reenviar la solicitud como streaming sin parsear el cuerpo para evitar límites

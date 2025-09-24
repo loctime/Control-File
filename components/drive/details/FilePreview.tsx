@@ -158,7 +158,7 @@ function ImagePreview({ file }: { file: any }) {
                     const currentUser = auth.currentUser;
                     if (!currentUser) throw new Error('No autenticado');
                     const token = await currentUser.getIdToken();
-                    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+                    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002').replace(/\/$/, '');
                     const form = new FormData();
                     const baseName = (file.name || 'imagen').replace(/\.[^.]+$/, '');
                     const fileName = `${baseName}.png`;

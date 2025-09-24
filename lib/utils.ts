@@ -282,7 +282,7 @@ export async function backendApiCall<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002';
   
   // Merge headers properly, allowing custom headers to override defaults
   const headers = {

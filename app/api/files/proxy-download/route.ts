@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ID de archivo requerido' }, { status: 400 });
     }
 
-    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002').replace(/\/$/, '');
 
     // Solicitar al backend la URL de descarga presignada (el backend valida el token)
     const presignResp = await fetch(`${backendUrl}/api/files/presign-get`, {

@@ -177,7 +177,7 @@ export function useProxyUpload() {
         });
 
         // Enviar directamente al backend para evitar límites del runtime de Next
-        const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+        const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002').replace(/\/$/, '');
         xhr.open('POST', `${backendUrl}/api/uploads/proxy-upload`);
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         

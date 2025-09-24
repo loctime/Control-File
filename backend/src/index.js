@@ -14,7 +14,7 @@ const foldersRoutes = require('./routes/folders');
 const userRoutes = require('./routes/user');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // Rate limiting
 const limiter = rateLimit({
