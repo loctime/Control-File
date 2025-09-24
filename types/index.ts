@@ -152,4 +152,11 @@ export interface User {
     title: string;
     message?: string;
     duration?: number;
+    // Información del archivo para errores de subida
+    fileInfo?: {
+      name: string;
+      size?: number;
+      type?: string;
+      file?: File; // Para poder abrir el archivo en caso de error
+    };
   }

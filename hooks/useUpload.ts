@@ -102,6 +102,11 @@ export function useUpload() {
           type: 'success',
           title: 'Archivo subido',
           message: `${file.name} se subió correctamente`,
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          },
         });
 
       } catch (error: any) {
@@ -114,6 +119,12 @@ export function useUpload() {
           type: 'error',
           title: 'Error al subir archivo',
           message: error.message || 'Error desconocido',
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            file: file, // Incluir el archivo para poder abrirlo
+          },
         });
         
         throw error;
