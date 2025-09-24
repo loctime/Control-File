@@ -25,14 +25,18 @@ export default function HomePage() {
     console.log('🔄 HomePage useEffect:', { 
       loading, 
       hasUser: !!user, 
-      userId: user?.uid 
+      userId: user?.uid,
+      username: user?.username
     });
     
     if (!loading && !user) {
       console.log('🔄 Redirecting to auth page - usuario no autenticado');
       router.push('/auth');
     } else if (!loading && user) {
-      console.log('✅ Usuario autenticado, mostrando FileExplorer');
+      // Usar username si existe, o generar uno temporal para compatibilidad
+      const username = user.username || (user.email ? user.email.split('@')[0].toLowerCase().replace(/[^\w]/g, '') : 'usuario');
+      console.log('✅ Usuario autenticado, redirigiendo a perfil de usuario');
+      router.push(`/${username}`);
     }
   }, [user, loading, router]);
 

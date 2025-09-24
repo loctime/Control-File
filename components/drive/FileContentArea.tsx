@@ -39,6 +39,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { collection, query as fsQuery, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuthStore } from '@/lib/stores/auth';
+import { useNavigation } from '@/hooks/useNavigation';
 
 interface FileContentAreaProps {
   files: any[];
@@ -62,6 +63,7 @@ export function FileContentArea({
   const { toggleDetailsPanel, detailsPanelOpen, viewMode, iconSize, setViewMode, setIconSize, addToast } = useUIStore();
   const { uploadFile } = useProxyUpload();
   const { setMainFolder, getMainFolder, setSelectedItems, getMainFolders, items, breadcrumb } = useDriveStore();
+  const { navigateToFolder } = useNavigation();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +213,7 @@ export function FileContentArea({
   const canGoBack = Boolean(parentFolderId);
   const handleGoBack = () => {
     if (parentFolderId) {
-      onFolderClick(parentFolderId);
+      navigateToFolder(parentFolderId);
     }
   };
 
@@ -419,7 +421,7 @@ export function FileContentArea({
                               variant="ghost"
                               size="sm"
                               className={`h-6 px-2 text-sm ${entry.item.id === lastBreadcrumbId ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
-                              onClick={() => onFolderClick(entry.item.id)}
+                              onClick={() => navigateToFolder(entry.item.id)}
                               disabled={entry.item.id === lastBreadcrumbId}
                               title={entry.item.name}
                             >
@@ -469,7 +471,7 @@ export function FileContentArea({
                         key={folder.id}
                         folder={folder}
                         isSelected={selectedItems.includes(folder.id)}
-                        onOpen={() => onFolderClick(folder.id)}
+                        onOpen={() => navigateToFolder(folder.id)}
                         itemIndex={folderIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
@@ -494,7 +496,7 @@ export function FileContentArea({
                           <FolderIcon
                             key={folder.id}
                             folder={folder}
-                            onClick={() => onFolderClick(folder.id)}
+                            onClick={() => navigateToFolder(folder.id)}
                             isSelected={selectedItems.includes(folder.id)}
                             itemIndex={folderIdx}
                             onShiftRangeSelect={handleShiftRangeSelect}

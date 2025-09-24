@@ -6,7 +6,17 @@ const { getAppCode, getFolderDoc } = require('../services/metadata');
 // Create folder endpoint
 router.post('/create', async (req, res) => {
   try {
-    const { name, parentId, id, icon, color } = req.body;
+    const { 
+      name, 
+      parentId, 
+      id, 
+      icon, 
+      color, 
+      description, 
+      tags, 
+      isPublic, 
+      customFields 
+    } = req.body;
     const { uid } = req.user;
     const APP_CODE = getAppCode();
 
@@ -19,8 +29,28 @@ router.post('/create', async (req, res) => {
       ? id
       : `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    // Generate slug
+    const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+    let slug = baseSlug;
+    
+    // Check for slug uniqueness within the same parent
+    const foldersCol = admin.firestore().collection('folders');
+    let counter = 1;
+    while (true) {
+      const existingQuery = await foldersCol
+        .where('userId', '==', uid)
+        .where('parentId', '==', parentId || null)
+        .where('slug', '==', slug)
+        .limit(1)
+        .get();
+      
+      if (existingQuery.empty) break;
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
     // Calculate path + ancestors
-    let path = `/${name.toLowerCase().replace(/\s+/g, '-')}`;
+    let path = `/${slug}`;
     let ancestors = [];
     if (parentId) {
       const parent = await getFolderDoc(parentId);
@@ -36,6 +66,7 @@ router.post('/create', async (req, res) => {
       id: folderId,
       userId: uid,
       name: name.trim(),
+      slug: slug,
       parentId: parentId || null,
       path: path,
       appCode: APP_CODE,
@@ -47,18 +78,112 @@ router.post('/create', async (req, res) => {
         isMainFolder: !parentId,
         isDefault: false,
         icon: icon || 'Folder',
-        color: color || 'text-purple-600'
+        color: color || 'text-purple-600',
+        description: description || '',
+        tags: Array.isArray(tags) ? tags : [],
+        isPublic: Boolean(isPublic),
+        viewCount: 0,
+        lastAccessedAt: new Date(),
+        permissions: {
+          canEdit: true,
+          canDelete: true,
+          canShare: true,
+          canDownload: true
+        },
+        customFields: customFields || {}
       }
     });
 
     res.json({ 
       success: true, 
       folderId: folderId,
+      slug: slug,
+      path: path,
       message: 'Carpeta creada exitosamente'
     });
 
   } catch (error) {
     console.error('Error creating folder:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// GET /api/folders/by-slug/:username/:path
+router.get('/by-slug/:username/:path(*)', async (req, res) => {
+  try {
+    const { username, path } = req.params;
+    const { uid } = req.user;
+    const APP_CODE = getAppCode();
+
+    if (!username || !path) {
+      return res.status(400).json({ error: 'Username y path requeridos' });
+    }
+
+    // Parse the path to get slug segments
+    const pathSegments = path.split('/').filter(segment => segment.trim() !== '');
+    
+    if (pathSegments.length === 0) {
+      return res.status(400).json({ error: 'Path inválido' });
+    }
+
+    // Find the user by username
+    const usersCol = admin.firestore().collection('users');
+    const userQuery = await usersCol
+      .where('username', '==', username)
+      .limit(1)
+      .get();
+
+    if (userQuery.empty) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const userDoc = userQuery.docs[0];
+    const targetUserId = userDoc.id;
+
+    // Check if the folder is public or if user is the owner
+    if (targetUserId !== uid) {
+      // TODO: Implement public folder access logic
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    // Navigate through the path to find the target folder
+    let currentParentId = null;
+    let currentFolder = null;
+
+    for (const slug of pathSegments) {
+      const foldersCol = admin.firestore().collection('folders');
+      const folderQuery = await foldersCol
+        .where('userId', '==', targetUserId)
+        .where('parentId', '==', currentParentId)
+        .where('slug', '==', slug)
+        .where('appCode', '==', APP_CODE)
+        .limit(1)
+        .get();
+
+      if (folderQuery.empty) {
+        return res.status(404).json({ error: 'Carpeta no encontrada' });
+      }
+
+      currentFolder = folderQuery.docs[0].data();
+      currentParentId = currentFolder.id;
+    }
+
+    // Update view count
+    if (currentFolder) {
+      const folderRef = admin.firestore().collection('folders').doc(currentFolder.id);
+      await folderRef.update({
+        'metadata.viewCount': (currentFolder.metadata?.viewCount || 0) + 1,
+        'metadata.lastAccessedAt': new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      folder: currentFolder
+    });
+
+  } catch (error) {
+    console.error('Error getting folder by slug:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -100,11 +225,13 @@ router.get('/root', async (req, res) => {
       const generatedId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const folderRef = foldersCol.doc(generatedId);
 
-      const path = `/${name.toLowerCase().replace(/\s+/g, '-')}`;
+      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+      const path = `/${slug}`;
       const doc = {
         id: generatedId,
         userId: uid,
         name,
+        slug: slug,
         parentId: null,
         path,
         appCode: APP_CODE,
@@ -117,6 +244,18 @@ router.get('/root', async (req, res) => {
           isDefault: true,
           icon: 'Folder',
           color: 'text-purple-600',
+          description: '',
+          tags: [],
+          isPublic: false,
+          viewCount: 0,
+          lastAccessedAt: new Date(),
+          permissions: {
+            canEdit: true,
+            canDelete: true,
+            canShare: true,
+            canDownload: true
+          },
+          customFields: {}
         },
       };
 

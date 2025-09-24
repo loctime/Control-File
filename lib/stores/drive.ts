@@ -21,7 +21,6 @@ interface DriveState {
   selectAll: () => void;
   clearSelection: () => void;
   setCurrentFolder: (folderId: string | null, breadcrumb: BreadcrumbItem[]) => void;
-  setCurrentFolderId: (folderId: string) => void;
   initializeDefaultFolder: () => void;
   setViewMode: (mode: Partial<ViewMode>) => void;
   setSearchFilters: (filters: Partial<SearchFilters>) => void;
@@ -110,39 +109,6 @@ export const useDriveStore = create<DriveState>()(
       clearSelection: () => set({ selectedItems: [] }),
       setCurrentFolder: (folderId, breadcrumb) =>
         set({ currentFolderId: folderId, breadcrumb }),
-      setCurrentFolderId: (folderId) =>
-        set((state) => {
-          // Si no hay breadcrumb o es la primera vez, inicializar con carpeta vacía
-          let newBreadcrumb = state.breadcrumb;
-          if (newBreadcrumb.length === 0) {
-            newBreadcrumb = [];
-          }
-          
-          // Si se está navegando a una carpeta específica, construir el breadcrumb
-          if (folderId) {
-            // Construir el breadcrumb para la nueva carpeta
-            const buildBreadcrumb = (targetFolderId: string): BreadcrumbItem[] => {
-              const item = state.items.find(i => i.id === targetFolderId);
-              if (!item || item.type !== 'folder') {
-                return [];
-              }
-              
-              if (!item.parentId) {
-                return [{ id: item.id, name: item.name, path: item.path }];
-              }
-              
-              const parentBreadcrumb = buildBreadcrumb(item.parentId);
-              return [...parentBreadcrumb, { id: item.id, name: item.name, path: item.path }];
-            };
-            
-            newBreadcrumb = buildBreadcrumb(folderId);
-          }
-          
-          return { 
-            currentFolderId: folderId,
-            breadcrumb: newBreadcrumb
-          };
-        }),
       initializeDefaultFolder: () =>
         set((state) => {
           // Solo inicializar si no hay carpeta actual
@@ -201,12 +167,14 @@ export const useDriveStore = create<DriveState>()(
       // Folder operations
       createMainFolder: (name, icon, color) => {
         const currentUserId = useAuthStore.getState().user?.uid || 'anonymous';
+        const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
         const newFolder = {
           id: `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           userId: currentUserId,
           name,
+          slug: slug,
           parentId: null,
-          path: `/${name.toLowerCase().replace(/\s+/g, '-')}`,
+          path: `/${slug}`,
           createdAt: new Date(),
           modifiedAt: new Date(),
           type: 'folder',
@@ -214,7 +182,19 @@ export const useDriveStore = create<DriveState>()(
             icon,
             color,
             isMainFolder: true,
-            isDefault: false
+            isDefault: false,
+            description: '',
+            tags: [],
+            isPublic: false,
+            viewCount: 0,
+            lastAccessedAt: new Date(),
+            permissions: {
+              canEdit: true,
+              canDelete: true,
+              canShare: true,
+              canDownload: true
+            },
+            customFields: {}
           }
         };
         

@@ -27,11 +27,13 @@ import { auth } from '@/lib/firebase';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { useExplorerShortcuts } from '@/hooks/useExplorerShortcuts';
 import { useMergeCurrentFolderItems } from '@/hooks/useMergeCurrentFolderItems';
+import { useNavigation } from '@/hooks/useNavigation';
 
 
 
 export function FileExplorer() {
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const { syncStateWithUrl, navigateToFolder } = useNavigation();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemsToDelete, setItemsToDelete] = useState<Array<{ id: string; name: string; type: 'file' | 'folder' }>>([]);
   const [showUploadOverlay, setShowUploadOverlay] = useState(false);
@@ -46,7 +48,6 @@ export function FileExplorer() {
     getSubfolders,
     getMainFolders,
     getMainFolder,
-    setCurrentFolderId,
     initializeDefaultFolder,
     items,
     createMainFolder,
@@ -133,14 +134,14 @@ export function FileExplorer() {
     if (currentFolderId || loading) return;
     const mainId = getMainFolder();
     if (mainId) {
-      setCurrentFolderId(mainId);
+      navigateToFolder(mainId);
       return;
     }
     const firstRootFolder = (files || []).find((i: any) => i.type === 'folder');
     if (firstRootFolder) {
-      setCurrentFolderId(firstRootFolder.id);
+      navigateToFolder(firstRootFolder.id);
     }
-  }, [currentFolderId, loading, files, getMainFolder, setCurrentFolderId]);
+  }, [currentFolderId, loading, files, getMainFolder, navigateToFolder]);
 
   // Obtener subcarpetas de la carpeta actual
   const subfolders = getSubfolders(currentFolderId || '');
@@ -150,7 +151,7 @@ export function FileExplorer() {
     const item = items.find(i => i.id === itemId);
     if (item) {
       if (item.type === 'folder') {
-        setCurrentFolderId(itemId);
+        navigateToFolder(itemId);
       } else {
         // TODO: Implementar apertura de archivos
         console.log('Abrir archivo:', itemId);
@@ -279,7 +280,7 @@ export function FileExplorer() {
 
   // Manejar clic en carpeta
   const handleFolderClick = (folderId: string) => {
-    setCurrentFolderId(folderId);
+    navigateToFolder(folderId);
     // Cerrar la papelera si está abierta
     closeTrashView();
   };
@@ -287,27 +288,18 @@ export function FileExplorer() {
   // Integración con historial del navegador para soportar botones físicos Atrás/Adelante
   useEffect(() => {
     const onPopState = (e: PopStateEvent) => {
-      const folderId = (e.state && (e.state as any).folderId) || null;
-      if (folderId) {
-        historyNavigatingRef.current = true;
-        setCurrentFolderId(folderId);
-        closeTrashView();
-      }
+      // Con las nuevas rutas, el navegador maneja automáticamente la navegación
+      // Solo necesitamos sincronizar el estado con la URL actual
+      syncStateWithUrl();
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [setCurrentFolderId, closeTrashView]);
+  }, []);
 
-  // Empujar un nuevo estado al cambiar de carpeta (evitar cuando proviene de popstate)
+  // Sincronizar estado con URL al cargar
   useEffect(() => {
-    if (!currentFolderId) return;
-    if (historyNavigatingRef.current) {
-      historyNavigatingRef.current = false;
-      return;
-    }
-    const url = `${window.location.pathname}#${currentFolderId}`;
-    window.history.pushState({ folderId: currentFolderId }, '', url);
-  }, [currentFolderId]);
+    syncStateWithUrl();
+  }, []);
 
   // Atajos de teclado extraídos a hook
   useExplorerShortcuts({

@@ -32,12 +32,14 @@ async function getOrCreateAppRootFolder(uid) {
   const folderId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const folderRef = foldersCol.doc(folderId);
 
+  const slug = APP_CODE.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
   const folderDoc = {
     id: folderId,
     userId: uid,
     name: APP_CODE,
+    slug: slug,
     parentId: null,
-    path: `/${APP_CODE}`,
+    path: `/${slug}`,
     appCode: APP_CODE,
     ancestors: [],
     createdAt: new Date(),
@@ -48,6 +50,18 @@ async function getOrCreateAppRootFolder(uid) {
       isDefault: true,
       icon: 'Folder',
       color: 'text-purple-600',
+      description: '',
+      tags: [],
+      isPublic: false,
+      viewCount: 0,
+      lastAccessedAt: new Date(),
+      permissions: {
+        canEdit: true,
+        canDelete: true,
+        canShare: true,
+        canDownload: true
+      },
+      customFields: {}
     },
   };
 

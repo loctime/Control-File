@@ -1,13 +1,21 @@
 // types/index.ts
-export interface User {
+  export interface User {
     uid: string;
     email: string;
     displayName: string | null;
     photoURL: string | null;
+    username: string; // Para URLs amigables
     planQuotaBytes: number;
     usedBytes: number;
     pendingBytes: number;
     createdAt: Date;
+    metadata?: {
+      bio?: string;
+      website?: string;
+      location?: string;
+      isPublic?: boolean;
+      customFields?: Record<string, any>;
+    };
   }
   
   export interface DriveFile {
@@ -20,10 +28,28 @@ export interface User {
   checksum: string;
   parentId: string | null;
   path: string;
+  slug: string; // Para URLs amigables
   version: number;
   createdAt: Date;
   modifiedAt: Date;
   isShared: boolean;
+  metadata?: {
+    // Metadatos extendidos para archivos
+    description?: string;
+    tags?: string[];
+    isPublic?: boolean;
+    downloadCount?: number;
+    lastAccessedAt?: Date;
+    thumbnail?: string;
+    exif?: Record<string, any>; // Metadatos de imagen
+    customFields?: Record<string, any>;
+    permissions?: {
+      canEdit?: boolean;
+      canDelete?: boolean;
+      canShare?: boolean;
+      canDownload?: boolean;
+    };
+  };
   // Campos para papelera
   deletedAt?: Date;
   expiresAt?: Date;
@@ -36,6 +62,7 @@ export interface User {
   name: string;
   parentId: string | null;
   path: string;
+  slug: string; // Para URLs amigables
   createdAt: Date;
   modifiedAt: Date;
   metadata?: {
@@ -43,6 +70,20 @@ export interface User {
     color?: string;
     isMainFolder?: boolean;
     isDefault?: boolean;
+    // Metadatos extendidos
+    description?: string;
+    tags?: string[];
+    isPublic?: boolean;
+    viewCount?: number;
+    lastAccessedAt?: Date;
+    permissions?: {
+      canEdit?: boolean;
+      canDelete?: boolean;
+      canShare?: boolean;
+      canDownload?: boolean;
+    };
+    thumbnail?: string;
+    customFields?: Record<string, any>;
   };
   // Campos para papelera
   deletedAt?: Date;
@@ -80,6 +121,7 @@ export interface User {
     id: string;
     name: string;
     path: string;
+    slug: string; // Para URLs amigables
   }
   
   export type DriveItem = (DriveFile & { type: 'file' }) | (DriveFolder & { type: 'folder' });

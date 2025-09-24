@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigation } from '@/hooks/useNavigation';
 import { useTaskbar } from '@/hooks/useTaskbar';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -36,10 +37,11 @@ interface TaskbarItem {
 }
 
 export function Taskbar() {
-  const { setCurrentFolderId, currentFolderId, getTrashItems } = useDriveStore();
+  const { currentFolderId, getTrashItems } = useDriveStore();
   const { isTrashView, toggleTrashView, closeTrashView, addToast } = useUIStore();
   const { logOut } = useAuth();
   const { taskbarItems, saveTaskbarItems } = useTaskbar();
+  const { navigateToFolder } = useNavigation();
   const router = useRouter();
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -104,7 +106,7 @@ export function Taskbar() {
     const match = allItems.find((i: any) => (i.name || '').toString().toLowerCase().includes(query));
     if (match) {
       if (match.type === 'folder') {
-        setCurrentFolderId(match.id);
+        navigateToFolder(match.id);
         closeTrashView();
         addToast({ type: 'success', title: 'Carpeta encontrada', message: `Abriendo "${match.name}"` });
       } else {
@@ -135,7 +137,7 @@ export function Taskbar() {
       }
       
       // Solo navegar si es una carpeta real
-      setCurrentFolderId(item.id);
+      navigateToFolder(item.id);
       // Cerrar la papelera si está abierta
       closeTrashView();
       // Efecto de feedback táctil

@@ -43,39 +43,50 @@ export function FloatingNotifications() {
       if (!processedToasts.current.has(toast.id)) {
         processedToasts.current.add(toast.id);
         
-        // Intentar obtener la posición del archivo
-        const fileId = toast.fileInfo?.fileId;
-        let position: ToastPosition | null = null;
+        // Verificar si hay subidas activas para determinar el comportamiento
+        const { uploadProgress } = useUIStore.getState();
+        const activeUploads = uploadProgress.filter(u => 
+          u.status === 'uploading' || u.status === 'processing'
+        );
         
-        if (fileId) {
-          // Esperar un poco para que el archivo aparezca en el DOM
-          setTimeout(() => {
+        // Si hay subidas activas, esperar más tiempo para evitar confusión
+        const delay = activeUploads.length > 0 ? 1000 : 500;
+        
+        // Esperar para asegurar que la subida haya terminado completamente
+        // y que el archivo esté disponible en el DOM
+        setTimeout(() => {
+          // Intentar obtener la posición del archivo
+          const fileId = toast.fileInfo?.fileId;
+          let position: ToastPosition | null = null;
+          
+          if (fileId) {
+            // Buscar el archivo en el DOM
             position = getFilePosition(fileId);
             if (position) {
               setToastPositions(prev => new Map(prev).set(toast.id, position!));
             }
-          }, 100);
-        }
-        
-        setVisibleToasts(prev => new Set(prev).add(toast.id));
-        
-        // Remover después de 3 segundos
-        setTimeout(() => {
-          setVisibleToasts(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(toast.id);
-            return newSet;
-          });
-          setToastPositions(prev => {
-            const newMap = new Map(prev);
-            newMap.delete(toast.id);
-            return newMap;
-          });
-          // También remover del ref después de que se oculte
+          }
+          
+          setVisibleToasts(prev => new Set(prev).add(toast.id));
+          
+          // Remover después de 3 segundos
           setTimeout(() => {
-            processedToasts.current.delete(toast.id);
-          }, 100);
-        }, 3000);
+            setVisibleToasts(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(toast.id);
+              return newSet;
+            });
+            setToastPositions(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(toast.id);
+              return newMap;
+            });
+            // También remover del ref después de que se oculte
+            setTimeout(() => {
+              processedToasts.current.delete(toast.id);
+            }, 100);
+          }, 3000);
+        }, delay);
       }
     });
   }, [toasts]);

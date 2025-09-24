@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigation } from '@/hooks/useNavigation';
 import { Button } from '@/components/ui/button';
 import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
@@ -11,9 +12,10 @@ import { ContextMenu } from '@/components/drive/ContextMenu';
 import { DriveItem, DriveFolder } from '@/types';
 
 export function Navbar() {
-  const { setCurrentFolderId, createMainFolder, items, toggleItemSelection, moveToTrash } = useDriveStore();
+  const { createMainFolder, items, toggleItemSelection, moveToTrash } = useDriveStore();
   const { sidebarOpen, closeTrashView } = useUIStore();
   const { user } = useAuth();
+  const { navigateToFolder } = useNavigation();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
@@ -36,10 +38,10 @@ export function Navbar() {
 
   // Memoizar el handler para evitar re-creaciones
   const handleFolderClick = useCallback((folderId: string) => {
-    setCurrentFolderId(folderId);
+    navigateToFolder(folderId);
     // Cerrar la papelera si está abierta
     closeTrashView();
-  }, [setCurrentFolderId, closeTrashView]);
+  }, [navigateToFolder, closeTrashView]);
 
   const handleCreateMainFolder = useCallback(() => {
     if (newFolderName.trim()) {
@@ -57,8 +59,8 @@ export function Navbar() {
 
   // Handlers para ContextMenuu
   const handleOpenItem = useCallback((itemId: string) => {
-    setCurrentFolderId(itemId);
-  }, [setCurrentFolderId]);
+    navigateToFolder(itemId);
+  }, [navigateToFolder]);
 
   const handleRenameItem = useCallback((itemId: string) => {
     // TODO: Implementar renombrar

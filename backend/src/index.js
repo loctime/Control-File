@@ -12,6 +12,7 @@ const sharesRoutes = require('./routes/shares');
 const healthRoutes = require('./routes/health');
 const foldersRoutes = require('./routes/folders');
 const userRoutes = require('./routes/user');
+const usersRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -125,6 +126,7 @@ app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/shares', authMiddleware, sharesRoutes);
 app.use('/api/folders', authMiddleware, foldersRoutes);
 app.use('/api/user', authMiddleware, userRoutes);
+app.use('/api/users', authMiddleware, usersRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

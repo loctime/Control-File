@@ -3,14 +3,16 @@
 import { ChevronRight, Home } from 'lucide-react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { Button } from '@/components/ui/button';
+import { useNavigation } from '@/hooks/useNavigation';
 
 export function Breadcrumb() {
-  const { breadcrumb, setCurrentFolder } = useDriveStore();
+  const { breadcrumb } = useDriveStore();
+  const { navigateToFolder } = useNavigation();
 
   const handleBreadcrumbClick = (index: number) => {
     const targetBreadcrumb = breadcrumb[index];
-    // Navegar a la carpeta específica
-    setCurrentFolder(targetBreadcrumb.id, breadcrumb.slice(0, index + 1));
+    // Navegar a la carpeta específica usando el nuevo sistema
+    navigateToFolder(targetBreadcrumb.id);
   };
 
   return (

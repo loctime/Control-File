@@ -26,6 +26,7 @@ import {
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigation } from '@/hooks/useNavigation';
 import { useFiles } from '@/hooks/useFiles';
 import { Breadcrumb } from './Breadcrumb';
 import { QuotaBar } from '@/components/common/QuotaBar';
@@ -34,14 +35,14 @@ import { ThemeToggle } from '@/components/common/ThemeToggle';
 export function DriveToolbar() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const { navigateToRoot } = useNavigation();
   
   const { 
     viewMode, 
     setViewMode, 
     searchFilters, 
     setSearchFilters,
-    currentFolderId,
-    setCurrentFolderId
+    currentFolderId
   } = useDriveStore();
   
   const { toggleDetailsPanel } = useUIStore();
@@ -76,7 +77,7 @@ export function DriveToolbar() {
 
   const handleHomeClick = () => {
     // Ir a la carpeta raíz (sin carpeta seleccionada)
-    setCurrentFolderId('');
+    navigateToRoot();
   };
 
   return (

@@ -3,13 +3,15 @@
 import { useUIStore } from '@/lib/stores/ui';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigation } from '@/hooks/useNavigation';
 import { Button } from '@/components/ui/button';
 import { Folder, PanelRight } from 'lucide-react';
 
 export function CollapsedSidebar() {
   const { user } = useAuth();
   const { toggleSidebar, closeTrashView } = useUIStore();
-  const { currentFolderId, getSubfolders, setCurrentFolderId, getMainFolders } = useDriveStore();
+  const { navigateToFolder } = useNavigation();
+  const { currentFolderId, getSubfolders, getMainFolders } = useDriveStore();
   
   // Obtener las subcarpetas de la carpeta principal actual
   const subfolders = currentFolderId ? getSubfolders(currentFolderId) : [];
@@ -39,7 +41,7 @@ export function CollapsedSidebar() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              setCurrentFolderId(folder.id);
+              navigateToFolder(folder.id);
               closeTrashView();
             }}
             className="w-8 h-8 p-0"

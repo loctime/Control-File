@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore } from '@/lib/stores/ui';
+import { useNavigation } from '@/hooks/useNavigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContextMenu } from '@/components/drive/ContextMenu';
@@ -28,10 +29,10 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
   const { user } = useAuth();
+  const { navigateToFolder } = useNavigation();
   const { 
     currentFolderId, 
     items, 
-    setCurrentFolderId, 
     createSubfolder, 
     getSubfolders,
     getMainFolders,
@@ -136,7 +137,7 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
 
   // Manejar clic en carpeta
   const handleFolderClick = (folderId: string) => {
-    setCurrentFolderId(folderId);
+    navigateToFolder(folderId);
     
     // Cerrar la papelera si está abierta
     closeTrashView();
@@ -187,8 +188,8 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
 
   // Handlers para ContextMenu
   const handleOpenItem = useCallback((itemId: string) => {
-    setCurrentFolderId(itemId);
-  }, [setCurrentFolderId]);
+    navigateToFolder(itemId);
+  }, [navigateToFolder]);
 
   const handleRenameItem = useCallback((itemId: string) => {
     // TODO: Implementar renombrar

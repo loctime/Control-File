@@ -180,6 +180,20 @@ export function useAuth() {
             } else {
               // New user, create document
               console.log('🆕 Usuario nuevo, creando documento en Firestore...');
+              // Generate username from email
+              const baseUsername = firebaseUser.email?.split('@')[0] || 'user';
+              const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
+              let username = cleanUsername;
+              
+              // Check for username uniqueness
+              let counter = 1;
+              while (true) {
+                const existingUser = await getDoc(doc(db, 'users', username));
+                if (!existingUser.exists()) break;
+                username = `${cleanUsername}${counter}`;
+                counter++;
+              }
+
               userData = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email!,
@@ -189,6 +203,7 @@ export function useAuth() {
                 usedBytes: 0,
                 pendingBytes: 0,
                 createdAt: new Date(),
+                username: username,
               };
               
               try {
@@ -197,6 +212,14 @@ export function useAuth() {
                   usedBytes: userData.usedBytes,
                   pendingBytes: userData.pendingBytes,
                   createdAt: userData.createdAt,
+                  username: userData.username,
+                  metadata: {
+                    bio: '',
+                    website: '',
+                    location: '',
+                    isPublic: false,
+                    customFields: {}
+                  }
                 });
                 console.log('✅ Documento de usuario creado exitosamente');
               } catch (createError: any) {
