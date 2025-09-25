@@ -343,7 +343,7 @@ export function FileContentArea({
 
   return (
     <div
-      ref={containerRef}
+      // ref={containerRef}
       {...getRootProps()}
       className={`flex-1 flex relative ${
         isDragActive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
