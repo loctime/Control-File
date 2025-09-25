@@ -13,7 +13,7 @@ interface FolderListItemProps {
   onShiftRangeSelect?: (itemIndex: number) => void;
   onSetAnchor?: (itemIndex: number) => void;
   // Para selección por arrastre
-  itemRef?: (ref: HTMLDivElement | null) => void;
+  itemRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FolderListItemProps) {

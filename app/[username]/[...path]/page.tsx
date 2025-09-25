@@ -46,7 +46,7 @@ export default function FolderPage() {
       }
 
       // Si es el usuario actual, usar la lógica normal
-      if (user.username === parsed.username) {
+      if (user && user.username === parsed.username) {
         // Buscar la carpeta por path en los items actuales
         const targetFolder = items.find(item => 
           item.type === 'folder' && 

@@ -106,7 +106,7 @@ export function useUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
-            fileId: confirmResponse.fileId, // Incluir el ID del archivo recién creado
+            fileId: (confirmResponse as any).fileId, // Incluir el ID del archivo recién creado
           },
         });
 

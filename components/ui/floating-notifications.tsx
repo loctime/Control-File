@@ -18,9 +18,9 @@ export function FloatingNotifications() {
   const [toastPositions, setToastPositions] = useState<Map<string, ToastPosition>>(new Map());
   const processedToasts = useRef<Set<string>>(new Set());
 
-  // Función para obtener la posición del archivo en la pantalla
-  const getFilePosition = (fileId: string): ToastPosition | null => {
-    const fileElement = document.querySelector(`[data-item-id="${fileId}"]`);
+  // Función para obtener la posición del archivo en la pantalla por nombre
+  const getFilePositionByName = (fileName: string): ToastPosition | null => {
+    const fileElement = document.querySelector(`[data-file-name="${fileName}"]`);
     if (!fileElement) return null;
 
     const rect = fileElement.getBoundingClientRect();
@@ -56,12 +56,12 @@ export function FloatingNotifications() {
         // y que el archivo esté disponible en el DOM
         setTimeout(() => {
           // Intentar obtener la posición del archivo
-          const fileId = toast.fileInfo?.fileId;
+          const fileName = toast.fileInfo?.name;
           let position: ToastPosition | null = null;
           
-          if (fileId) {
-            // Buscar el archivo en el DOM
-            position = getFilePosition(fileId);
+          if (fileName) {
+            // Buscar el archivo en el DOM por nombre
+            position = getFilePositionByName(fileName);
             if (position) {
               setToastPositions(prev => new Map(prev).set(toast.id, position!));
             }
@@ -99,10 +99,10 @@ export function FloatingNotifications() {
         .filter(toast => visibleToasts.has(toast.id))
         .map((toast) => {
           const position = toastPositions.get(toast.id);
-          const fileId = toast.fileInfo?.fileId;
+          const fileName = toast.fileInfo?.name;
           
           // Si tenemos la posición del archivo, posicionar encima de él
-          if (position && fileId) {
+          if (position && fileName) {
             return (
               <div
                 key={toast.id}

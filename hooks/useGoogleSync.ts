@@ -1,13 +1,15 @@
 // hooks/useGoogleSync.ts
 import { useAuth } from './useAuth';
+import { useAuthStore } from '@/lib/stores/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 export function useGoogleSync() {
-  const { user, setUser } = useAuth();
+  const { user } = useAuth();
+  const { setUser } = useAuthStore();
 
   const forceGoogleSync = async () => {
-    if (!user || !auth.currentUser || !db) {
+    if (!user || !auth || !auth.currentUser || !db) {
       console.error('❌ No hay usuario autenticado o Firestore no disponible');
       return false;
     }
@@ -33,7 +35,7 @@ export function useGoogleSync() {
         ...user,
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
-        email: firebaseUser.email
+        email: firebaseUser.email || user.email
       };
       
       setUser(updatedUser);
@@ -47,7 +49,7 @@ export function useGoogleSync() {
   };
 
   const checkGoogleChanges = () => {
-    if (!user || !auth.currentUser) {
+    if (!user || !auth || !auth.currentUser) {
       return false;
     }
 

@@ -144,7 +144,7 @@ export const useDriveStore = create<DriveState>()(
               console.log('📁 Abriendo carpeta principal por defecto:', mainFolder.name);
               return {
                 currentFolderId: mainFolder.id,
-                breadcrumb: [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path }]
+                breadcrumb: [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path, slug: mainFolder.slug }]
               };
             } else {
               // Si no hay carpeta principal, mantener el estado actual
@@ -362,7 +362,7 @@ export const useDriveStore = create<DriveState>()(
             items: finalItems,
             // Automáticamente abrir la carpeta principal
             currentFolderId: folderId,
-            breadcrumb: mainFolder ? [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path }] : []
+            breadcrumb: mainFolder ? [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path, slug: mainFolder.slug }] : []
           };
         }),
 

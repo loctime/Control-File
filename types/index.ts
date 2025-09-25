@@ -200,5 +200,6 @@
       size?: number;
       type?: string;
       file?: File; // Para poder abrir el archivo en caso de error
+      fileId?: string; // ID del archivo recién creado
     };
   }

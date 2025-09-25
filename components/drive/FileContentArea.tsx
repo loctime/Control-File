@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
@@ -191,8 +191,16 @@ export function FileContentArea({
   //   }
   // }, []);
   
-  // Función dummy para evitar errores
-  const registerItemRef = () => {};
+  // Map para almacenar referencias de elementos
+  const itemRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
+  
+  // Función para obtener o crear una referencia
+  const getItemRef = (itemId: string): React.RefObject<HTMLDivElement> => {
+    if (!itemRefs.current.has(itemId)) {
+      itemRefs.current.set(itemId, React.createRef<HTMLDivElement>());
+    }
+    return itemRefs.current.get(itemId)!;
+  };
 
   // Drag and drop for file upload
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -561,7 +569,7 @@ export function FileContentArea({
                             itemIndex={folderIdx}
                             onShiftRangeSelect={handleShiftRangeSelect}
                             onSetAnchor={handleSetAnchor}
-                            itemRef={(ref) => registerItemRef(folder.id, ref)}
+                            itemRef={getItemRef(folder.id)}
                           />
                         ))}
                       </div>
@@ -607,7 +615,7 @@ export function FileContentArea({
                         itemIndex={folderIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
-                        itemRef={(ref) => registerItemRef(folder.id, ref)}
+                        itemRef={getItemRef(folder.id)}
                       />
                     ))}
                     {sortedFiles.map((file, fileIdx) => (
@@ -618,7 +626,7 @@ export function FileContentArea({
                         itemIndex={sortedFolders.length + fileIdx}
                         onShiftRangeSelect={handleShiftRangeSelect}
                         onSetAnchor={handleSetAnchor}
-                        itemRef={(ref) => registerItemRef(file.id, ref)}
+                        itemRef={getItemRef(file.id)}
                       />
                     ))}
                   </div>

@@ -95,7 +95,7 @@ export function useProxyUpload() {
         });
 
         updateUpload(sessionId, { progress: 100, status: 'complete' });
-        console.log('🎉 Subida confirmada y completada', { sessionId, name: file.name, fileId: confirmResponse.fileId });
+        console.log('🎉 Subida confirmada y completada', { sessionId, name: file.name, fileId: (confirmResponse as any).fileId });
         
         // Refresh quota and file list
         await refreshUserQuota();
@@ -117,7 +117,7 @@ export function useProxyUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
-            fileId: confirmResponse.fileId, // Incluir el ID del archivo recién creado
+            fileId: (confirmResponse as any).fileId, // Incluir el ID del archivo recién creado
           },
         });
 
