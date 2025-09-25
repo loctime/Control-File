@@ -7,7 +7,6 @@ import { ClientWrapper } from '@/components/common/ClientWrapper';
 import { ConnectionStatus } from '@/components/common/ConnectionStatus';
 import { TrashCleanupInitializer } from '@/components/common/TrashCleanupInitializer';
 import { DomainConfigProvider } from '@/components/common/DomainConfigProvider';
-import { FloatingNotifications } from '@/components/ui/floating-notifications';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,7 +28,6 @@ export default function RootLayout({
             <ClientWrapper>
               <ConnectionStatus />
               <TrashCleanupInitializer />
-              <FloatingNotifications />
             </ClientWrapper>
             {children}
           </DomainConfigProvider>
