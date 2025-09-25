@@ -122,6 +122,7 @@ function assertItemVisibleForApp(itemData) {
 
 module.exports = {
   getAppCode,
+  getFolderDoc,
   getOrCreateAppRootFolder,
   resolveParentAndAncestors,
   assertItemVisibleForApp,
