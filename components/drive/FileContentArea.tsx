@@ -400,7 +400,7 @@ export function FileContentArea({
                     size="sm"
                     onClick={() => setViewMode('list')}
                     className="h-6 px-2"
-                    title="Vista de lista"
+                    title="Vista de lista con detalles"
                   >
                     <List className="h-3 w-3" />
                   </Button>
@@ -412,15 +412,6 @@ export function FileContentArea({
                     title="Vista de iconos"
                   >
                     <Grid className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'content' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('content')}
-                    className="h-6 px-2"
-                    title="Vista de contenido"
-                  >
-                    <FileText className="h-3 w-3" />
                   </Button>
                   
                   {/* Separador visual */}
@@ -557,61 +548,53 @@ export function FileContentArea({
                 </div>
               ) : (sortedFolders.length + sortedFiles.length) > 0 ? (
                 viewMode === 'list' ? (
-                  <div className="space-y-2">
-                    {sortedFolders.map((folder, folderIdx) => (
-                      <FolderListItem
-                        key={folder.id}
-                        folder={folder}
-                        isSelected={selectedItems.includes(folder.id)}
-                        onOpen={() => navigateToFolder(folder.id)}
-                        itemIndex={folderIdx}
-                        onShiftRangeSelect={handleShiftRangeSelect}
-                        onSetAnchor={handleSetAnchor}
-                        itemRef={(ref) => registerItemRef(folder.id, ref)}
-                      />
-                    ))}
-                    {sortedFiles.map((file, fileIdx) => (
-                      <FileItem
-                        key={file.id}
-                        file={file}
-                        isSelected={selectedItems.includes(file.id)}
-                        itemIndex={sortedFolders.length + fileIdx}
-                        onShiftRangeSelect={handleShiftRangeSelect}
-                        onSetAnchor={handleSetAnchor}
-                        itemRef={(ref) => registerItemRef(file.id, ref)}
-                      />
-                    ))}
-                  </div>
-                ) : viewMode === 'content' ? (
                   <div className="space-y-4">
+                    {/* Carpetas en formato de lista */}
                     {sortedFolders.length > 0 && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                      <div className="space-y-2">
                         {sortedFolders.map((folder, folderIdx) => (
-                          <FolderIcon
+                          <FolderListItem
                             key={folder.id}
                             folder={folder}
-                            onClick={() => navigateToFolder(folder.id)}
                             isSelected={selectedItems.includes(folder.id)}
+                            onOpen={() => navigateToFolder(folder.id)}
                             itemIndex={folderIdx}
                             onShiftRangeSelect={handleShiftRangeSelect}
                             onSetAnchor={handleSetAnchor}
+                            itemRef={(ref) => registerItemRef(folder.id, ref)}
                           />
                         ))}
                       </div>
                     )}
-                    {sortedFiles.map((file) => (
-                      <div key={file.id} className="border rounded-lg p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <File className="h-5 w-5 text-blue-500" />
-                          <h4 className="font-medium">{file.name}</h4>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          <p>Tamaño: {file.size ? formatFileSize(file.size) : '-'}</p>
-                          <p>Modificado: {file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : '-'}</p>
-                          {file.mime && <p>Tipo: {file.mime}</p>}
-                        </div>
+                    {/* Archivos con información detallada */}
+                    {sortedFiles.length > 0 && (
+                      <div className="space-y-3">
+                        {sortedFiles.map((file, fileIdx) => (
+                          <div 
+                            key={file.id} 
+                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                              selectedItems.includes(file.id) 
+                                ? 'bg-accent border-accent-foreground/20' 
+                                : 'hover:bg-muted/50'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShiftRangeSelect(sortedFolders.length + fileIdx);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              <File className="h-5 w-5 text-blue-500" />
+                              <h4 className="font-medium">{file.name}</h4>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              <p>Tamaño: {file.size ? formatFileSize(file.size) : '-'}</p>
+                              <p>Modificado: {file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : '-'}</p>
+                              {file.mime && <p>Tipo: {file.mime}</p>}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">

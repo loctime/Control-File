@@ -8,7 +8,7 @@ interface UIState {
   detailsPanelOpen: boolean;
   sidebarOpen: boolean;
   isTrashView: boolean;
-  viewMode: 'list' | 'grid' | 'content';
+  viewMode: 'list' | 'grid';
   iconSize: 'small' | 'medium' | 'large' | 'extra-large';
   autoplayVideoThumbnails: boolean;
   videoPreviewOnHover: boolean;
@@ -24,7 +24,7 @@ interface UIState {
   toggleTrashView: () => void;
   setTrashView: (isTrashView: boolean) => void;
   closeTrashView: () => void;
-  setViewMode: (mode: 'list' | 'grid' | 'content') => void;
+  setViewMode: (mode: 'list' | 'grid') => void;
   setIconSize: (size: 'small' | 'medium' | 'large' | 'extra-large') => void;
   setAutoplayVideoThumbnails: (value: boolean) => void;
   setVideoPreviewOnHover: (value: boolean) => void;
