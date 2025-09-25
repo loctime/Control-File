@@ -5,7 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useProxyUpload } from '@/hooks/useProxyUpload';
-import { useDragSelection } from '@/hooks/useDragSelection';
+// import { useDragSelection } from '@/hooks/useDragSelection';
 import { formatFileSize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { 
@@ -21,7 +21,10 @@ import {
   Smartphone,
   File,
   Star,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Clock
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -35,7 +38,7 @@ import { FolderIcon } from './FolderIcon';
 import { EmptyState } from './EmptyState';
 import { DragDropLoader } from './DragDropLoader';
 import { FolderListItem } from './FolderListItem';
-import { SelectionRectangle } from './SelectionRectangle';
+// import { SelectionRectangle } from './SelectionRectangle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { collection, query as fsQuery, where, orderBy, getDocs } from 'firebase/firestore';
@@ -76,18 +79,22 @@ export function FileContentArea({
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'type' | 'modifiedAt' | 'createdAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
-  // Referencias para selección por arrastre
-  const containerRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Referencias para selección por arrastre (DESACTIVADO)
+  // const containerRef = useRef<HTMLDivElement>(null);
+  // const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Hook de selección por arrastre
-  const { dragState, handleMouseDown: handleDragMouseDown } = useDragSelection({
-    onSelectionChange: setSelectedItems,
-    containerRef,
-    itemRefs,
-    selectedItems,
-    multiSelect: true
-  });
+  // Hook de selección por arrastre (DESACTIVADO)
+  // const { dragState, handleMouseDown: handleDragMouseDown } = useDragSelection({
+  //   onSelectionChange: setSelectedItems,
+  //   containerRef,
+  //   itemRefs,
+  //   selectedItems,
+  //   multiSelect: true
+  // });
+  
+  // Estado dummy para evitar errores
+  const dragState = { isSelecting: false, selectionRect: null };
+  const handleDragMouseDown = () => {};
 
   // Archivos ordenados según preferencia
   const sortedFiles = useMemo(() => {
@@ -161,14 +168,31 @@ export function FileContentArea({
     setAnchorIndex(idx);
   }, []);
 
-  // Función para registrar referencias de elementos
-  const registerItemRef = useCallback((itemId: string, element: HTMLDivElement | null) => {
-    if (element) {
-      itemRefs.current.set(itemId, element);
+  // Funciones para manejar el ordenamiento por columnas
+  const handleSortColumn = useCallback((column: 'name' | 'size' | 'type' | 'modifiedAt' | 'createdAt') => {
+    if (sortBy === column) {
+      // Si es la misma columna, cambiar el orden
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
-      itemRefs.current.delete(itemId);
+      // Si es una columna diferente, establecer orden ascendente por defecto
+      setSortBy(column);
+      setSortOrder('asc');
     }
-  }, []);
+  }, [sortBy, sortOrder]);
+
+  // Función para registrar referencias de elementos (DESACTIVADO)
+  // const registerItemRef = useCallback((itemId: string, element: HTMLDivElement | null) => {
+  //   if (element) {
+  //     itemRefs.current.set(itemId, element);
+  //     console.log('📌 Registrada referencia para:', itemId, element);
+  //   } else {
+  //     itemRefs.current.delete(itemId);
+  //     console.log('🗑️ Eliminada referencia para:', itemId);
+  //   }
+  // }, []);
+  
+  // Función dummy para evitar errores
+  const registerItemRef = () => {};
 
   // Drag and drop for file upload
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -325,7 +349,6 @@ export function FileContentArea({
         isDragActive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
       }`}
       onClick={onBackgroundClick}
-      onMouseDown={handleDragMouseDown}
     >
       <input {...getInputProps()} />
       <input
@@ -370,67 +393,110 @@ export function FileContentArea({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 px-2">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Vista
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setViewMode('list')}>
-                        <List className="h-4 w-4 mr-2" />
-                        Lista
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuItem onClick={() => setViewMode('grid')}>
-                        <Grid className="h-4 w-4 mr-2" />
-                        Iconos
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setViewMode('content')}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Contenido
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  {/* Botón Ordenar */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 px-2">
-                        <ArrowUpDown className="h-3 w-3 mr-1" />
-                        Ordenar
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setSortBy('name')}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Nombre
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('size')}>
-                        <Square className="h-4 w-4 mr-2" />
-                        Tamaño
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('type')}>
-                        <File className="h-4 w-4 mr-2" />
-                        Tipo
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('modifiedAt')}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Fecha (modificación)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('createdAt')}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Fecha (creación)
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setSortOrder('asc')}>
-                        Ascendente
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortOrder('desc')}>
-                        Descendente
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  
+                  {/* Botones de Vista directos */}
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                    className="h-6 px-2"
+                    title="Vista de lista"
+                  >
+                    <List className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className="h-6 px-2"
+                    title="Vista de iconos"
+                  >
+                    <Grid className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'content' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('content')}
+                    className="h-6 px-2"
+                    title="Vista de contenido"
+                  >
+                    <FileText className="h-3 w-3" />
+                  </Button>
+                  
+                  {/* Separador visual */}
+                  <div className="h-4 w-px bg-border mx-1" />
+                  
+                  {/* Columnas de ordenamiento */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSortColumn('name')}
+                    className={`h-6 px-2 text-xs flex items-center gap-1 ${
+                      sortBy === 'name' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <FileText className="h-3 w-3" />
+                    Nombre
+                    {sortBy === 'name' && (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSortColumn('size')}
+                    className={`h-6 px-2 text-xs flex items-center gap-1 ${
+                      sortBy === 'size' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Square className="h-3 w-3" />
+                    Tamaño
+                    {sortBy === 'size' && (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSortColumn('type')}
+                    className={`h-6 px-2 text-xs flex items-center gap-1 ${
+                      sortBy === 'type' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <File className="h-3 w-3" />
+                    Tipo
+                    {sortBy === 'type' && (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSortColumn('modifiedAt')}
+                    className={`h-6 px-2 text-xs flex items-center gap-1 ${
+                      sortBy === 'modifiedAt' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Clock className="h-3 w-3" />
+                    Modificado
+                    {sortBy === 'modifiedAt' && (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSortColumn('createdAt')}
+                    className={`h-6 px-2 text-xs flex items-center gap-1 ${
+                      sortBy === 'createdAt' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Clock className="h-3 w-3" />
+                    Creado
+                    {sortBy === 'createdAt' && (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                    )}
+                  </Button>
                 </div>
                 <div className="flex items-center gap-2">
                   {currentFolderId && (
@@ -592,11 +658,11 @@ export function FileContentArea({
         files={draggedFiles}
       />
 
-      {/* Selection Rectangle */}
-      <SelectionRectangle 
+      {/* Selection Rectangle (DESACTIVADO) */}
+      {/* <SelectionRectangle 
         rect={dragState.selectionRect}
         isVisible={dragState.isSelecting}
-      />
+      /> */}
     </div>
   );
 }

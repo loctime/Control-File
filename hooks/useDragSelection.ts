@@ -64,10 +64,18 @@ export function useDragSelection({
   const getElementsInSelection = useCallback((rect: DOMRect) => {
     const selectedIds: string[] = [];
     
-    if (!itemRefs.current) return selectedIds;
+    if (!itemRefs.current) {
+      console.log('❌ No hay referencias de elementos');
+      return selectedIds;
+    }
+
+    console.log('🔍 Buscando elementos en rectángulo:', rect);
+    console.log('📋 Referencias disponibles:', Array.from(itemRefs.current.keys()));
 
     itemRefs.current.forEach((element, itemId) => {
-      if (isElementInSelection(element, rect)) {
+      const isInSelection = isElementInSelection(element, rect);
+      console.log(`🔍 Elemento ${itemId}:`, isInSelection ? '✅ DENTRO' : '❌ FUERA');
+      if (isInSelection) {
         selectedIds.push(itemId);
       }
     });
@@ -87,23 +95,43 @@ export function useDragSelection({
 
   // Manejar inicio de selección
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    console.log('🖱️ Mouse down event:', e.target, e.button);
+    
     // Solo iniciar selección si se hace clic en el área de contenido (no en elementos)
     if ((e.target as HTMLElement).closest('[data-item-id]')) {
+      console.log('❌ Click en elemento, no iniciar selección');
       return;
     }
 
     // Solo iniciar selección con botón izquierdo
-    if (e.button !== 0) return;
+    if (e.button !== 0) {
+      console.log('❌ No es botón izquierdo, no iniciar selección');
+      return;
+    }
 
+    // Verificar que no sea un botón o elemento interactivo
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, a, [role="button"]')) {
+      console.log('❌ Click en elemento interactivo, no iniciar selección');
+      return;
+    }
+
+    console.log('✅ Iniciando selección por arrastre');
     e.preventDefault();
+    e.stopPropagation();
     
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) {
+      console.log('❌ No se pudo obtener rect del contenedor');
+      return;
+    }
 
     const startPoint = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
     };
+
+    console.log('📍 Punto de inicio:', startPoint);
 
     setDragState({
       isSelecting: true,
@@ -118,6 +146,8 @@ export function useDragSelection({
   // Manejar movimiento del mouse durante la selección
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!dragState.isSelecting || !dragState.startPoint) return;
+
+    console.log('🖱️ Mouse move durante selección');
 
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -147,14 +177,11 @@ export function useDragSelection({
       height: selectionRect.height
     } as DOMRect);
 
-    if (multiSelect) {
-      // En modo multi-selección, combinar con selección existente
-      const newSelection = [...new Set([...selectedItems, ...selectedIds])];
-      onSelectionChange(newSelection);
-    } else {
-      // En modo selección única, reemplazar selección
-      onSelectionChange(selectedIds);
-    }
+    console.log('🎯 Elementos seleccionados:', selectedIds);
+
+    // Para selección por arrastre, siempre reemplazar la selección actual
+    // con los elementos dentro del rectángulo
+    onSelectionChange(selectedIds);
   }, [dragState.isSelecting, dragState.startPoint, containerRef, calculateSelectionRect, getElementsInSelection, selectedItems, onSelectionChange, multiSelect]);
 
   // Manejar fin de selección
