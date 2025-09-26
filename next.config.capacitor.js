@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Removed output: 'export' for Capacitor builds to allow API routes
   trailingSlash: true,
   distDir: 'out',
   images: {
@@ -20,13 +20,19 @@ const nextConfig = {
     }
     return config;
   },
-  // Excluir rutas API del build estático
-  async rewrites() {
-    return []
-  },
-  // Solo incluir páginas estáticas
-  async generateStaticParams() {
-    return []
+  // Configuración para APIs en mobile
+  async headers() {
+    return [
+      {
+        source: '/api/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
+    ];
   }
 }
 

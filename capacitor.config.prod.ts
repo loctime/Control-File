@@ -3,10 +3,10 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'app.controlfile.files.controldoc.app',
   appName: 'ControlFile',
-  webDir: 'out', // Usar assets estáticos para producción
+  webDir: '.next', // Usar build de Next.js normal para permitir APIs
   server: {
     androidScheme: 'https'
-    // Sin 'url' para usar assets locales en lugar de servidor remoto
+    // Sin 'url' para usar servidor local embebido con APIs funcionales
   },
   plugins: {
     SplashScreen: {
