@@ -49,7 +49,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS configuration
+// CORS configuration.
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
