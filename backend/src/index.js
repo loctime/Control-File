@@ -56,7 +56,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'http://localhost:3000',
       'https://files.controldoc.app',
       'https://controldoc.app',
-      'https://stock.controldoc.app'
+      'https://stock.controldoc.app',
+      'https://gastos.controldoc.app'
     ];
 
 console.log('🌐 CORS allowed origins:', allowedOrigins);
