@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/lib/stores/ui';
+import { useDriveStore } from '@/lib/stores/drive';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TaskbarItem {
   id: string;
@@ -10,10 +12,14 @@ interface TaskbarItem {
   color: string;
   type: 'folder' | 'app';
   isCustom?: boolean;
+  folderId?: string; // Referencia a la carpeta real
+  appCode?: string; // Código de la app que creó la carpeta
 }
 
 export function useTaskbar() {
   const { addToast } = useUIStore();
+  const { items } = useDriveStore();
+  const { user } = useAuth();
   const [taskbarItems, setTaskbarItems] = useState<TaskbarItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const hasLoadedTaskbarRef = useRef(false);
@@ -143,6 +149,51 @@ export function useTaskbar() {
       console.error('❌ Error saving taskbar items:', error);
     }
   };
+
+  // Detectar carpetas de otras apps y agregarlas automáticamente al taskbar
+  useEffect(() => {
+    if (!user?.uid || !items.length || isLoading) return;
+
+    const userId = user.uid;
+    
+    // Encontrar carpetas de otras apps (no de ControlFile)
+    const otherAppFolders = items.filter(item => 
+      item.type === 'folder' && 
+      item.parentId === null &&
+      item.metadata?.isMainFolder &&
+      item.userId === userId &&
+      !item.deletedAt && // Excluir carpetas en la papelera
+      item.appCode && 
+      item.appCode !== 'controlfile' // Solo carpetas de otras apps
+    );
+
+    if (otherAppFolders.length > 0) {
+      console.log('🔍 Detectadas carpetas de otras apps:', otherAppFolders.length);
+      
+      // Crear items del taskbar para estas carpetas
+      const newTaskbarItems = otherAppFolders.map(folder => ({
+        id: `auto-${folder.id}`,
+        name: folder.name,
+        icon: folder.metadata?.icon || 'Folder',
+        color: folder.metadata?.color || 'text-blue-600',
+        type: 'folder' as const,
+        isCustom: false,
+        folderId: folder.id, // Guardar referencia a la carpeta real
+        appCode: folder.appCode
+      }));
+
+      // Filtrar items que ya existen en el taskbar
+      const existingIds = taskbarItems.map(item => item.id);
+      const itemsToAdd = newTaskbarItems.filter(item => !existingIds.includes(item.id));
+
+      if (itemsToAdd.length > 0) {
+        console.log('➕ Agregando carpetas de otras apps al taskbar:', itemsToAdd.length);
+        const updatedItems = [...taskbarItems, ...itemsToAdd];
+        setTaskbarItems(updatedItems);
+        saveTaskbarItems(updatedItems);
+      }
+    }
+  }, [items, user, taskbarItems, isLoading, saveTaskbarItems]);
 
   return {
     taskbarItems,

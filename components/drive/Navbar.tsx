@@ -24,14 +24,14 @@ export function Navbar() {
     const userId = user?.uid;
     if (!userId) return [];
     // Filtrar carpetas directamente desde items para ser reactivo
-    // Solo mostrar carpetas de ControlFile (appCode === 'controlfile' o undefined)
+    // Solo mostrar carpetas de ControlFile (appCode === 'controlfile')
     const mainFolders = items.filter(item => 
       item.type === 'folder' && 
       item.parentId === null &&
       item.metadata?.isMainFolder &&
       item.userId === userId &&
       !item.deletedAt && // Excluir carpetas en la papelera
-      (item.appCode === 'controlfile' || !item.appCode) // Solo carpetas de ControlFile
+      item.appCode === 'controlfile' // Solo carpetas de ControlFile
     );
     
     console.log('📁 Navbar - carpetas disponibles (solo ControlFile):', mainFolders.length);

@@ -34,6 +34,8 @@ interface TaskbarItem {
   color: string;
   type: 'folder' | 'app';
   isCustom?: boolean;
+  folderId?: string; // Referencia a la carpeta real
+  appCode?: string; // Código de la app que creó la carpeta
 }
 
 export function Taskbar() {
@@ -126,6 +128,18 @@ export function Taskbar() {
 
   const handleItemClick = (item: TaskbarItem) => {
     if (item.type === 'folder') {
+      // Si es un item automático de otra app, navegar a la carpeta real
+      if (item.id.startsWith('auto-') && item.folderId) {
+        navigateToFolder(item.folderId);
+        closeTrashView();
+        addToast({
+          title: 'Carpeta de otra app',
+          message: `Abriendo "${item.name}" de ${item.appCode || 'otra aplicación'}`,
+          type: 'info'
+        });
+        return;
+      }
+      
       // Si es un item del taskbar (no una carpeta real), no navegamos
       if (item.id.startsWith('taskbar-') || item.id.startsWith('custom-')) {
         addToast({
