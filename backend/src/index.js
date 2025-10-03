@@ -127,6 +127,11 @@ app.options('/api/folders/*', cors(corsOptions), (req, res) => {
   res.sendStatus(200);
 });
 
+// Public shares routes (no auth required)
+app.get('/api/shares/:token', sharesRoutes);
+app.post('/api/shares/:token/download', sharesRoutes);
+
+// Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/shares', authMiddleware, sharesRoutes);
 app.use('/api/folders', authMiddleware, foldersRoutes);
