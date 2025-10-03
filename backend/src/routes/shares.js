@@ -3,8 +3,11 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 
-// Create share
-router.post('/create', async (req, res) => {
+// Import auth middleware
+const { authMiddleware } = require('../middleware/auth');
+
+// Create share (protected)
+router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { fileId, expiresIn = 24 } = req.body; // expiresIn in hours
     const { uid } = req.user;
@@ -163,8 +166,8 @@ router.post('/:token/download', async (req, res) => {
   }
 });
 
-// Revoke share
-router.post('/revoke', async (req, res) => {
+// Revoke share (protected)
+router.post('/revoke', authMiddleware, async (req, res) => {
   try {
     const { shareToken } = req.body;
     const { uid } = req.user;
@@ -202,8 +205,8 @@ router.post('/revoke', async (req, res) => {
   }
 });
 
-// List user's shares
-router.get('/', async (req, res) => {
+// List user's shares (protected)
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const { uid } = req.user;
 
