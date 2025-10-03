@@ -22,7 +22,7 @@ router.post('/create', async (req, res) => {
     }
 
     const fileData = fileDoc.data();
-    if (fileData.uid !== uid) {
+    if (fileData.userId !== uid) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
