@@ -133,10 +133,14 @@ app.post('/api/shares/:token/download', sharesRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);
-app.use('/api/shares', authMiddleware, sharesRoutes);
 app.use('/api/folders', authMiddleware, foldersRoutes);
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
+
+// Protected shares routes (with auth)
+app.post('/api/shares/create', authMiddleware, sharesRoutes);
+app.post('/api/shares/revoke', authMiddleware, sharesRoutes);
+app.get('/api/shares', authMiddleware, sharesRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
