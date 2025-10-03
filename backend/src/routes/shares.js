@@ -4,7 +4,7 @@ const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 
 // Import auth middleware
-const { authMiddleware } = require('../middleware/auth');
+const authMiddleware = require('../middleware/auth');
 
 // Create share (protected)
 router.post('/create', authMiddleware, async (req, res) => {
