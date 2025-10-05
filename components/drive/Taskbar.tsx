@@ -21,8 +21,7 @@ import {
   Search,
   Clock,
   Trash2,
-  LogOut,
-  Pin
+  LogOut
 } from 'lucide-react';
 
 const iconMap: Record<string, any> = {
@@ -162,7 +161,7 @@ export function Taskbar() {
     if (newFolderName.trim()) {
       // Crear carpeta específica para el taskbar
       console.log('📁 Creando carpeta desde taskbar:', newFolderName);
-      const folderId = createMainFolder(newFolderName.trim(), 'Pin', 'text-blue-600', 'taskbar');
+      const folderId = createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
       
       addToast({
         title: 'Carpeta creada',
@@ -357,20 +356,18 @@ export function Taskbar() {
         {/* Carpetas de la barra de tareas - solo carpetas del taskbar */}
         <div className="flex items-center space-x-1 flex-1 justify-center">
           {folders.map((folder) => {
-            const IconComponent = Pin; // Usar ícono Pin para carpetas del taskbar
             return (
               <Button
                 key={folder.id}
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => handleFolderClick(folder.id)}
-                className={`flex items-center space-x-2 px-3 py-2 h-10 rounded-lg hover:bg-accent transition-all duration-200 hover:scale-105 ${
-                  currentFolderId === folder.id ? 'bg-accent/50 border-b-2 border-primary' : ''
+                className={`px-3 py-2 h-10 rounded-lg hover:bg-accent transition-all duration-200 hover:scale-105 border-2 ${
+                  currentFolderId === folder.id ? 'bg-accent/50 border-primary' : 'border-blue-500'
                 }`}
                 title={`Carpeta del Taskbar: ${folder.name}`}
               >
-                <IconComponent className={`w-4 h-4 ${folder.metadata?.color || 'text-blue-600'}`} />
-                <span className="text-sm">{folder.name}</span>
+                <span className="text-sm font-medium">{folder.name}</span>
               </Button>
             );
           })}

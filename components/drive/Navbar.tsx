@@ -156,14 +156,13 @@ export function Navbar() {
                 onSelectAll={handleSelectAll}
               >
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={() => handleFolderClick(folder.id)}
                   onContextMenu={() => toggleItemSelection(folder.id)}
-                  className="flex items-center space-x-2 px-3 py-2"
+                  className="px-3 py-2 border-2 border-purple-500 hover:bg-accent transition-all duration-200"
                 >
-                  <IconComponent className={`w-4 h-4 ${color}`} />
-                  <span>{folder.name}</span>
+                  <span className="font-medium">{folder.name}</span>
                 </Button>
               </ContextMenu>
             );
