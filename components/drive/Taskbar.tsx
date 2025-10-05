@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
-import { useTaskbar } from '@/hooks/useTaskbar';
 import { useRouter } from 'next/navigation';
+import { useFiles } from '@/hooks/useFiles';
+import { useMergeCurrentFolderItems } from '@/hooks/useMergeCurrentFolderItems';
 import { Button } from '@/components/ui/button';
 import { 
   Home, 
@@ -20,29 +21,49 @@ import {
   Search,
   Clock,
   Trash2,
-  LogOut
+  LogOut,
+  Pin
 } from 'lucide-react';
 
 const iconMap: Record<string, any> = {
   Home, Folder, Image, FileText, Monitor, Plus, Settings, User, Search, Clock, Trash2, LogOut,
 };
 
-interface TaskbarItem {
-  id: string;
-  name: string;
-  icon: any;
-  color: string;
-  type: 'folder' | 'app';
-  isCustom?: boolean;
-  folderId?: string; // Referencia a la carpeta real
-  appCode?: string; // Código de la app que creó la carpeta
-}
 
 export function Taskbar() {
-  const { currentFolderId, getTrashItems } = useDriveStore();
+  const { currentFolderId, getTrashItems, createMainFolder } = useDriveStore();
   const { isTrashView, toggleTrashView, closeTrashView, addToast } = useUIStore();
   const { logOut } = useAuth();
-  const { taskbarItems, saveTaskbarItems } = useTaskbar();
+  // Usar la misma lógica que FileExplorer para cargar carpetas
+  const { user } = useAuth();
+  const { items } = useDriveStore();
+  
+  // Cargar carpetas principales usando useFiles (igual que FileExplorer)
+  const { files: mainFoldersFiles, loading: foldersLoading } = useFiles(null); // null = carpetas principales
+  
+  // Sincronizar con el store global (igual que FileExplorer)
+  useMergeCurrentFolderItems(mainFoldersFiles, null, foldersLoading);
+  
+  // Filtrar carpetas creadas desde el taskbar
+  const folders = useMemo(() => {
+    const userId = user?.uid;
+    if (!userId) return [];
+    // Solo mostrar carpetas creadas desde el taskbar
+    const taskbarFolders = items.filter(item => 
+      item.type === 'folder' && 
+      item.parentId === null &&
+      item.metadata?.isMainFolder &&
+      item.userId === userId &&
+      !item.deletedAt && // Excluir carpetas en la papelera
+      item.appCode === 'controlfile' && // Solo carpetas de ControlFile
+      item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
+    );
+    
+    console.log('📁 Taskbar - carpetas del taskbar:', taskbarFolders.length);
+    console.log('📁 Taskbar - items totales en store:', items.length);
+    console.log('📁 Taskbar - carpetas principales cargadas desde useFiles:', mainFoldersFiles?.length || 0);
+    return taskbarFolders;
+  }, [items, user]);
   const { navigateToFolder } = useNavigation();
   const router = useRouter();
   const [isAddingFolder, setIsAddingFolder] = useState(false);
@@ -126,67 +147,35 @@ export function Taskbar() {
     setShowSearch(false);
   };
 
-  const handleItemClick = (item: TaskbarItem) => {
-    if (item.type === 'folder') {
-      // Si es un item automático de otra app, navegar a la carpeta real
-      if (item.id.startsWith('auto-') && item.folderId) {
-        navigateToFolder(item.folderId);
-        closeTrashView();
-        addToast({
-          title: 'Carpeta de otra app',
-          message: `Abriendo "${item.name}" de ${item.appCode || 'otra aplicación'}`,
-          type: 'info'
-        });
-        return;
-      }
-      
-      // Si es un item del taskbar (no una carpeta real), no navegamos
-      if (item.id.startsWith('taskbar-') || item.id.startsWith('custom-')) {
-        addToast({
-          title: 'Item del Taskbar',
-          message: 'Este es un favorito del taskbar. Crea una carpeta real desde el Navbar para navegar.',
-          type: 'info'
-        });
-        return;
-      }
-      
-      // Solo navegar si es una carpeta real
-      navigateToFolder(item.id);
-      // Cerrar la papelera si está abierta
-      closeTrashView();
-      // Efecto de feedback táctil
-      if (navigator.vibrate) {
-        navigator.vibrate(10);
-      }
+  // Usar la misma lógica simple del Navbar
+  const handleFolderClick = (folderId: string) => {
+    navigateToFolder(folderId);
+    // Cerrar la papelera si está abierta
+    closeTrashView();
+    // Efecto de feedback táctil
+    if (navigator.vibrate) {
+      navigator.vibrate(10);
     }
   };
 
   const handleAddFolder = () => {
     if (newFolderName.trim()) {
-      // Crear solo un item del taskbar (no una carpeta real)
-      const taskbarItemId = `taskbar-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newItem: TaskbarItem = {
-        id: taskbarItemId,
-        name: newFolderName.trim(),
-        icon: 'Folder',
-        color: 'text-purple-600',
-        type: 'folder',
-        isCustom: true,
-      };
-      // Usar la función del hook para guardar
-      const updatedItems = [...taskbarItems, newItem];
-      saveTaskbarItems(updatedItems);
+      // Crear carpeta específica para el taskbar
+      console.log('📁 Creando carpeta desde taskbar:', newFolderName);
+      const folderId = createMainFolder(newFolderName.trim(), 'Pin', 'text-blue-600', 'taskbar');
+      
+      addToast({
+        title: 'Carpeta creada',
+        message: `Carpeta "${newFolderName.trim()}" creada en el taskbar`,
+        type: 'success'
+      });
+      
       setNewFolderName('');
       setIsAddingFolder(false);
-      // No abrimos ninguna carpeta ya que es solo un item del taskbar
       closeTrashView();
     }
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    const updatedItems = taskbarItems.filter(item => item.id !== itemId);
-    saveTaskbarItems(updatedItems);
-  };
 
 
   // Funciones para la papelera
@@ -365,38 +354,24 @@ export function Taskbar() {
           )}
         </div>
 
-        {/* Items de la barra de tareas */}
+        {/* Carpetas de la barra de tareas - solo carpetas del taskbar */}
         <div className="flex items-center space-x-1 flex-1 justify-center">
-          {taskbarItems.map((item) => {
-            const IconComponent = typeof item.icon === 'string' ? (iconMap[item.icon] || Folder) : (item.icon || Folder);
+          {folders.map((folder) => {
+            const IconComponent = Pin; // Usar ícono Pin para carpetas del taskbar
             return (
-                              <div
-                  key={item.id}
-                  className="relative group"
-                  title={`Abrir ${item.name}`}
-                >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleItemClick(item)}
-                  className={`flex items-center space-x-2 px-3 py-2 h-10 rounded-lg hover:bg-accent transition-all duration-200 hover:scale-105 ${
-                    currentFolderId === item.id ? 'bg-accent/50 border-b-2 border-primary' : ''
-                  }`}
-                >
-                  <IconComponent className={`w-4 h-4 ${item.color}`} />
-                  <span className="text-sm">{item.name}</span>
-                </Button>
-                
-                {/* Botón de eliminar (solo para items del taskbar) */}
-                {(item.id.startsWith('custom-') || item.id.startsWith('taskbar-')) && (
-                  <button
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
+              <Button
+                key={folder.id}
+                variant="ghost"
+                size="sm"
+                onClick={() => handleFolderClick(folder.id)}
+                className={`flex items-center space-x-2 px-3 py-2 h-10 rounded-lg hover:bg-accent transition-all duration-200 hover:scale-105 ${
+                  currentFolderId === folder.id ? 'bg-accent/50 border-b-2 border-primary' : ''
+                }`}
+                title={`Carpeta del Taskbar: ${folder.name}`}
+              >
+                <IconComponent className={`w-4 h-4 ${folder.metadata?.color || 'text-blue-600'}`} />
+                <span className="text-sm">{folder.name}</span>
+              </Button>
             );
           })}
 

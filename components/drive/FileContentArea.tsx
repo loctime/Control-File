@@ -535,16 +535,18 @@ export function FileContentArea({
                       Principal
                     </Button>
                   )}
-                  <Button
-                    variant={detailsPanelOpen ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={toggleDetailsPanel}
-                    title="Atajo: barra espaciadora"
-                    className="h-6 px-2"
-                  >
-                    <PanelRight className="h-3 w-3 mr-1" />
-                    Detalles
-                  </Button>
+                  {!detailsPanelOpen && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleDetailsPanel}
+                      title="Atajo: barra espaciadora"
+                      className="h-6 px-2"
+                    >
+                      <PanelRight className="h-3 w-3 mr-1" />
+                      Detalles
+                    </Button>
+                  )}
                 </div>
               </div>
               {loading ? (

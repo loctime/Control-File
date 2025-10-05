@@ -33,7 +33,7 @@ interface DriveState {
   addItem: (item: any) => void;
   
   // Folder operations
-  createMainFolder: (name: string, icon: string, color: string) => string;
+  createMainFolder: (name: string, icon: string, color: string, source?: string) => string;
   createSubfolder: (name: string, parentId: string) => void;
   getMainFolders: () => any[];
   getSubfolders: (parentId: string) => any[];
@@ -184,7 +184,7 @@ export const useDriveStore = create<DriveState>()(
         })),
 
       // Folder operations
-      createMainFolder: (name, icon, color) => {
+      createMainFolder: (name, icon, color, source = 'navbar') => {
         const currentUserId = useAuthStore.getState().user?.uid || 'anonymous';
         const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
         const newFolder = {
@@ -207,6 +207,7 @@ export const useDriveStore = create<DriveState>()(
             isPublic: false,
             viewCount: 0,
             lastAccessedAt: new Date(),
+            source: source, // 'navbar' o 'taskbar'
             permissions: {
               canEdit: true,
               canDelete: true,
@@ -230,6 +231,7 @@ export const useDriveStore = create<DriveState>()(
                 parentId: newFolder.parentId,
                 icon: newFolder.metadata.icon,
                 color: newFolder.metadata.color,
+                source: newFolder.metadata.source,
               }),
             });
           } catch (error) {

@@ -15,7 +15,8 @@ router.post('/create', async (req, res) => {
       description, 
       tags, 
       isPublic, 
-      customFields 
+      customFields,
+      source 
     } = req.body;
     const { uid } = req.user;
     const APP_CODE = getAppCode();
@@ -90,7 +91,8 @@ router.post('/create', async (req, res) => {
           canShare: true,
           canDownload: true
         },
-        customFields: customFields || {}
+        customFields: customFields || {},
+        source: source || 'navbar'
       }
     });
 
