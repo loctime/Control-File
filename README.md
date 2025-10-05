@@ -5,6 +5,7 @@ Una aplicación de almacenamiento en la nube estilo Windows con Next.js 14, Fire
 ## 🚀 Características
 
 - **Interfaz estilo Windows**: Navegación breadcrumb, vista lista/cuadrícula, panel de detalles
+- **Sistema de Taskbar**: Barra de acceso rápido separada del navbar con carpetas específicas
 - **Autenticación**: Firebase Auth con Google y email/password
 - **Almacenamiento**: Backblaze B2 con presigned URLs
 - **Subida de archivos**: Drag & drop, multipart para archivos grandes
@@ -324,6 +325,7 @@ El script de reconciliación también limpia automáticamente las sesiones de su
 
 - Guía de integración: ver `API_INTEGRATION.md`
 - Referencia completa de endpoints: ver `API_REFERENCE.md`
+- Sistema de Taskbar: ver `TASKBAR_SYSTEM.md`
 
 ## 🤝 Contribuir
 

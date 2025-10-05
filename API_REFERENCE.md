@@ -64,8 +64,9 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - Respuesta: `{ folderId, folder }`
 
 - POST `/api/folders/create` (auth)
-  - Body: `{ name, parentId?: string | null, id?: string, icon?: string, color?: string }`
+  - Body: `{ name, parentId?: string | null, id?: string, icon?: string, color?: string, source?: string }`
   - Respuesta: `{ success: true, folderId, message }`
+  - **source**: `"navbar"` (default) o `"taskbar"` - Identifica el origen de la carpeta
 
 ## Shares
 - POST `/api/shares/create` (auth)
@@ -88,10 +89,12 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
 ## User
 - GET `/api/user/taskbar` (auth)
   - Respuesta: `{ items: TaskbarItem[] }`
+  - **NOTA**: Este endpoint está deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
 
 - POST `/api/user/taskbar` (auth)
   - Body: `{ items: TaskbarItem[] }`
   - Respuesta: `{ success: true }`
+  - **NOTA**: Este endpoint está deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
 
 ## Control de Acceso por Aplicación
 - El backend utiliza `APP_CODE=controlfile` para todas las integraciones (fijo, no configurable por app externa).

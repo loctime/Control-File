@@ -53,7 +53,9 @@ mini-onedrive/
 │   │   ├── Breadcrumb.tsx
 │   │   ├── ContextMenu.tsx
 │   │   ├── UploadProgress.tsx
-│   │   └── SearchBar.tsx
+│   │   ├── SearchBar.tsx
+│   │   ├── Navbar.tsx
+│   │   └── Taskbar.tsx
 │   ├── auth/
 │   │   └── AuthForm.tsx
 │   └── common/
@@ -407,8 +409,38 @@ npm run dev
 2. Set environment variables
 3. Deploy as Node.js service
 
+## Sistema de Taskbar
+
+### Componentes Principales
+- **Navbar.tsx**: Navegación principal con carpetas de `source: "navbar"`
+- **Taskbar.tsx**: Acceso rápido con carpetas de `source: "taskbar"`
+
+### Diferenciación Visual
+- **Navbar**: Marco morado (`border-purple-500`)
+- **Taskbar**: Marco azul (`border-blue-500`)
+
+### Estructura de Datos
+```typescript
+// Firestore: folders/{folderId}
+{
+  metadata: {
+    source: "navbar" | "taskbar", // Identifica el origen
+    isMainFolder: true,
+    icon: "Folder" | "Taskbar",
+    color: "text-purple-600" | "text-blue-600"
+  }
+}
+```
+
+### API Changes
+- **POST /api/folders/create**: Nuevo parámetro `source` opcional
+- **Endpoints taskbar**: Deprecated (ahora usa carpetas reales)
+
 ## Key Features Implementation Status
 - [x] Project structure and configuration
+- [x] Sistema de Taskbar separado del Navbar
+- [x] Diferenciación visual con marcos de colores
+- [x] Campo `metadata.source` en Firestore
 - [ ] Authentication system
 - [ ] File system components  
 - [ ] Upload/download functionality
