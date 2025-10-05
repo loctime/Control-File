@@ -28,6 +28,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
+  // Log para debugging del ancho
+  console.log('Sidebar recibiendo width:', width);
+  
   const { user } = useAuth();
   const { navigateToFolder } = useNavigation();
   const { 
@@ -396,8 +399,13 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
 
     return (
     <div 
-      className="bg-card border-r border-border flex flex-col min-w-0 h-full"
-      style={{ width: `${width}px` }}
+      className="bg-card border-r border-border flex flex-col h-full"
+      style={{ 
+        width: `${width}px`,
+        minWidth: `${width}px`,
+        maxWidth: `${width}px`,
+        flexShrink: 0
+      }}
     >
       {/* Header con botón de toggle */}
       <div className="flex items-center justify-between p-3 border-b border-border">
@@ -407,6 +415,10 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
             return <IconComponent className={`w-4 h-4 ${color}`} />;
           })()}
           <span className="text-sm font-medium">{currentMainFolder.name}</span>
+          {/* Indicador de ancho para debugging */}
+          <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
+            {width}px
+          </span>
         </div>
         <Button
           variant="ghost"

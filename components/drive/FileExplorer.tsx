@@ -77,6 +77,11 @@ export function FileExplorer() {
   // Estado para el ancho del sidebar (hook)
   const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({ initialWidth: 320, minWidth: 200, maxWidth: 600 });
 
+  // Log para debugging del contenedor
+  useEffect(() => {
+    console.log('Contenedor sidebar width actualizado:', sidebarWidth + 16);
+  }, [sidebarWidth]);
+
   // Merge de items del folder actual al store global
   useMergeCurrentFolderItems(files, currentFolderId, loading);
 
@@ -407,18 +412,50 @@ export function FileExplorer() {
         <div className="flex flex-1">
           {/* Sidebar o barra lateral mínima */}
           {sidebarOpen ? (
-            <>
+            <div 
+              className="flex" 
+              style={{ width: `${sidebarWidth + 16}px` }}
+              onLoad={() => console.log('Contenedor sidebar width:', sidebarWidth + 16)}
+            >
               <Sidebar 
                 isOpen={true} 
                 onToggle={() => {}} 
                 width={sidebarWidth}
               />
-              {/* Resize handle */}
+              {/* Resize handle - más ancho y visible */}
               <div
-                className="w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors"
+                className="w-4 bg-border hover:bg-primary/50 cursor-col-resize transition-all duration-200 relative group"
                 onMouseDown={handleMouseDown}
-              />
-            </>
+                title="Arrastra para redimensionar el panel lateral"
+              >
+                {/* Indicador visual central más visible */}
+                <div className="absolute inset-y-0 left-1/2 w-1 bg-muted-foreground/40 group-hover:bg-primary/80 group-hover:w-1.5 transition-all duration-200 transform -translate-x-0.5" />
+                
+                {/* Indicadores de puntos para mayor visibilidad */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="flex flex-col space-y-1">
+                    <div className="w-1 h-1 bg-primary/60 rounded-full"></div>
+                    <div className="w-1 h-1 bg-primary/60 rounded-full"></div>
+                    <div className="w-1 h-1 bg-primary/60 rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Botón de reset para debugging */}
+              <div className="absolute top-2 right-2 z-10">
+                <button
+                  onClick={() => {
+                    console.log('Reseteando sidebar a 320px');
+                    // Forzar reset del sidebar
+                    window.location.reload();
+                  }}
+                  className="text-xs bg-red-500 text-white px-2 py-1 rounded opacity-50 hover:opacity-100"
+                  title="Reset sidebar (debug)"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
           ) : (
             <CollapsedSidebar />
           )}
