@@ -104,9 +104,54 @@ export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSe
         onContextMenu={handleContextMenu}
         data-item-id={file.id}
       >
-        {/* Icono del archivo */}
+        {/* Icono del archivo o miniatura */}
         <div className="flex-shrink-0 mr-3">
-          <File className={`${getIconSize()} text-blue-500`} />
+          {isImageFile(file?.mime || '') && downloadUrl ? (
+            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted/30 flex items-center justify-center">
+              <img
+                src={downloadUrl}
+                alt={file.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          ) : isVideoFile(file?.mime || '') && downloadUrl ? (
+            <div className="w-12 h-12 rounded-md overflow-hidden bg-muted/30 flex items-center justify-center relative">
+              <video
+                ref={videoRef}
+                src={downloadUrl}
+                className="w-full h-full object-cover"
+                muted
+                playsInline
+                loop
+                preload="metadata"
+                onMouseEnter={() => {
+                  if (videoPreviewOnHover && !autoplayVideoThumbnails) {
+                    videoRef.current?.play().catch(() => {});
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (videoPreviewOnHover && !autoplayVideoThumbnails) {
+                    try {
+                      videoRef.current?.pause();
+                      if (videoRef.current) videoRef.current.currentTime = 0;
+                    } catch {}
+                  }
+                }}
+              />
+              {!(isSelected || (videoPreviewOnHover && !autoplayVideoThumbnails)) && (
+                <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                  <Play className="h-3 w-3 text-white" />
+                </div>
+              )}
+            </div>
+          ) : isPDFFile(file?.mime || '') ? (
+            <div className="w-12 h-12 rounded-md bg-red-500/10 dark:bg-red-900/30 text-red-600 dark:text-red-300 flex items-center justify-center">
+              <span className="text-xs font-bold">PDF</span>
+            </div>
+          ) : (
+            <File className={`${getIconSize()} text-blue-500`} />
+          )}
         </div>
 
         {/* Nombre del archivo */}

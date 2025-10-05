@@ -574,32 +574,19 @@ export function FileContentArea({
                         ))}
                       </div>
                     )}
-                    {/* Archivos con información detallada */}
+                    {/* Archivos usando FileItem para consistencia */}
                     {sortedFiles.length > 0 && (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {sortedFiles.map((file, fileIdx) => (
-                          <div 
-                            key={file.id} 
-                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                              selectedItems.includes(file.id) 
-                                ? 'bg-accent border-accent-foreground/20' 
-                                : 'hover:bg-muted/50'
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShiftRangeSelect(sortedFolders.length + fileIdx);
-                            }}
-                          >
-                            <div className="flex items-center gap-3 mb-3">
-                              <File className="h-5 w-5 text-blue-500" />
-                              <h4 className="font-medium">{file.name}</h4>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              <p>Tamaño: {file.size ? formatFileSize(file.size) : '-'}</p>
-                              <p>Modificado: {file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : '-'}</p>
-                              {file.mime && <p>Tipo: {file.mime}</p>}
-                            </div>
-                          </div>
+                          <FileItem
+                            key={file.id}
+                            file={file}
+                            isSelected={selectedItems.includes(file.id)}
+                            itemIndex={sortedFolders.length + fileIdx}
+                            onShiftRangeSelect={handleShiftRangeSelect}
+                            onSetAnchor={handleSetAnchor}
+                            itemRef={getItemRef(file.id)}
+                          />
                         ))}
                       </div>
                     )}
