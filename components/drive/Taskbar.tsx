@@ -217,7 +217,7 @@ export function Taskbar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-card border-t-2 border-secondary z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-card border-t-2 border-secondary z-[110]">
       <div className="flex items-center justify-between px-2 py-1 h-12">
         {/* Botón de inicio (Windows) */}
         <div className="flex items-center relative start-menu-container">
