@@ -5,6 +5,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore } from '@/lib/stores/ui';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContextMenu } from '@/components/drive/ContextMenu';
@@ -30,6 +31,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
   // Log para debugging del ancho
   console.log('Sidebar recibiendo width:', width);
+  const { invalidateFiles } = useQueryInvalidation();
   
   const { user } = useAuth();
   const { navigateToFolder } = useNavigation();
@@ -162,6 +164,10 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
   const handleCreateSubfolder = (parentId: string) => {
     if (newFolderName.trim()) {
       createSubfolder(newFolderName, parentId);
+      
+      // Invalidar queries para actualizar la UI automáticamente
+      invalidateFiles(parentId);
+      
       setNewFolderName('');
       setIsCreatingSubfolder(null);
       // Expandir la carpeta padre automáticamente

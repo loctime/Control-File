@@ -28,6 +28,7 @@ import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useFiles } from '@/hooks/useFiles';
+import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { Breadcrumb } from './Breadcrumb';
 import { QuotaBar } from '@/components/common/QuotaBar';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
@@ -36,6 +37,7 @@ export function DriveToolbar() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const { navigateToRoot } = useNavigation();
+  const { invalidateFiles } = useQueryInvalidation();
   
   const { 
     viewMode, 
@@ -54,6 +56,10 @@ export function DriveToolbar() {
     
     try {
       await createFolder.mutateAsync(newFolderName);
+      
+      // Invalidar queries para actualizar la UI automáticamente
+      invalidateFiles(currentFolderId);
+      
       setNewFolderName('');
       setIsCreatingFolder(false);
     } catch (error) {

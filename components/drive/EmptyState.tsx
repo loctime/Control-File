@@ -2,17 +2,23 @@
 
 import { useState } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
+import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { Button } from '@/components/ui/button';
 import { Folder, Plus } from 'lucide-react';
 
 export function EmptyState() {
   const { createMainFolder, setMainFolder } = useDriveStore();
+  const { invalidateFiles } = useQueryInvalidation();
   const [isCreating, setIsCreating] = useState(false);
   const [folderName, setFolderName] = useState('');
 
   const handleCreateFirstFolder = () => {
     if (folderName.trim()) {
       const newFolderId = createMainFolder(folderName, 'Folder', 'text-purple-600');
+      
+      // Invalidar queries para actualizar la UI automáticamente
+      invalidateFiles(null);
+      
       // Establecer la carpeta recién creada como principal automáticamente
       setMainFolder(newFolderId);
       setFolderName('');
