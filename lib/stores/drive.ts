@@ -234,6 +234,7 @@ export const useDriveStore = create<DriveState>()(
                 source: newFolder.metadata.source,
               }),
             });
+            
           } catch (error) {
             console.error('❌ Error persistiendo carpeta principal:', error);
           }
@@ -303,6 +304,7 @@ export const useDriveStore = create<DriveState>()(
                   color: newSubfolder.metadata.color,
                 }),
               });
+              
             } catch (error) {
               console.error('❌ Error persistiendo subcarpeta:', error);
             }

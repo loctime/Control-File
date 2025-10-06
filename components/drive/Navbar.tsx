@@ -5,6 +5,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { Button } from '@/components/ui/button';
 import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
@@ -16,8 +17,10 @@ export function Navbar() {
   const { sidebarOpen, closeTrashView } = useUIStore();
   const { user } = useAuth();
   const { navigateToFolder } = useNavigation();
+  const { invalidateFiles } = useQueryInvalidation();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   // Memoizar las carpetas para evitar re-renders innecesarios
   const folders = useMemo(() => {
@@ -46,14 +49,26 @@ export function Navbar() {
     closeTrashView();
   }, [navigateToFolder, closeTrashView]);
 
-  const handleCreateMainFolder = useCallback(() => {
-    if (newFolderName.trim()) {
+  const handleCreateMainFolder = useCallback(async () => {
+    if (newFolderName.trim() && !isCreating) {
+      setIsCreating(true);
       console.log('📁 Creando carpeta:', newFolderName);
-      createMainFolder(newFolderName, 'Folder', 'text-purple-600');
-      setNewFolderName('');
-      setIsCreatingFolder(false);
+      
+      try {
+        createMainFolder(newFolderName, 'Folder', 'text-purple-600');
+        
+        // Invalidar queries para actualizar la UI automáticamente
+        invalidateFiles(null);
+        
+        setNewFolderName('');
+        setIsCreatingFolder(false);
+      } catch (error) {
+        console.error('Error creando carpeta:', error);
+      } finally {
+        setIsCreating(false);
+      }
     }
-  }, [newFolderName, createMainFolder]);
+  }, [newFolderName, createMainFolder, invalidateFiles, isCreating]);
 
   const handleProfileClick = useCallback(() => {
     // TODO: Navegar a página de perfil
@@ -191,10 +206,10 @@ export function Navbar() {
               <Button
                 size="sm"
                 onClick={handleCreateMainFolder}
-                disabled={!newFolderName.trim()}
+                disabled={!newFolderName.trim() || isCreating}
                 className="text-xs px-2 py-1"
               >
-                Crear
+                {isCreating ? 'Creando...' : 'Crear'}
               </Button>
             </div>
           ) : (

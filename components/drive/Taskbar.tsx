@@ -5,6 +5,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { useRouter } from 'next/navigation';
 import { useFiles } from '@/hooks/useFiles';
 import { useMergeCurrentFolderItems } from '@/hooks/useMergeCurrentFolderItems';
@@ -33,6 +34,7 @@ export function Taskbar() {
   const { currentFolderId, getTrashItems, createMainFolder } = useDriveStore();
   const { isTrashView, toggleTrashView, closeTrashView, addToast } = useUIStore();
   const { logOut } = useAuth();
+  const { invalidateFiles } = useQueryInvalidation();
   // Usar la misma lógica que FileExplorer para cargar carpetas
   const { user } = useAuth();
   const { items } = useDriveStore();
@@ -67,6 +69,7 @@ export function Taskbar() {
   const router = useRouter();
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const [showStartMenu, setShowStartMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showSearch, setShowSearch] = useState(false);
@@ -157,21 +160,37 @@ export function Taskbar() {
     }
   };
 
-  const handleAddFolder = () => {
-    if (newFolderName.trim()) {
+  const handleAddFolder = async () => {
+    if (newFolderName.trim() && !isCreating) {
+      setIsCreating(true);
       // Crear carpeta específica para el taskbar
       console.log('📁 Creando carpeta desde taskbar:', newFolderName);
-      const folderId = createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
       
-      addToast({
-        title: 'Carpeta creada',
-        message: `Carpeta "${newFolderName.trim()}" creada en el taskbar`,
-        type: 'success'
-      });
-      
-      setNewFolderName('');
-      setIsAddingFolder(false);
-      closeTrashView();
+      try {
+        const folderId = createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
+        
+        // Invalidar queries para actualizar la UI automáticamente
+        invalidateFiles(null);
+        
+        addToast({
+          title: 'Carpeta creada',
+          message: `Carpeta "${newFolderName.trim()}" creada en el taskbar`,
+          type: 'success'
+        });
+        
+        setNewFolderName('');
+        setIsAddingFolder(false);
+        closeTrashView();
+      } catch (error) {
+        console.error('Error creando carpeta:', error);
+        addToast({
+          title: 'Error',
+          message: 'No se pudo crear la carpeta',
+          type: 'error'
+        });
+      } finally {
+        setIsCreating(false);
+      }
     }
   };
 
@@ -395,10 +414,10 @@ export function Taskbar() {
                 <Button
                   size="sm"
                   onClick={handleAddFolder}
-                  disabled={!newFolderName.trim()}
+                  disabled={!newFolderName.trim() || isCreating}
                   className="h-6 px-2"
                 >
-                  +
+                  {isCreating ? '...' : '+'}
                 </Button>
                 <Button
                   variant="ghost"
