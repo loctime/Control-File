@@ -9,6 +9,8 @@ export function Breadcrumb() {
   const { breadcrumb } = useDriveStore();
   const { navigateToFolder } = useNavigation();
 
+
+
   const handleBreadcrumbClick = (index: number) => {
     const targetBreadcrumb = breadcrumb[index];
     // Navegar a la carpeta específica usando el nuevo sistema

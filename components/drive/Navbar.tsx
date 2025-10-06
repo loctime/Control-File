@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { ContextMenu } from '@/components/drive/ContextMenu';
+import { Breadcrumb } from '@/components/drive/Breadcrumb';
 import { DriveItem, DriveFolder } from '@/types';
 
 export function Navbar() {
@@ -130,7 +131,8 @@ export function Navbar() {
 
   return (
     <nav className="bg-card border-b-2 border-secondary px-4 py-2">
-      <div className="flex items-center justify-between">
+      {/* Primera fila: Logo, Carpetas y Usuario */}
+      <div className="flex items-center justify-between mb-2">
         {/* Logo */}
         <div className="flex items-center space-x-2">
           <h1 className="text-lg font-semibold">Control File</h1>
@@ -241,6 +243,11 @@ export function Navbar() {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Segunda fila: Breadcrumb de navegación */}
+      <div className="flex items-center justify-center">
+        <Breadcrumb />
       </div>
     </nav>
   );

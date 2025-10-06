@@ -35,15 +35,9 @@ export function Taskbar() {
   const { isTrashView, toggleTrashView, closeTrashView, addToast } = useUIStore();
   const { logOut } = useAuth();
   const { invalidateFiles } = useQueryInvalidation();
-  // Usar la misma lógica que FileExplorer para cargar carpetas
+  // Usar directamente el store (como el sidebar) para evitar conflictos
   const { user } = useAuth();
   const { items } = useDriveStore();
-  
-  // Cargar carpetas principales usando useFiles (igual que FileExplorer)
-  const { files: mainFoldersFiles, loading: foldersLoading } = useFiles(null); // null = carpetas principales
-  
-  // Sincronizar con el store global (igual que FileExplorer)
-  useMergeCurrentFolderItems(mainFoldersFiles, null, foldersLoading);
   
   // Filtrar carpetas creadas desde el taskbar
   const folders = useMemo(() => {
@@ -62,7 +56,6 @@ export function Taskbar() {
     
     console.log('📁 Taskbar - carpetas del taskbar:', taskbarFolders.length);
     console.log('📁 Taskbar - items totales en store:', items.length);
-    console.log('📁 Taskbar - carpetas principales cargadas desde useFiles:', mainFoldersFiles?.length || 0);
     return taskbarFolders;
   }, [items, user]);
   const { navigateToFolder } = useNavigation();

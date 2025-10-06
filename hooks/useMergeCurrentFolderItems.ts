@@ -23,12 +23,6 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
         currentItemsCount: currentItems.length,
         files: memoizedFiles.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parentId }))
       });
-      
-      // Debug específico para la carpeta "Octubre"
-      const octubreFolder = memoizedFiles.find(f => f.name === 'Octubre' && f.id === 'main-1759781709442-k2zs81ple');
-      if (octubreFolder) {
-        console.log('🔍 useMergeCurrentFolderItems - Encontrada carpeta Octubre en files:', octubreFolder);
-      }
 
       const existingById = new Map(currentItems.map((i: any) => [i.id, i]));
 
@@ -48,9 +42,12 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
       const base = currentItems.filter((it: any) => {
         const belongsToCurrent = it.parentId === currentFolderId;
         const isTrashed = !!it.deletedAt;
-        // NO eliminar carpetas que pertenecen a la carpeta actual
-        // Solo mantener elementos que NO pertenecen a la carpeta actual O están en la papelera
-        return !belongsToCurrent || isTrashed;
+        // Mantener elementos que:
+        // 1. NO pertenecen a la carpeta actual (para preservar el árbol global)
+        // 2. O están en la papelera (para preservar estado de papelera)
+        // 3. O son carpetas principales (para preservar navbar/taskbar)
+        const isMainFolder = it.metadata?.isMainFolder;
+        return !belongsToCurrent || isTrashed || isMainFolder;
       });
 
       const baseWithoutIncoming = base.filter((it: any) => !incomingIds.has(it.id));
@@ -64,15 +61,6 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
         nextItemsCount: nextItems.length,
         nextItems: nextItems.map(i => ({ id: i.id, name: i.name, type: i.type, parentId: i.parentId }))
       });
-      
-      // Debug específico para verificar si "Octubre" está en el resultado final
-      const octubreInResult = nextItems.find(i => i.name === 'Octubre' && i.id === 'main-1759781709442-k2zs81ple');
-      if (octubreInResult) {
-        console.log('✅ useMergeCurrentFolderItems - Carpeta Octubre incluida en resultado final:', octubreInResult);
-      } else {
-        console.log('❌ useMergeCurrentFolderItems - Carpeta Octubre NO incluida en resultado final');
-        console.log('🔍 Items que SÍ están en el resultado:', nextItems.filter(i => i.parentId === 'main-1759781707790-601cgad4r'));
-      }
 
       const prevSignature = JSON.stringify(currentItems.map((i: any) => i.id).sort());
       const nextSignature = JSON.stringify(nextItems.map((i: any) => i.id).sort());

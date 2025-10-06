@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FileExplorer } from '@/components/drive/FileExplorer';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
+import { useNavigation } from '@/hooks/useNavigation';
 import { parseFolderUrl, buildFolderUrl } from '@/lib/url-utils';
 
 export default function FolderPage() {
@@ -15,6 +16,7 @@ export default function FolderPage() {
   const { user, loading: authLoading } = useAuth();
   const { setCurrentFolder, items } = useDriveStore();
   const { addToast } = useUIStore();
+  const { navigateToFolder } = useNavigation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,16 +49,32 @@ export default function FolderPage() {
 
       // Si es el usuario actual, usar la lógica normal
       if (user && user.username === parsed.username) {
-        // Buscar la carpeta por path en los items actuales
-        const targetFolder = items.find(item => 
-          item.type === 'folder' && 
-          item.path === `/${parsed.path.join('/')}`
-        );
+        // Usar la misma lógica que useNavigation para encontrar la carpeta
+        const targetPath = `/${parsed.path.join('/')}`;
+        
+        // Buscar la carpeta usando la lógica de buildBreadcrumbFromPath
+        let currentFolderId = null;
+        let targetFolder = null;
+        
+        for (const slug of parsed.path) {
+          const folder = items.find(item => 
+            item.type === 'folder' && 
+            item.slug === slug &&
+            item.parentId === currentFolderId
+          );
+          
+          if (folder) {
+            currentFolderId = folder.id;
+            targetFolder = folder;
+          } else {
+            targetFolder = null;
+            break;
+          }
+        }
 
         if (targetFolder) {
-          // Construir breadcrumb
-          const breadcrumb = buildBreadcrumbFromPath(parsed.path);
-          setCurrentFolder(targetFolder.id, breadcrumb);
+          // Usar el mismo sistema de navegación que useNavigation para construir el breadcrumb correctamente
+          navigateToFolder(targetFolder.id);
         } else {
           setError('Carpeta no encontrada');
         }

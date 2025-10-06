@@ -25,7 +25,7 @@ export function useNavigation() {
   }
 
   /**
-   * Navega a una carpeta usando su ID
+   * Navega a una carpeta usando su ID - PUNTO CENTRAL DE SINCRONIZACIÓN
    */
   const navigateToFolder = (folderId: string) => {
     const username = getUserUsername(user || {});
@@ -34,15 +34,20 @@ export function useNavigation() {
     const folder = items.find(item => item.id === folderId && item.type === 'folder') as DriveFolder;
     if (!folder) return;
 
+    console.log('🧭 navigateToFolder - Navegando a carpeta:', { id: folder.id, name: folder.name, parentId: folder.parentId });
+
     // Construir breadcrumb
     const breadcrumb = buildBreadcrumbFromFolder(folder);
     
-    // Actualizar estado
+    // Actualizar estado central (esto sincroniza todo)
     setCurrentFolder(folderId, breadcrumb);
 
     // Construir URL y navegar
     const pathSegments = breadcrumb.map(item => getItemSlug(item));
     const url = buildFolderUrl(username, pathSegments);
+    
+    console.log('🧭 navigateToFolder - URL construida:', url);
+    console.log('🧭 navigateToFolder - Breadcrumb:', breadcrumb);
     
     // Solo navegar si no estamos ya en esa URL
     if (window.location.pathname !== url) {
@@ -114,7 +119,6 @@ export function useNavigation() {
         break;
       }
     }
-
     return breadcrumb;
   };
 
@@ -136,28 +140,47 @@ export function useNavigation() {
   };
 
   /**
-   * Sincroniza el estado con la URL actual
+   * Sincroniza el estado con la URL actual - PUNTO CENTRAL DE SINCRONIZACIÓN
    */
   const syncStateWithUrl = () => {
     const username = getUserUsername(user || {});
     if (!username) return;
 
     const pathSegments = getCurrentPathFromUrl();
+    
     if (!pathSegments || pathSegments.length === 0) {
       // Estamos en la raíz
       setCurrentFolder(null, []);
       return;
     }
 
-    // Buscar la carpeta por el path (usando slugs para compatibilidad)
+    // Buscar la carpeta usando la misma lógica jerárquica que loadFolderByPath
     const targetPath = `/${pathSegments.join('/')}`;
-    const folder = items.find(item => 
-      item.type === 'folder' && 
-      item.path === targetPath
-    ) as DriveFolder;
+    let currentFolderId = null;
+    let folder = null;
+    
+    for (const slug of pathSegments) {
+      const foundFolder = items.find(item => 
+        item.type === 'folder' && 
+        item.slug === slug &&
+        item.parentId === currentFolderId
+      );
+      
+      if (foundFolder) {
+        currentFolderId = foundFolder.id;
+        folder = foundFolder;
+      } else {
+        folder = null;
+        break;
+      }
+    }
+
+    console.log('🧭 syncStateWithUrl - Buscando carpeta con path:', targetPath);
+    console.log('🧭 syncStateWithUrl - Carpeta encontrada:', folder ? { id: folder.id, name: folder.name } : 'NO ENCONTRADA');
 
     if (folder) {
       const breadcrumb = buildBreadcrumbFromFolder(folder);
+      console.log('🧭 syncStateWithUrl - Breadcrumb construido:', breadcrumb);
       setCurrentFolder(folder.id, breadcrumb);
     }
   };

@@ -287,10 +287,10 @@ export function FileExplorer() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Sincronizar estado con URL al cargar
+  // Sincronizar estado con URL al cargar - PUNTO CENTRAL DE SINCRONIZACIÓN
   useEffect(() => {
     syncStateWithUrl();
-  }, []);
+  }, []); // Solo ejecutar una vez al montar
 
   // Atajos de teclado extraídos a hook
   useExplorerShortcuts({
