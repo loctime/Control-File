@@ -10,7 +10,8 @@ import { auth } from '@/lib/firebase';
  * Elimina la duplicación de código entre Navbar, Sidebar, FileExplorer, etc.
  */
 export function useContextMenuActions() {
-  const { navigateToFolder, moveToTrash, removeItem } = useDriveStore();
+  const { moveToTrash, removeItem } = useDriveStore();
+  const { navigateToFolder } = useNavigation();
   const { addToast } = useUIStore();
 
   // Abrir elemento (carpeta o archivo)

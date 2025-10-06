@@ -111,7 +111,9 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error actualizando plan');
       // Refrescar datos locales
-      window.location.reload();
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
     } catch (e) {
       console.error(e);
       alert((e as Error).message);
@@ -274,7 +276,9 @@ export default function SettingsPage() {
                               });
                               const data = await res.json();
                               if (!res.ok) throw new Error(data.error || 'Error iniciando checkout');
-                              window.location.href = data.url;
+                              if (typeof window !== 'undefined') {
+                                window.location.href = data.url;
+                              }
                             } catch (e) {
                               console.error(e);
                               alert((e as Error).message);

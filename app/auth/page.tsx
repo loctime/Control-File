@@ -19,18 +19,10 @@ export default function AuthPage() {
   const { user, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
   const { addToast } = useUIStore();
 
-  console.log('🔐 AuthPage render:', { 
-    isLogin, 
-    loading, 
-    hasSignInWithGoogle: !!signInWithGoogle,
-    hasUser: !!user,
-    timestamp: new Date().toISOString()
-  });
 
   // Efecto para redirigir cuando el usuario se autentique
   useEffect(() => {
     if (user && !loading) {
-      console.log('🔄 Usuario autenticado detectado, redirigiendo a /...');
       router.push('/');
     }
   }, [user, loading, router]);
@@ -127,12 +119,10 @@ export default function AuthPage() {
         message: errorMessage,
       });
     } finally {
-      console.log('🏁 handleGoogleSignIn finalizado');
       setLoading(false);
     }
   };
 
-  console.log('🔐 AuthPage antes del return:', { loading, isLogin });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
