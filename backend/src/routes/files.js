@@ -7,7 +7,7 @@ const archiver = require('archiver');
 const { Readable } = require('stream');
 const { getAppCode, assertItemVisibleForApp } = require('../services/metadata');
 
-// List files with pagination
+// List files and folders with pagination
 router.get('/list', async (req, res) => {
   try {
     const uid = req.user?.uid;
@@ -22,37 +22,98 @@ router.get('/list', async (req, res) => {
       return res.status(401).json({ error: 'No autorizado' });
     }
 
-    let q = admin.firestore()
-      .collection('files')
-      .where('userId', '==', uid)
-      .where('isDeleted', '==', false);
+    const items = [];
 
-    if (parentId === null) {
-      q = q.where('parentId', '==', null);
-    } else if (typeof parentId === 'string' && parentId.length > 0) {
-      q = q.where('parentId', '==', parentId);
-    }
+    try {
+      // Get files from 'files' collection
+      let filesQuery = admin.firestore()
+        .collection('files')
+        .where('userId', '==', uid)
+        .where('isDeleted', '==', false);
 
-    if (APP_CODE !== 'controlfile') {
-      q = q.where('appCode', '==', APP_CODE);
-    }
-
-    q = q.orderBy('updatedAt', 'desc').limit(limit);
-
-    if (cursor) {
-      const afterDoc = await admin.firestore().collection('files').doc(cursor).get();
-      if (afterDoc.exists) {
-        q = q.startAfter(afterDoc);
+      if (parentId === null) {
+        filesQuery = filesQuery.where('parentId', '==', null);
+      } else if (typeof parentId === 'string' && parentId.length > 0) {
+        filesQuery = filesQuery.where('parentId', '==', parentId);
       }
+
+      if (APP_CODE !== 'controlfile') {
+        filesQuery = filesQuery.where('appCode', '==', APP_CODE);
+      }
+
+      filesQuery = filesQuery.orderBy('updatedAt', 'desc');
+
+      if (cursor) {
+        const afterDoc = await admin.firestore().collection('files').doc(cursor).get();
+        if (afterDoc.exists) {
+          filesQuery = filesQuery.startAfter(afterDoc);
+        }
+      }
+
+      const filesSnap = await filesQuery.limit(limit).get();
+      filesSnap.forEach(doc => {
+        items.push({ 
+          id: doc.id, 
+          ...doc.data(),
+          type: 'file' // Asegurar que tenga el tipo correcto
+        });
+      });
+
+    } catch (filesError) {
+      console.warn('Error consultando archivos:', filesError.message);
     }
 
-    const snap = await q.get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const nextPage = snap.size === limit ? (items[items.length - 1]?.id || null) : null;
+    try {
+      // Get folders from 'folders' collection
+      let foldersQuery = admin.firestore()
+        .collection('folders')
+        .where('userId', '==', uid);
 
-    return res.json({ items, nextPage });
+      if (parentId === null) {
+        foldersQuery = foldersQuery.where('parentId', '==', null);
+      } else if (typeof parentId === 'string' && parentId.length > 0) {
+        foldersQuery = foldersQuery.where('parentId', '==', parentId);
+      }
+
+      if (APP_CODE !== 'controlfile') {
+        foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);
+      }
+
+      foldersQuery = foldersQuery.orderBy('createdAt', 'desc');
+
+      const foldersSnap = await foldersQuery.limit(limit).get();
+      foldersSnap.forEach(doc => {
+        const data = doc.data();
+        items.push({ 
+          id: doc.id, 
+          ...data,
+          type: 'folder', // Asegurar que tenga el tipo correcto
+          updatedAt: data.modifiedAt || data.createdAt // Usar modifiedAt como updatedAt para consistencia
+        });
+      });
+
+    } catch (foldersError) {
+      console.warn('Error consultando carpetas:', foldersError.message);
+    }
+
+    // Ordenar todos los items por updatedAt/modifiedAt descendente
+    items.sort((a, b) => {
+      const aTime = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 
+                   a.modifiedAt?.toDate ? a.modifiedAt.toDate().getTime() : 
+                   a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const bTime = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 
+                   b.modifiedAt?.toDate ? b.modifiedAt.toDate().getTime() : 
+                   b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return bTime - aTime;
+    });
+
+    // Aplicar límite después de combinar
+    const limitedItems = items.slice(0, limit);
+    const nextPage = limitedItems.length === limit ? (limitedItems[limitedItems.length - 1]?.id || null) : null;
+
+    return res.json({ items: limitedItems, nextPage });
   } catch (error) {
-    console.error('Error listando archivos:', error);
+    console.error('Error listando archivos y carpetas:', error);
     return res.status(500).json({ 
       error: 'Error interno del servidor', 
       details: process.env.NODE_ENV === 'development' ? error.message : undefined 
