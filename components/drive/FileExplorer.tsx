@@ -79,7 +79,7 @@ export function FileExplorer() {
 
   // Log para debugging del contenedor
   useEffect(() => {
-    console.log('Contenedor sidebar width actualizado:', sidebarWidth + 16);
+    console.log('Contenedor sidebar width actualizado:', sidebarWidth + 8);
   }, [sidebarWidth]);
 
   // Merge de items del folder actual al store global
@@ -409,22 +409,22 @@ export function FileExplorer() {
         <Navbar />
         
         {/* Content area con sidebar y archivos */}
-        <div className="flex flex-1">
+        <div className="flex flex-1 min-w-0 overflow-hidden">
           {/* Sidebar o barra lateral mínima */}
           {sidebarOpen ? (
             <div 
               className="flex" 
-              style={{ width: `${sidebarWidth + 16}px` }}
-              onLoad={() => console.log('Contenedor sidebar width:', sidebarWidth + 16)}
+              style={{ width: `${sidebarWidth + 8}px` }}
+              onLoad={() => console.log('Contenedor sidebar width:', sidebarWidth + 8)}
             >
               <Sidebar 
                 isOpen={true} 
                 onToggle={() => {}} 
                 width={sidebarWidth}
               />
-              {/* Resize handle - más ancho y visible */}
+              {/* Resize handle - más sutil pero visible */}
               <div
-                className="w-4 bg-border hover:bg-primary/50 cursor-col-resize transition-all duration-200 relative group"
+                className="w-2 bg-border hover:bg-primary/50 cursor-col-resize transition-all duration-200 relative group"
                 onMouseDown={handleMouseDown}
                 title="Arrastra para redimensionar el panel lateral"
               >
@@ -461,7 +461,7 @@ export function FileExplorer() {
           )}
           
           {/* Main content area */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 overflow-hidden">
             {/* File area */}
             {isTrashView ? (
               // Vista de papelera
@@ -495,7 +495,7 @@ export function FileExplorer() {
           
           {/* Details Panel */}
           {detailsPanelOpen && (
-            <div className="w-80 border-l border-border bg-card">
+            <div className="w-80 min-w-80 max-w-96 border-l border-border bg-card flex-shrink-0">
               <DetailsPanel />
             </div>
           )}
