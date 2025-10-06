@@ -131,15 +131,17 @@ export function Navbar() {
 
   return (
     <nav className="bg-card border-b-2 border-secondary px-4 py-2">
-      {/* Primera fila: Logo, Carpetas y Usuario */}
-      <div className="flex items-center justify-between mb-2">
-        {/* Logo */}
-        <div className="flex items-center space-x-2">
+      {/* Estructura de dos filas con breadcrumb solo en el centro */}
+      <div className="flex items-start">
+        {/* Columna izquierda: Logo - Ocupa ambas filas */}
+        <div className="flex flex-col justify-center min-w-0 flex-shrink-0 h-16">
           <h1 className="text-lg font-semibold">Control File</h1>
         </div>
 
-        {/* Folder Navigation */}
-        <div className="flex items-center space-x-1">
+        {/* Columna central: Carpetas y Breadcrumb */}
+        <div className="flex-1 flex flex-col items-center px-4">
+          {/* Folder Navigation */}
+          <div className="flex items-center space-x-1 mb-2">
           {folders.map((folder) => {
             const { IconComponent, color } = getFolderIconAndColor(folder);
             
@@ -214,40 +216,43 @@ export function Navbar() {
               <span>Nueva Carpeta</span>
             </Button>
           )}
+          </div>
+          
+          {/* Breadcrumb de navegación - Solo debajo de las carpetas */}
+          <div className="flex items-center justify-center">
+            <Breadcrumb />
+          </div>
         </div>
 
-        {/* Profile and Theme Toggle */}
-        <div className="flex items-center space-x-2">
-          <ThemeToggle />
-          {user?.photoURL ? (
-            <button
-              onClick={handleProfileClick}
-              className="flex items-center space-x-2 px-3 py-2 rounded hover:bg-accent"
-            >
-              <img
-                src={user.photoURL}
-                alt={user.displayName || 'Usuario'}
-                className="w-6 h-6 rounded-full"
-              />
-              <span className="text-sm font-medium">{user.displayName}</span>
-            </button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleProfileClick}
-              className="flex items-center space-x-2 px-3 py-2"
-            >
-              <User className="w-4 h-4" />
-              <span>Perfil</span>
-            </Button>
-          )}
+        {/* Columna derecha: Profile and Theme Toggle - Ocupa ambas filas */}
+        <div className="flex flex-col justify-center space-y-2 min-w-0 flex-shrink-0 h-16">
+          <div className="flex items-center space-x-2">
+            <ThemeToggle />
+            {user?.photoURL ? (
+              <button
+                onClick={handleProfileClick}
+                className="flex items-center space-x-2 px-3 py-2 rounded hover:bg-accent"
+              >
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'Usuario'}
+                  className="w-6 h-6 rounded-full"
+                />
+                <span className="text-sm font-medium">{user.displayName}</span>
+              </button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleProfileClick}
+                className="flex items-center space-x-2 px-3 py-2"
+              >
+                <User className="w-4 h-4" />
+                <span>Perfil</span>
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Segunda fila: Breadcrumb de navegación */}
-      <div className="flex items-center justify-center">
-        <Breadcrumb />
       </div>
     </nav>
   );
