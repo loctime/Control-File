@@ -232,17 +232,12 @@ export function FileExplorer() {
       // Limpiar la selección
       clearSelection();
       
-      console.log('✅ Elementos movidos a papelera:', itemsToDelete.map(item => item.name));
     } catch (error) {
-      console.error('❌ Error al mover elementos a papelera:', error);
+      console.error('Error al mover elementos a papelera:', error);
       throw error;
     }
   };
 
-  const handleShowProperties = (itemId: string) => {
-    // TODO: Implementar mostrar propiedades
-    console.log('Mostrar propiedades:', itemId);
-  };
 
   const handleCreateFolder = () => {
     setIsCreateFolderModalOpen(true);
