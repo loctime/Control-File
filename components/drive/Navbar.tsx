@@ -13,7 +13,7 @@ import { ContextMenu } from '@/components/drive/ContextMenu';
 import { DriveItem, DriveFolder } from '@/types';
 
 export function Navbar() {
-  const { createMainFolder, items, toggleItemSelection, moveToTrash } = useDriveStore();
+  const { createMainFolder, items, toggleItemSelection, moveToTrash, currentFolderId } = useDriveStore();
   const { sidebarOpen, closeTrashView } = useUIStore();
   const { user } = useAuth();
   const { navigateToFolder } = useNavigation();
@@ -176,7 +176,11 @@ export function Navbar() {
                   size="sm"
                   onClick={() => handleFolderClick(folder.id)}
                   onContextMenu={() => toggleItemSelection(folder.id)}
-                  className="px-3 py-2 border-2 border-purple-500 hover:bg-accent transition-all duration-200"
+                  className={`px-3 py-2 border-2 transition-all duration-200 hover:bg-accent ${
+                    currentFolderId === folder.id 
+                      ? 'bg-primary/20 border-primary shadow-lg ring-2 ring-primary/30' 
+                      : 'border-purple-500 hover:border-purple-600'
+                  }`}
                 >
                   <span className="font-medium">{folder.name}</span>
                 </Button>

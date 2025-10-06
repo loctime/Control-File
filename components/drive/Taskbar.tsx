@@ -382,7 +382,9 @@ export function Taskbar() {
                 size="sm"
                 onClick={() => handleFolderClick(folder.id)}
                 className={`px-3 py-2 h-10 rounded-lg hover:bg-accent transition-all duration-200 hover:scale-105 border-2 ${
-                  currentFolderId === folder.id ? 'bg-accent/50 border-primary' : 'border-blue-500'
+                  currentFolderId === folder.id 
+                    ? 'bg-primary/20 border-primary shadow-lg ring-2 ring-primary/30' 
+                    : 'border-blue-500 hover:border-blue-600'
                 }`}
                 title={`Carpeta del Taskbar: ${folder.name}`}
               >
