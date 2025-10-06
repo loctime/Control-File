@@ -44,17 +44,27 @@ export function useFiles(folderId: string | null = null) {
       try {
         // Get folders
         const foldersRef = collection(db, 'folders');
-        const foldersQuery = query(
+        let foldersQuery = query(
           foldersRef,
           where('userId', '==', user.uid),
           where('parentId', '==', folderId),
           // Ordenar por createdAt para evitar requerir índice por nombre; el orden final se maneja en UI
           orderBy('createdAt', 'desc')
         );
+        
+        // Debug: Log para verificar qué carpetas se encuentran
+        console.log('🔍 useFiles - Consultando carpetas para folderId:', folderId);
+        
         const foldersSnap = await getDocs(foldersQuery);
       
       foldersSnap.forEach((doc) => {
         const data = doc.data();
+        console.log('📁 useFiles - Carpeta encontrada:', {
+          id: doc.id,
+          name: data.name,
+          parentId: data.parentId,
+          appCode: data.appCode
+        });
         items.push({
           ...data,
           id: doc.id,
@@ -66,16 +76,26 @@ export function useFiles(folderId: string | null = null) {
 
       // Get files
       const filesRef = collection(db, 'files');
-      const filesQuery = query(
+      let filesQuery = query(
         filesRef,
         where('userId', '==', user.uid),
         where('parentId', '==', folderId),
         orderBy('name', 'asc')
       );
+      
+      // Debug: Log para verificar qué archivos se encuentran
+      console.log('🔍 useFiles - Consultando archivos para folderId:', folderId);
+      
       const filesSnap = await getDocs(filesQuery);
       
       filesSnap.forEach((doc) => {
         const data = doc.data();
+        console.log('📄 useFiles - Archivo encontrado:', {
+          id: doc.id,
+          name: data.name,
+          parentId: data.parentId,
+          appCode: data.appCode
+        });
         items.push({
           ...data,
           id: doc.id,
