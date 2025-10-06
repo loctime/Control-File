@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore } from '@/lib/stores/ui';
+import { useContextMenuActions } from '@/hooks/useContextMenuActions';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { Button } from '@/components/ui/button';
@@ -29,8 +30,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
-  // Log para debugging del ancho
-  console.log('Sidebar recibiendo width:', width);
   const { invalidateFiles } = useQueryInvalidation();
   
   const { user } = useAuth();
@@ -200,34 +199,18 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
     navigateToFolder(itemId);
   }, [navigateToFolder]);
 
-  const handleRenameItem = useCallback((itemId: string) => {
-    // TODO: Implementar renombrar
-    console.log('Renombrar item:', itemId);
-  }, []);
-
-  const handleCopyItem = useCallback((itemId: string) => {
-    // TODO: Implementar copiar
-    console.log('Copiar item:', itemId);
-  }, []);
-
-  const handleCutItem = useCallback((itemId: string) => {
-    // TODO: Implementar cortar
-    console.log('Cortar item:', itemId);
-  }, []);
+  // Usar handlers centralizados
+  const {
+    handleRenameItem,
+    handleCopyItem,
+    handleCutItem,
+    handleShareItem,
+    handleShowProperties,
+  } = useContextMenuActions();
 
   const handleDeleteItem = useCallback((itemId: string) => {
     removeItem(itemId);
   }, [removeItem]);
-
-  const handleShareItem = useCallback((itemId: string) => {
-    // TODO: Implementar compartir
-    console.log('Compartir item:', itemId);
-  }, []);
-
-  const handleShowProperties = useCallback((itemId: string) => {
-    // TODO: Implementar propiedades
-    console.log('Mostrar propiedades:', itemId);
-  }, []);
 
   const handleCreateFolder = useCallback(() => {
     // TODO: Implementar crear carpeta

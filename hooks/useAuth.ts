@@ -69,17 +69,8 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    console.log('🔧 useAuth useEffect iniciado');
-    console.log('🔧 Estado actual:', { 
-      hasAuth: !!auth, 
-      hasDb: !!db, 
-      currentUser: !!user, 
-      loading, 
-      isOnline: navigator.onLine 
-    });
-
     if (!auth || !db) {
-      console.error('❌ Firebase no está configurado:', { auth: !!auth, db: !!db });
+      console.error('Firebase no está configurado');
       setLoading(false);
       return;
     }
@@ -93,18 +84,10 @@ export function useAuth() {
       try {
         const redirectResult = await getRedirectResult(auth);
         if (redirectResult) {
-          console.log('🔁 Resultado de redirección recibido:', {
-            uid: redirectResult.user?.uid,
-            email: redirectResult.user?.email,
-            providerId: redirectResult.providerId
-          });
+          // Usuario autenticado via redirect
         }
       } catch (redirectError: any) {
-        console.error('❌ Error post-redirect de Google:', {
-          code: redirectError.code,
-          message: redirectError.message,
-          stack: redirectError.stack
-        });
+        console.error('Error en autenticación Google:', redirectError.message);
         // Asegurar que no quede en loading si hubo error en el redirect
         if (isMounted) {
           setLoading(false);
@@ -113,53 +96,22 @@ export function useAuth() {
     })();
 
         // Set up auth state listener directly (no redirect handling needed with popup)
-    console.log('🔧 Configurando listener de estado de autenticación...');
-    
-    if (!auth) {
-      console.error('❌ Auth no disponible');
-      setLoading(false);
-      return;
-    }
     
     // Solo configurar el listener si no existe uno previo
     if (!unsubscribe) {
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        console.log('🔄 onAuthStateChanged disparado:', {
-          hasUser: !!firebaseUser,
-          userId: firebaseUser?.uid,
-          userEmail: firebaseUser?.email,
-          isMounted,
-          currentUser: !!user
-        });
-
         if (!isMounted) {
-          console.log('⚠️ Componente desmontado, ignorando cambio de estado');
           return;
         }
         
         // Solo establecer loading si no hay usuario o si es un usuario diferente
         if (!user || (firebaseUser && user.uid !== firebaseUser.uid)) {
-          console.log('⏳ Estableciendo loading...');
           setLoading(true);
         }
         
         if (firebaseUser) {
-          console.log('👤 Usuario de Firebase detectado:', {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            emailVerified: firebaseUser.emailVerified,
-            providerData: firebaseUser.providerData.map(p => ({
-              providerId: p.providerId,
-              email: p.email
-            }))
-          });
-
           // Si ya tenemos el mismo usuario cargado, verificar si hay cambios en Google
           if (user && user.uid === firebaseUser.uid) {
-            console.log('ℹ️ Usuario ya cargado, verificando cambios en Google...');
-            
             // Verificar si hay cambios en la información de Google
             const hasChanges = (
               user.displayName !== firebaseUser.displayName ||
@@ -168,10 +120,7 @@ export function useAuth() {
             );
             
             if (hasChanges) {
-              console.log('🔄 Cambios detectados en Google, sincronizando...');
               await syncUserWithGoogle(firebaseUser, user, setUser);
-            } else {
-              console.log('✅ No hay cambios en Google');
             }
             return;
           }
@@ -179,7 +128,6 @@ export function useAuth() {
           try {
             // Verificar conectividad antes de intentar acceder a Firestore
             if (!navigator.onLine) {
-              console.log('⚠️ Sin conexión, usando datos mínimos del usuario');
               const minimalUserData: User = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email!,
@@ -192,42 +140,29 @@ export function useAuth() {
                 createdAt: new Date(),
               };
               if (isMounted) {
-                console.log('✅ Estableciendo usuario mínimo offline');
                 setUser(minimalUserData);
                 setLoading(false);
               }
               return;
             }
 
-            console.log('📡 Conectividad OK, obteniendo datos de Firestore...');
-
             // Get user document from Firestore
             if (!db) {
-              console.error('❌ Firestore no está disponible');
               throw new Error('Firestore no está disponible');
             }
             
-            console.log('🔍 Firestore disponible, continuando...');
             const userRef = doc(db, 'users', firebaseUser.uid);
-            console.log('🔍 Buscando documento de usuario:', firebaseUser.uid);
-            
             const userSnap = await getDoc(userRef);
-            console.log('📄 Resultado de Firestore:', {
-              exists: userSnap.exists(),
-              hasData: !!userSnap.data()
-            });
             
             let userData: User;
             
             if (userSnap.exists()) {
               // User exists, get data
               const data = userSnap.data();
-              console.log('📋 Datos existentes del usuario:', data);
               
               // Si el usuario no tiene username, generarlo y actualizarlo
               let username = data.username;
               if (!username) {
-                console.log('🔄 Usuario sin username, generando uno...');
                 const baseUsername = firebaseUser.email?.split('@')[0] || 'user';
                 const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
                 username = cleanUsername;
@@ -238,14 +173,12 @@ export function useAuth() {
                   try {
                     const existingUserQuery = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
                     if (existingUserQuery.empty) {
-                      console.log('✅ Username único generado:', username);
                       break;
                     }
                     username = `${cleanUsername}${counter}`;
                     counter++;
-                    console.log('🔄 Username ocupado, probando:', username);
                   } catch (queryError) {
-                    console.error('❌ Error verificando username:', queryError);
+                    console.error('Error verificando username:', queryError);
                     break;
                   }
                 }
@@ -253,9 +186,8 @@ export function useAuth() {
                 // Actualizar el usuario con el username generado
                 try {
                   await setDoc(userRef, { username }, { merge: true });
-                  console.log('✅ Username agregado al usuario:', username);
                 } catch (updateError) {
-                  console.error('❌ Error actualizando username:', updateError);
+                  console.error('Error actualizando username:', updateError);
                 }
               }
               
@@ -272,29 +204,23 @@ export function useAuth() {
               };
             } else {
               // New user, create document
-              console.log('🆕 Usuario nuevo, creando documento en Firestore...');
-              console.log('🔍 Firebase User UID:', firebaseUser.uid);
-              console.log('🔍 Firebase User Email:', firebaseUser.email);
               // Generate username from email
               const baseUsername = firebaseUser.email?.split('@')[0] || 'user';
               const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
               let username = cleanUsername;
               
               // Check for username uniqueness
-              console.log('🔍 Verificando unicidad del username:', username);
               let counter = 1;
               while (true) {
                 try {
                   const existingUserQuery = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
                   if (existingUserQuery.empty) {
-                    console.log('✅ Username único:', username);
                     break;
                   }
                   username = `${cleanUsername}${counter}`;
                   counter++;
-                  console.log('🔄 Username ocupado, probando:', username);
                 } catch (queryError) {
-                  console.error('❌ Error verificando username:', queryError);
+                  console.error('Error verificando username:', queryError);
                   // Si hay error en la consulta, usar el username base
                   break;
                 }
@@ -313,12 +239,6 @@ export function useAuth() {
               };
               
               try {
-                console.log('📝 Creando documento de usuario con datos:', {
-                  uid: firebaseUser.uid,
-                  username: userData.username,
-                  email: userData.email
-                });
-                
                 await setDoc(userRef, {
                   planQuotaBytes: userData.planQuotaBytes,
                   usedBytes: userData.usedBytes,
@@ -337,34 +257,19 @@ export function useAuth() {
                     customFields: {}
                   }
                 });
-                console.log('✅ Documento de usuario creado exitosamente en Firestore');
               } catch (createError: any) {
-                console.error('❌ Error creando usuario en Firestore:', {
-                  code: createError.code,
-                  message: createError.message,
-                  uid: firebaseUser.uid,
-                  username: userData.username
-                });
+                console.error('Error creando usuario en Firestore:', createError.message);
               }
             }
             
             if (isMounted) {
-              console.log('✅ Estableciendo usuario en el store:', {
-                uid: userData.uid,
-                email: userData.email
-              });
               setUser(userData);
               setLoading(false);
             }
           } catch (error: any) {
-            console.error('❌ Error obteniendo datos del usuario:', {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            });
+            console.error('Error obteniendo datos del usuario:', error.message);
             
             // Create minimal user data if Firestore fails
-            console.log('🔄 Creando datos mínimos del usuario debido al error...');
             const minimalUserData: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email!,
@@ -377,13 +282,11 @@ export function useAuth() {
               createdAt: new Date(),
             };
             if (isMounted) {
-              console.log('✅ Estableciendo usuario mínimo por error');
               setUser(minimalUserData);
               setLoading(false);
             }
           }
         } else {
-          console.log('🚪 Usuario no autenticado, limpiando estado...');
           if (isMounted) {
             setUser(null);
             setLoading(false);
@@ -394,7 +297,6 @@ export function useAuth() {
 
     // Cleanup function
     return () => {
-      console.log('🧹 Limpiando useAuth useEffect');
       isMounted = false;
       if (unsubscribe) {
         unsubscribe();
@@ -435,27 +337,15 @@ export function useAuth() {
   };
 
   const signInWithGoogle = async () => {
-    console.log('🚀 Iniciando autenticación con Google...');
-    console.log('🔍 Configuración actual:', {
-      hasAuth: !!auth,
-      hasGoogleProvider: !!googleProvider,
-      isOnline: navigator.onLine,
-      currentUrl: window.location.href,
-      userAgent: navigator.userAgent
-    });
-    
     if (!auth) {
-      console.error('❌ Firebase no está configurado');
       throw new Error('Firebase no está configurado');
     }
     
     if (!navigator.onLine) {
-      console.error('❌ Sin conexión a internet');
       throw new Error('No hay conexión a internet. Verifica tu conexión e intenta nuevamente.');
     }
     
     try {
-      console.log('🔧 Configurando proveedor de Google...');
       // Configure Google provider
       googleProvider.setCustomParameters({
         prompt: 'select_account'
@@ -464,41 +354,13 @@ export function useAuth() {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        console.log('📱 Detectado móvil: usando signInWithRedirect');
         await signInWithRedirect(auth, googleProvider);
         return;
       }
 
-      console.log('🖥️ Desktop: usando signInWithPopup');
       const result = await signInWithPopup(auth, googleProvider);
-      console.log('✅ Popup completado exitosamente:', {
-        user: result.user.email,
-        uid: result.user.uid,
-        providerId: result.providerId,
-        displayName: result.user.displayName,
-        emailVerified: result.user.emailVerified
-      });
-      
       // El onAuthStateChanged se disparará automáticamente
-      console.log('🔄 Esperando que onAuthStateChanged se dispare...');
     } catch (error: any) {
-      console.error('❌ Error en signInWithGoogle (popup):', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        fullError: error
-      });
-      
-      // Log adicional para errores específicos
-      if (error.code === 'auth/popup-closed-by-user') {
-        console.log('ℹ️ Usuario cerró el popup manualmente');
-      } else if (error.code === 'auth/popup-blocked') {
-        console.log('ℹ️ Popup bloqueado por el navegador');
-      } else if (error.code === 'auth/unauthorized-domain') {
-        console.log('ℹ️ Dominio no autorizado en Firebase Console');
-      }
-      
       throw new Error(getAuthErrorMessage(error.code));
     }
   };

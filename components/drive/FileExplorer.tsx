@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
+import { useContextMenuActions } from '@/hooks/useContextMenuActions';
 import { useFiles } from '@/hooks/useFiles';
 import { isKeyboardShortcut } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
@@ -77,10 +78,6 @@ export function FileExplorer() {
   // Estado para el ancho del sidebar (hook)
   const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({ initialWidth: 320, minWidth: 200, maxWidth: 600 });
 
-  // Log para debugging del contenedor
-  useEffect(() => {
-    console.log('Contenedor sidebar width actualizado:', sidebarWidth + 8);
-  }, [sidebarWidth]);
 
   // Merge de items del folder actual al store global
   useMergeCurrentFolderItems(files, currentFolderId, loading);
@@ -201,20 +198,14 @@ export function FileExplorer() {
     }
   }, [addToast]);
 
-  const handleRenameItem = (itemId: string) => {
-    // TODO: Implementar renombrar
-    console.log('Renombrar item:', itemId);
-  };
-
-  const handleCopyItem = (itemId: string) => {
-    // TODO: Implementar copiar
-    console.log('Copiar item:', itemId);
-  };
-
-  const handleCutItem = (itemId: string) => {
-    // TODO: Implementar cortar
-    console.log('Cortar item:', itemId);
-  };
+  // Usar handlers centralizados
+  const {
+    handleRenameItem,
+    handleCopyItem,
+    handleCutItem,
+    handleShareItem: centralHandleShareItem,
+    handleShowProperties,
+  } = useContextMenuActions();
 
   const handleDeleteItem = (itemId: string) => {
     // Mover a papelera en lugar de eliminar directamente
@@ -345,11 +336,11 @@ export function FileExplorer() {
   useEffect(() => {
     const listener = (e: any) => {
       const fileId = e?.detail?.fileId;
-      if (fileId) handleShareItem(fileId);
+      if (fileId) centralHandleShareItem(fileId);
     };
     window.addEventListener('file-share-click', listener as EventListener);
     return () => window.removeEventListener('file-share-click', listener as EventListener);
-  }, [handleShareItem]);
+  }, [centralHandleShareItem]);
 
   // Verificar si el error es de conectividad
   const isOfflineError = error?.message?.includes('Sin conexión') || 
@@ -390,7 +381,7 @@ export function FileExplorer() {
     <ContextMenu
       onOpenItem={handleOpenItem}
       onDownloadFile={handleDownloadFile}
-      onShareItem={handleShareItem}
+      onShareItem={centralHandleShareItem}
       onRenameItem={handleRenameItem}
       onCopyItem={handleCopyItem}
       onCutItem={handleCutItem}
@@ -469,7 +460,7 @@ export function FileExplorer() {
                 <TrashView
                   onOpenItem={handleOpenItem}
                   onDownloadFile={handleDownloadFile}
-                  onShareItem={handleShareItem}
+                  onShareItem={centralHandleShareItem}
                   onRenameItem={handleRenameItem}
                   onCopyItem={handleCopyItem}
                   onCutItem={handleCutItem}

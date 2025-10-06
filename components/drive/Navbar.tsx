@@ -6,6 +6,7 @@ import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
+import { useContextMenuActions } from '@/hooks/useContextMenuActions';
 import { Button } from '@/components/ui/button';
 import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
@@ -80,35 +81,19 @@ export function Navbar() {
     navigateToFolder(itemId);
   }, [navigateToFolder]);
 
-  const handleRenameItem = useCallback((itemId: string) => {
-    // TODO: Implementar renombrar
-    console.log('Renombrar item:', itemId);
-  }, []);
-
-  const handleCopyItem = useCallback((itemId: string) => {
-    // TODO: Implementar copiar
-    console.log('Copiar item:', itemId);
-  }, []);
-
-  const handleCutItem = useCallback((itemId: string) => {
-    // TODO: Implementar cortar
-    console.log('Cortar item:', itemId);
-  }, []);
+  // Usar handlers centralizados
+  const {
+    handleRenameItem,
+    handleCopyItem,
+    handleCutItem,
+    handleShareItem,
+    handleShowProperties,
+  } = useContextMenuActions();
 
   const handleDeleteItem = useCallback((itemId: string) => {
     // Usar moveToTrash en lugar de removeItem para mover a la papelera
     moveToTrash(itemId);
   }, [moveToTrash]);
-
-  const handleShareItem = useCallback((itemId: string) => {
-    // TODO: Implementar compartir
-    console.log('Compartir item:', itemId);
-  }, []);
-
-  const handleShowProperties = useCallback((itemId: string) => {
-    // TODO: Implementar propiedades
-    console.log('Mostrar propiedades:', itemId);
-  }, []);
 
   const handleCreateFolder = useCallback(() => {
     setIsCreatingFolder(true);
