@@ -15,6 +15,14 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
     if (isLoading) return;
     if (memoizedFiles.length >= 0) {
       const currentItems = useDriveStore.getState().items;
+      
+      // Debug: Log para entender qué está pasando
+      console.log('🔄 useMergeCurrentFolderItems - Fusionando items:', {
+        currentFolderId,
+        filesCount: memoizedFiles.length,
+        currentItemsCount: currentItems.length,
+        files: memoizedFiles.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parentId }))
+      });
 
       const existingById = new Map(currentItems.map((i: any) => [i.id, i]));
 
@@ -34,6 +42,8 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
       const base = currentItems.filter((it: any) => {
         const belongsToCurrent = it.parentId === currentFolderId;
         const isTrashed = !!it.deletedAt;
+        // NO eliminar carpetas que pertenecen a la carpeta actual
+        // Solo mantener elementos que NO pertenecen a la carpeta actual O están en la papelera
         return !belongsToCurrent || isTrashed;
       });
 
@@ -41,15 +51,27 @@ export function useMergeCurrentFolderItems(files: any[] | undefined, currentFold
 
       const nextItems = [...baseWithoutIncoming, ...incomingMerged];
 
+      // Debug: Log del resultado final
+      console.log('🔄 useMergeCurrentFolderItems - Resultado:', {
+        baseCount: baseWithoutIncoming.length,
+        incomingCount: incomingMerged.length,
+        nextItemsCount: nextItems.length,
+        nextItems: nextItems.map(i => ({ id: i.id, name: i.name, type: i.type, parentId: i.parentId }))
+      });
+
       const prevSignature = JSON.stringify(currentItems.map((i: any) => i.id).sort());
       const nextSignature = JSON.stringify(nextItems.map((i: any) => i.id).sort());
       if (prevSignature !== nextSignature) {
+        console.log('🔄 useMergeCurrentFolderItems - Actualizando store (signature changed)');
         setItems(nextItems);
       } else {
         const prevHash = JSON.stringify(currentItems);
         const nextHash = JSON.stringify(nextItems);
         if (prevHash !== nextHash) {
+          console.log('🔄 useMergeCurrentFolderItems - Actualizando store (content changed)');
           setItems(nextItems);
+        } else {
+          console.log('🔄 useMergeCurrentFolderItems - No hay cambios, manteniendo store actual');
         }
       }
     }
