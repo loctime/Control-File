@@ -24,17 +24,18 @@ export function Navbar() {
     const userId = user?.uid;
     if (!userId) return [];
     // Filtrar carpetas directamente desde items para ser reactivo
-    // Solo mostrar carpetas de ControlFile (appCode === 'controlfile')
+    // Solo mostrar carpetas de ControlFile del navbar (no del taskbar)
     const mainFolders = items.filter(item => 
       item.type === 'folder' && 
       item.parentId === null &&
       item.metadata?.isMainFolder &&
       item.userId === userId &&
       !item.deletedAt && // Excluir carpetas en la papelera
-      item.appCode === 'controlfile' // Solo carpetas de ControlFile
+      item.appCode === 'controlfile' && // Solo carpetas de ControlFile
+      (item.metadata?.source === 'navbar' || !item.metadata?.source) // Solo navbar o sin source (compatibilidad)
     );
     
-    console.log('📁 Navbar - carpetas disponibles (solo ControlFile):', mainFolders.length);
+    console.log('📁 Navbar - carpetas del navbar:', mainFolders.length);
     return mainFolders;
   }, [items, user]); // Ahora es reactivo a los cambios en items y usuario
 
