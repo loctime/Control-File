@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { Folder } from 'lucide-react';
@@ -16,7 +17,7 @@ interface FolderListItemProps {
   itemRef?: React.RefObject<HTMLDivElement>;
 }
 
-export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FolderListItemProps) {
+export const FolderListItem = memo(function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FolderListItemProps) {
   const { toggleItemSelection } = useDriveStore();
   const { setDetailsPanelOpen, iconSize } = useUIStore();
 
@@ -115,6 +116,6 @@ export function FolderListItem({ folder, isSelected, onOpen, itemIndex, onShiftR
       )}
     </div>
   );
-}
+});
 
 

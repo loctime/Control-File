@@ -16,8 +16,8 @@ import { Sidebar } from '@/components/drive/Sidebar';
 import { ContextMenu } from '@/components/drive/ContextMenu';
 import { CreateFolderModal } from '@/components/drive/CreateFolderModal';
 import { DeleteConfirmModal } from '@/components/drive/DeleteConfirmModal';
-import { TrashView } from '@/components/drive/TrashView';
-import { DetailsPanel } from '@/components/drive/DetailsPanel';
+import { TrashViewLazy } from '@/components/drive/lazy/TrashViewLazy';
+import { DetailsPanelLazy } from '@/components/drive/lazy/DetailsPanelLazy';
 import { FileContentArea } from '@/components/drive/FileContentArea';
 import { CollapsedSidebar } from '@/components/drive/CollapsedSidebar';
 import { UploadProgress } from '@/components/drive/UploadProgress';
@@ -457,7 +457,7 @@ export function FileExplorer() {
             {isTrashView ? (
               // Vista de papelera
               <div className="flex-1">
-                <TrashView
+                <TrashViewLazy
                   onOpenItem={handleOpenItem}
                   onDownloadFile={handleDownloadFile}
                   onShareItem={centralHandleShareItem}
@@ -487,7 +487,7 @@ export function FileExplorer() {
           {/* Details Panel */}
           {detailsPanelOpen && (
             <div className="w-80 min-w-80 max-w-96 border-l border-border bg-card flex-shrink-0">
-              <DetailsPanel />
+              <DetailsPanelLazy />
             </div>
           )}
         </div>

@@ -39,7 +39,6 @@ export function Navbar() {
       (item.metadata?.source === 'navbar' || !item.metadata?.source) // Solo navbar o sin source (compatibilidad)
     );
     
-    console.log('📁 Navbar - carpetas del navbar:', mainFolders.length);
     return mainFolders;
   }, [items, user]); // Ahora es reactivo a los cambios en items y usuario
 

@@ -47,9 +47,7 @@ export function useUpload() {
           parentId,
         };
         
-        console.log('📤 Frontend sending presign request:', requestBody);
-        console.log('📤 Frontend token length:', token.length);
-        console.log('📤 Frontend request body stringified:', JSON.stringify(requestBody));
+        // Solicitar URL prefirmada
         
         const presignData: PresignResponse = await backendApiCall('/uploads/presign', {
           method: 'POST',
@@ -106,7 +104,7 @@ export function useUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
-            fileId: (confirmResponse as any).fileId, // Incluir el ID del archivo recién creado
+            fileId: (confirmResponse as any).fileId,
           },
         });
 
@@ -124,7 +122,7 @@ export function useUpload() {
             name: file.name,
             size: file.size,
             type: file.type,
-            file: file, // Incluir el archivo para poder abrirlo
+            file: file,
           },
         });
         

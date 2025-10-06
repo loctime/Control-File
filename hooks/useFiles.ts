@@ -27,13 +27,11 @@ export function useFiles(folderId: string | null = null) {
 
       // Si es una carpeta personalizada que no existe en Firebase, no cargar
       if (isCustomFolder()) {
-        console.log('📁 Carpeta personalizada detectada, no cargando desde Firebase');
         return [];
       }
 
       // Verificar conectividad
       if (!navigator.onLine) {
-        console.log('📡 Modo offline: no se pueden cargar archivos');
         throw new Error('Sin conexión a internet. Los archivos no están disponibles en modo offline.');
       }
 
@@ -89,8 +87,6 @@ export function useFiles(folderId: string | null = null) {
 
         return items;
       } catch (error: any) {
-        console.error('Error loading files:', error);
-        
         // Manejar errores específicos de conectividad
         if (error.code === 'unavailable' || 
             error.message.includes('network') || 
@@ -125,9 +121,7 @@ export function useFiles(folderId: string | null = null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files', user?.uid, folderId] });
     },
-    onError: (error: any) => {
-      console.error('Error creating folder:', error);
-    },
+    onError: (_error: any) => {},
   });
 
   const deleteItems = useMutation({
@@ -147,9 +141,7 @@ export function useFiles(folderId: string | null = null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
-    onError: (error: any) => {
-      console.error('Error deleting items:', error);
-    },
+    onError: (_error: any) => {},
   });
 
   const renameItem = useMutation({
@@ -166,9 +158,7 @@ export function useFiles(folderId: string | null = null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
-    onError: (error: any) => {
-      console.error('Error renaming item:', error);
-    },
+    onError: (_error: any) => {},
   });
 
   const moveItems = useMutation({
@@ -188,9 +178,7 @@ export function useFiles(folderId: string | null = null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
-    onError: (error: any) => {
-      console.error('Error moving items:', error);
-    },
+    onError: (_error: any) => {},
   });
 
   return {

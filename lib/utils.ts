@@ -242,6 +242,48 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 // API utilities
+type RetryOptions = {
+  retries?: number;
+  backoffMs?: number;
+};
+
+export async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit = {}, opts: RetryOptions = {}) {
+  const { retries = 2, backoffMs = 300 } = opts;
+
+  // Chequeo offline temprano
+  if (typeof window !== 'undefined' && !navigator.onLine) {
+    throw new Error('Sin conexión a internet');
+  }
+
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      if (!res.ok) {
+        let errBody: any = null;
+        try { errBody = await res.json(); } catch (_) { /* noop */ }
+        const message = (errBody && (errBody.message || errBody.error)) || `Error ${res.status}`;
+        const error = new Error(message);
+        (error as any).status = res.status;
+        throw error;
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+      // No reintentar si estamos offline
+      if (typeof window !== 'undefined' && !navigator.onLine) break;
+      // Reintentos con backoff exponencial simple
+      if (attempt < retries) {
+        const wait = backoffMs * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      break;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Error de red');
+}
+
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -259,21 +301,15 @@ export async function apiCall<T>(
     }
   } catch (_) {}
 
-  const response = await fetch(`/api${endpoint}`, {
+  const response = await fetchWithRetry(`/api${endpoint}` as any, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...authHeader,
       ...options.headers,
     },
-    ...options,
   });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const message = (error && (error.message || error.error)) || `Error ${response.status}`;
-    throw new Error(message);
-  }
-  
+
   return response.json();
 }
 
@@ -289,21 +325,12 @@ export async function backendApiCall<T>(
     'Content-Type': 'application/json',
     ...options.headers,
   };
-  
-  console.log('🌐 Backend API call to:', `${backendUrl}/api${endpoint}`);
-  console.log('🌐 Headers:', headers);
-  console.log('🌐 Body:', options.body);
-  
-  const response = await fetch(`${backendUrl}/api${endpoint}`, {
+
+  const response = await fetchWithRetry(`${backendUrl}/api${endpoint}`, {
     ...options,
     headers,
   });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Error desconocido' }));
-    throw new Error(error.message || `Error ${response.status}`);
-  }
-  
+
   return response.json();
 }
 

@@ -5,7 +5,7 @@ import { useUIStore } from '@/lib/stores/ui';
 import { formatFileSize, isImageFile, isVideoFile, isPDFFile } from '@/lib/utils';
 import { File, Share2, Play } from 'lucide-react';
 import { useFileDownloadUrl } from '@/hooks/useFileDownloadUrl';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 
 interface FileItemProps {
   file: any;
@@ -18,7 +18,7 @@ interface FileItemProps {
   itemRef?: React.RefObject<HTMLDivElement>;
 }
 
-export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FileItemProps) {
+export const FileItem = memo(function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSetAnchor, itemRef }: FileItemProps) {
   const { toggleItemSelection } = useDriveStore();
   const { setDetailsPanelOpen, viewMode, iconSize, autoplayVideoThumbnails, videoPreviewOnHover } = useUIStore();
   const { downloadUrl, loading } = useFileDownloadUrl(
@@ -292,4 +292,4 @@ export function FileItem({ file, isSelected, itemIndex, onShiftRangeSelect, onSe
       )}
     </div>
   );
-}
+});

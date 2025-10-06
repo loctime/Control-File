@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { 
   File, 
   Folder, 
@@ -29,7 +29,7 @@ interface FileListProps {
   items: DriveItem[];
 }
 
-export function FileList({ items }: FileListProps) {
+export const FileList = memo(function FileList({ items }: FileListProps) {
   const { selectedItems, toggleItemSelection } = useDriveStore();
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -204,4 +204,4 @@ export function FileList({ items }: FileListProps) {
       )}
     </div>
   );
-}
+});

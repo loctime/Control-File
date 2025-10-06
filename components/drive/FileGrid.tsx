@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { 
   File, 
   Folder, 
@@ -29,7 +29,7 @@ interface FileGridProps {
   items: DriveItem[];
 }
 
-export function FileGrid({ items }: FileGridProps) {
+export const FileGrid = memo(function FileGrid({ items }: FileGridProps) {
   const { selectedItems, toggleItemSelection } = useDriveStore();
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -220,4 +220,4 @@ export function FileGrid({ items }: FileGridProps) {
       )}
     </div>
   );
-}
+});
