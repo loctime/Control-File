@@ -12,17 +12,18 @@ export function EmptyState() {
   const [isCreating, setIsCreating] = useState(false);
   const [folderName, setFolderName] = useState('');
 
-  const handleCreateFirstFolder = () => {
+  const handleCreateFirstFolder = async () => {
     if (folderName.trim()) {
-      const newFolderId = createMainFolder(folderName, 'Folder', 'text-purple-600');
-      
-      // Invalidar queries para actualizar la UI automáticamente
-      invalidateFiles(null);
-      
-      // Establecer la carpeta recién creada como principal automáticamente
-      setMainFolder(newFolderId);
-      setFolderName('');
-      setIsCreating(false);
+      try {
+        const newFolderId = await createMainFolder(folderName, 'Folder', 'text-purple-600');
+        
+        // Establecer la carpeta recién creada como principal automáticamente
+        setMainFolder(newFolderId);
+        setFolderName('');
+        setIsCreating(false);
+      } catch (error) {
+        console.error('Error creando primera carpeta:', error);
+      }
     }
   };
 

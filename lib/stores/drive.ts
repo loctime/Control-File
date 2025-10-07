@@ -184,7 +184,7 @@ export const useDriveStore = create<DriveState>()(
         })),
 
       // Folder operations
-      createMainFolder: (name, icon, color, source = 'navbar') => {
+      createMainFolder: async (name, icon, color, source = 'navbar') => {
         const currentUserId = useAuthStore.getState().user?.uid || 'anonymous';
         const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
         const newFolder = {
@@ -221,31 +221,44 @@ export const useDriveStore = create<DriveState>()(
         
         console.log('📁 Creando carpeta principal en store local:', newFolder.name);
         
-        // Primero actualizar el store localmente
+        // Primero actualizar el store localmente (optimistic update)
         set((state) => ({
           items: [...state.items, newFolder]
         }));
         
-        // Luego persistir en backend de forma asíncrona (sin bloquear)
-        // La llamada se hace después de actualizar el store
-        apiCall('/api/folders/create', {
-          method: 'POST',
-          body: JSON.stringify({
-            id: newFolder.id,
-            name: newFolder.name,
-            parentId: newFolder.parentId,
-            icon: newFolder.metadata.icon,
-            color: newFolder.metadata.color,
-            source: newFolder.metadata.source,
-            appCode: 'controlfile',
-          }),
-        }).catch(error => {
+        try {
+          // Persistir en backend y esperar respuesta
+          await apiCall('/api/folders/create', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: newFolder.id,
+              name: newFolder.name,
+              parentId: newFolder.parentId,
+              icon: newFolder.metadata.icon,
+              color: newFolder.metadata.color,
+              source: newFolder.metadata.source,
+              appCode: 'controlfile',
+            }),
+          });
+          
+          console.log('✅ Carpeta creada exitosamente en backend:', newFolder.name);
+          
+          // IMPORTANTE: Invalidar queries de React Query para sincronizar
+          // Esto asegura que useFiles recargue los datos desde Firestore
+          if (typeof window !== 'undefined' && (window as any).__queryClient) {
+            const queryClient = (window as any).__queryClient;
+            queryClient.invalidateQueries({ queryKey: ['files'] });
+            console.log('♻️ Queries invalidadas después de crear carpeta');
+          }
+          
+        } catch (error) {
           console.error('❌ Error persistiendo carpeta principal:', error);
           // Revertir en caso de error
           set((state) => ({
             items: state.items.filter(item => item.id !== newFolder.id)
           }));
-        });
+          throw error;
+        }
         
         return newFolder.id;
       },
@@ -272,7 +285,7 @@ export const useDriveStore = create<DriveState>()(
         return customFolders;
       },
 
-      createSubfolder: (name, parentId) => {
+      createSubfolder: async (name, parentId) => {
         const currentUserId = useAuthStore.getState().user?.uid || 'anonymous';
         const newSubfolder = {
           id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -294,29 +307,42 @@ export const useDriveStore = create<DriveState>()(
         
         console.log('📁 Creando subcarpeta en store local:', newSubfolder.name);
         
-        // Primero actualizar el store localmente
+        // Primero actualizar el store localmente (optimistic update)
         set((state) => ({
           items: [...state.items, newSubfolder]
         }));
         
-        // Luego persistir en backend de forma asíncrona
-        apiCall('/api/folders/create', {
-          method: 'POST',
-          body: JSON.stringify({
-            id: newSubfolder.id,
-            name: newSubfolder.name,
-            parentId: newSubfolder.parentId,
-            icon: newSubfolder.metadata.icon,
-            color: newSubfolder.metadata.color,
-            appCode: 'controlfile',
-          }),
-        }).catch(error => {
+        try {
+          // Persistir en backend y esperar respuesta
+          await apiCall('/api/folders/create', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: newSubfolder.id,
+              name: newSubfolder.name,
+              parentId: newSubfolder.parentId,
+              icon: newSubfolder.metadata.icon,
+              color: newSubfolder.metadata.color,
+              appCode: 'controlfile',
+            }),
+          });
+          
+          console.log('✅ Subcarpeta creada exitosamente en backend:', newSubfolder.name);
+          
+          // IMPORTANTE: Invalidar queries de React Query para sincronizar
+          if (typeof window !== 'undefined' && (window as any).__queryClient) {
+            const queryClient = (window as any).__queryClient;
+            queryClient.invalidateQueries({ queryKey: ['files'] });
+            console.log('♻️ Queries invalidadas después de crear subcarpeta');
+          }
+          
+        } catch (error) {
           console.error('❌ Error persistiendo subcarpeta:', error);
           // Revertir en caso de error
           set((state) => ({
             items: state.items.filter(item => item.id !== newSubfolder.id)
           }));
-        });
+          throw error;
+        }
       },
 
       getSubfolders: (parentId) => {

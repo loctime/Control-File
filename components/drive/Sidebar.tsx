@@ -160,17 +160,20 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
   };
 
   // Crear subcarpeta
-  const handleCreateSubfolder = (parentId: string) => {
+  const handleCreateSubfolder = async (parentId: string) => {
     if (newFolderName.trim()) {
-      createSubfolder(newFolderName, parentId);
-      
-      // Invalidar queries para actualizar la UI automáticamente
-      invalidateFiles(parentId);
-      
-      setNewFolderName('');
-      setIsCreatingSubfolder(null);
-      // Expandir la carpeta padre automáticamente
-      setExpandedFolders(prev => new Set(Array.from(prev).concat([parentId])));
+      try {
+        await createSubfolder(newFolderName, parentId);
+        
+        console.log('✅ Subcarpeta creada y sincronizada correctamente');
+        
+        setNewFolderName('');
+        setIsCreatingSubfolder(null);
+        // Expandir la carpeta padre automáticamente
+        setExpandedFolders(prev => new Set(Array.from(prev).concat([parentId])));
+      } catch (error) {
+        console.error('Error creando subcarpeta:', error);
+      }
     }
   };
 

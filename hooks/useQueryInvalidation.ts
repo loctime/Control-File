@@ -11,13 +11,8 @@ export function useQueryInvalidation() {
 
   const invalidateFiles = (folderId: string | null = null) => {
     try {
-      // Invalidar todas las queries de archivos
+      // Invalidar todas las queries de archivos para asegurar sincronización completa
       queryClient.invalidateQueries({ queryKey: ['files'] });
-      
-      // Invalidar query específica de la carpeta
-      if (user?.uid) {
-        queryClient.invalidateQueries({ queryKey: ['files', user.uid, folderId] });
-      }
       
       console.log('♻️ Queries invalidadas para actualizar UI', { folderId });
     } catch (error) {

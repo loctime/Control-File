@@ -56,10 +56,9 @@ export function Navbar() {
       console.log('📁 Creando carpeta:', newFolderName);
       
       try {
-        createMainFolder(newFolderName, 'Folder', 'text-purple-600');
+        await createMainFolder(newFolderName, 'Folder', 'text-purple-600');
         
-        // No necesitamos invalidar queries - el store de Zustand
-        // actualizará la UI automáticamente de forma reactiva
+        console.log('✅ Carpeta creada y sincronizada correctamente');
         
         setNewFolderName('');
         setIsCreatingFolder(false);

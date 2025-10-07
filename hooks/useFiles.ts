@@ -21,7 +21,7 @@ export function useFiles(folderId: string | null = null) {
   };
 
   const filesQuery = useQuery({
-    queryKey: ['files', user?.uid || 'no-user', folderId || 'root'],
+    queryKey: ['files', user?.uid || 'no-user', folderId],
     queryFn: async (): Promise<DriveItem[]> => {
       if (!user) return [];
 

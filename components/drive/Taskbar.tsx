@@ -160,10 +160,7 @@ export function Taskbar() {
       console.log('📁 Creando carpeta desde taskbar:', newFolderName);
       
       try {
-        const folderId = createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
-        
-        // Invalidar queries para actualizar la UI automáticamente
-        invalidateFiles(null);
+        const folderId = await createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
         
         addToast({
           title: 'Carpeta creada',
