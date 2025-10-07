@@ -54,10 +54,15 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
       'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'http://localhost:5173',
       'https://files.controldoc.app',
       'https://controldoc.app',
       'https://stock.controldoc.app',
-      'https://gastos.controldoc.app'
+      'https://gastos.controldoc.app',
+      'https://auditoria.controldoc.app'
     ];
 
 console.log('🌐 CORS allowed origins:', allowedOrigins);

@@ -385,7 +385,6 @@ export function FileContentArea({
                     <ChevronLeft className="h-3 w-3 mr-1" />
                     Atrás
                   </Button>
-                  <h3 className="text-sm font-medium text-muted-foreground">Archivos</h3>
                   {/* Botón +Nuevo */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

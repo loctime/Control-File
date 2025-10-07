@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigation } from '@/hooks/useNavigation';
-import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { useContextMenuActions } from '@/hooks/useContextMenuActions';
 import { Button } from '@/components/ui/button';
-import { Folder, Image, FileText, User, Monitor, Plus } from 'lucide-react';
+import { Folder, Image, FileText, User, Monitor, Plus, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { ContextMenu } from '@/components/drive/ContextMenu';
 import { Breadcrumb } from '@/components/drive/Breadcrumb';
@@ -17,9 +16,10 @@ import { DriveItem, DriveFolder } from '@/types';
 export function Navbar() {
   const { createMainFolder, items, toggleItemSelection, moveToTrash, currentFolderId } = useDriveStore();
   const { sidebarOpen, closeTrashView } = useUIStore();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { navigateToFolder } = useNavigation();
-  const { invalidateFiles } = useQueryInvalidation();
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -58,8 +58,8 @@ export function Navbar() {
       try {
         createMainFolder(newFolderName, 'Folder', 'text-purple-600');
         
-        // Invalidar queries para actualizar la UI automáticamente
-        invalidateFiles(null);
+        // No necesitamos invalidar queries - el store de Zustand
+        // actualizará la UI automáticamente de forma reactiva
         
         setNewFolderName('');
         setIsCreatingFolder(false);
@@ -69,12 +69,47 @@ export function Navbar() {
         setIsCreating(false);
       }
     }
-  }, [newFolderName, createMainFolder, invalidateFiles, isCreating]);
+  }, [newFolderName, createMainFolder, isCreating]);
 
   const handleProfileClick = useCallback(() => {
     // TODO: Navegar a página de perfil
     console.log('Ir a perfil');
   }, []);
+
+  const handleUserMenuToggle = useCallback(() => {
+    setIsUserMenuOpen(!isUserMenuOpen);
+  }, [isUserMenuOpen]);
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+      setIsUserMenuOpen(false);
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  }, [signOut]);
+
+  const handleProfileSettings = useCallback(() => {
+    navigateToFolder('profile');
+    setIsUserMenuOpen(false);
+  }, [navigateToFolder]);
+
+  // Cerrar menú al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
 
   // Handlers para ContextMenuu
   const handleOpenItem = useCallback((itemId: string) => {
@@ -218,6 +253,9 @@ export function Navbar() {
           )}
           </div>
           
+          {/* Línea divisora entre carpetas y breadcrumb */}
+          <div className="w-full border-t border-border mb-2"></div>
+          
           {/* Breadcrumb de navegación - Solo debajo de las carpetas */}
           <div className="flex items-center justify-center">
             <Breadcrumb />
@@ -229,17 +267,42 @@ export function Navbar() {
           <div className="flex items-center space-x-2">
             <ThemeToggle />
             {user?.photoURL ? (
-              <button
-                onClick={handleProfileClick}
-                className="flex items-center space-x-2 px-3 py-2 rounded hover:bg-accent"
-              >
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || 'Usuario'}
-                  className="w-6 h-6 rounded-full"
-                />
-                <span className="text-sm font-medium">{user.displayName}</span>
-              </button>
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={handleUserMenuToggle}
+                  className="flex items-center space-x-2 px-3 py-2 rounded hover:bg-accent transition-colors"
+                >
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || 'Usuario'}
+                    className="w-6 h-6 rounded-full"
+                  />
+                  <span className="text-sm font-medium">{user.displayName}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {/* Menú desplegable */}
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-md shadow-lg z-50">
+                    <div className="py-1">
+                      <button
+                        onClick={handleProfileSettings}
+                        className="flex items-center space-x-2 w-full px-4 py-2 text-sm hover:bg-accent transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>Perfil</span>
+                      </button>
+                      <button
+                        onClick={handleSignOut}
+                        className="flex items-center space-x-2 w-full px-4 py-2 text-sm hover:bg-accent transition-colors text-red-600 hover:text-red-700"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Cerrar Sesión</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <Button
                 variant="ghost"

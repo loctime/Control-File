@@ -427,20 +427,6 @@ export function FileExplorer() {
                 </div>
               </div>
               
-              {/* Botón de reset para debugging */}
-              <div className="absolute top-2 right-2 z-10">
-                <button
-                  onClick={() => {
-                    console.log('Reseteando sidebar a 320px');
-                    // Forzar reset del sidebar
-                    window.location.reload();
-                  }}
-                  className="text-xs bg-red-500 text-white px-2 py-1 rounded opacity-50 hover:opacity-100"
-                  title="Reset sidebar (debug)"
-                >
-                  Reset
-                </button>
-              </div>
             </div>
           ) : (
             <CollapsedSidebar />
