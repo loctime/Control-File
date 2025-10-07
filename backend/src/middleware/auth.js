@@ -70,6 +70,35 @@ if (!admin.apps.length) {
 
 const APP_CODE = process.env.APP_CODE || 'controlfile';
 
+// Auto-inicializar usuario en Firestore si no existe
+async function ensureUserExists(uid, email) {
+  try {
+    const db = admin.firestore();
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      console.log('🔧 Auto-inicializando usuario en Firestore:', uid);
+      
+      const defaultQuotaGB = parseInt(process.env.DEFAULT_USER_QUOTA_GB) || 5;
+      const quotaBytes = defaultQuotaGB * 1024 * 1024 * 1024;
+      
+      await userRef.set({
+        planQuotaBytes: quotaBytes,
+        usedBytes: 0,
+        pendingBytes: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        email: email || ''
+      });
+      
+      console.log(`✅ Usuario auto-inicializado con ${defaultQuotaGB}GB de cuota`);
+    }
+  } catch (error) {
+    // No bloqueamos la request si falla, solo loggeamos
+    console.error('⚠️  Error auto-inicializando usuario (no crítico):', error.message);
+  }
+}
+
 module.exports = async (req, res, next) => {
   try {
     const h = req.headers.authorization || '';
@@ -102,6 +131,11 @@ module.exports = async (req, res, next) => {
       name: decoded.name,
       picture: decoded.picture,
     };
+
+    // Auto-inicializar usuario en Firestore si no existe (async, no blocking)
+    ensureUserExists(decoded.uid, decoded.email).catch(err => {
+      console.error('Error en ensureUserExists:', err);
+    });
 
     return next();
   } catch (error) {
