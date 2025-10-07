@@ -228,7 +228,7 @@ export const useDriveStore = create<DriveState>()(
         
         try {
           // Persistir en backend y esperar respuesta
-          await apiCall('/api/folders/create', {
+          await apiCall('/folders/create', {
             method: 'POST',
             body: JSON.stringify({
               id: newFolder.id,
@@ -314,7 +314,7 @@ export const useDriveStore = create<DriveState>()(
         
         try {
           // Persistir en backend y esperar respuesta
-          await apiCall('/api/folders/create', {
+          await apiCall('/folders/create', {
             method: 'POST',
             body: JSON.stringify({
               id: newSubfolder.id,

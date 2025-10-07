@@ -1,39 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
+
+// Evitar pre-renderizado durante el build
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📁 Next.js create folder endpoint called');
+    console.log('📁 API create folder endpoint called');
     
-    // Redirigir la petición al backend
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
-    if (!backendUrl) {
-      console.error('❌ BACKEND_URL no configurada');
-      return NextResponse.json(
-        { error: 'BACKEND_URL no configurada en el entorno del frontend' },
-        { status: 500 }
-      );
+    // Verify authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
-    const backendResponse = await fetch(`${backendUrl}/api/folders/create`, {
-      method: 'POST',
-      headers: {
-        'Authorization': request.headers.get('Authorization') || '',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(await request.json()),
+
+    const token = authHeader.split('Bearer ')[1];
+    const adminAuth = requireAdminAuth();
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    // Parse request body
+    const { id, name, parentId, icon, color, source, appCode } = await request.json();
+
+    if (!id || !name) {
+      return NextResponse.json({ error: 'ID y nombre son requeridos' }, { status: 400 });
+    }
+
+    console.log('📁 Creating folder:', { name, parentId, userId, source, appCode });
+
+    // Get Firestore instance
+    const adminDb = requireAdminDb();
+
+    // Check if folder already exists in the same parent
+    const existingFolderQuery = adminDb.collection('files')
+      .where('userId', '==', userId)
+      .where('parentId', '==', parentId || null)
+      .where('name', '==', name)
+      .where('type', '==', 'folder');
+
+    const existingFolders = await existingFolderQuery.get();
+    
+    if (!existingFolders.empty) {
+      return NextResponse.json({ error: 'Ya existe una carpeta con ese nombre' }, { status: 409 });
+    }
+
+    // Create slug from name
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+
+    // Calculate path
+    let path: string[] = [];
+    if (parentId) {
+      const parentDoc = await adminDb.collection('files').doc(parentId).get();
+      if (parentDoc.exists) {
+        const parentData = parentDoc.data();
+        path = [...(parentData?.path || []), parentId];
+      }
+    }
+
+    // Create folder document
+    const folderData = {
+      id,
+      userId,
+      name,
+      slug,
+      parentId: parentId || null,
+      path,
+      type: 'folder',
+      appCode: appCode || 'controlfile',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      metadata: {
+        icon: icon || 'Folder',
+        color: color || 'text-purple-600',
+        isMainFolder: !parentId,
+        isDefault: false,
+        description: '',
+        tags: [],
+        isPublic: false,
+        viewCount: 0,
+        lastAccessedAt: new Date(),
+        source: source || 'navbar',
+        permissions: {
+          canEdit: true,
+          canDelete: true,
+          canShare: true,
+          canDownload: true
+        },
+        customFields: {}
+      }
+    };
+
+    // Save to Firestore
+    await adminDb.collection('files').doc(id).set(folderData);
+
+    console.log('✅ Folder created successfully:', id);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Carpeta creada exitosamente',
+      folder: folderData
     });
-
-    const responseData = await backendResponse.json();
-    
-    if (!backendResponse.ok) {
-      return NextResponse.json(
-        { error: responseData.error || 'Error en el servidor backend' },
-        { status: backendResponse.status }
-      );
-    }
-
-    return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in create folder:', error);
+    console.error('❌ Error creating folder:', error);
     const message = error instanceof Error ? error.message : 'Error interno del servidor';
     return NextResponse.json(
       { error: message },
