@@ -9,6 +9,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useNavigation } from '@/hooks/useNavigation';
 import { parseFolderUrl, buildFolderUrl } from '@/lib/url-utils';
+import { DriveFolder } from '@/types';
 
 export default function FolderPage() {
   const params = useParams();
@@ -53,8 +54,8 @@ export default function FolderPage() {
         const targetPath = `/${parsed.path.join('/')}`;
         
         // Buscar la carpeta usando la lógica de buildBreadcrumbFromPath
-        let currentFolderId = null;
-        let targetFolder = null;
+        let currentFolderId: string | null = null;
+        let targetFolder: DriveFolder | null = null;
         
         for (const slug of parsed.path) {
           const folder = items.find(item => 

@@ -156,8 +156,8 @@ export function useNavigation() {
 
     // Buscar la carpeta usando la misma lógica jerárquica que loadFolderByPath
     const targetPath = `/${pathSegments.join('/')}`;
-    let currentFolderId = null;
-    let folder = null;
+    let currentFolderId: string | null = null;
+    let folder: DriveFolder | null = null;
     
     for (const slug of pathSegments) {
       const foundFolder = items.find(item => 
