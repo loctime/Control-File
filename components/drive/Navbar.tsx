@@ -16,7 +16,7 @@ import { DriveItem, DriveFolder } from '@/types';
 export function Navbar() {
   const { createMainFolder, items, toggleItemSelection, moveToTrash, currentFolderId } = useDriveStore();
   const { sidebarOpen, closeTrashView } = useUIStore();
-  const { user, signOut } = useAuth();
+  const { user, logOut } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { navigateToFolder } = useNavigation();
@@ -81,12 +81,12 @@ export function Navbar() {
 
   const handleSignOut = useCallback(async () => {
     try {
-      await signOut();
+      await logOut();
       setIsUserMenuOpen(false);
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
-  }, [signOut]);
+  }, [logOut]);
 
   const handleProfileSettings = useCallback(() => {
     navigateToFolder('profile');

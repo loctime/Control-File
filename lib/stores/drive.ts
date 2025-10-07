@@ -33,7 +33,7 @@ interface DriveState {
   addItem: (item: any) => void;
   
   // Folder operations
-  createMainFolder: (name: string, icon: string, color: string, source?: string) => string;
+  createMainFolder: (name: string, icon: string, color: string, source?: string) => Promise<string>;
   createSubfolder: (name: string, parentId: string) => void;
   getMainFolders: () => any[];
   getSubfolders: (parentId: string) => any[];
