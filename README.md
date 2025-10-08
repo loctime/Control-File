@@ -1,361 +1,268 @@
-# Mini-OneDrive
+# ControlFile - Sistema de Almacenamiento en la Nube
 
-Una aplicación de almacenamiento en la nube estilo Windows con Next.js 14, Firebase, Backblaze B2 y Cloudflare Workers.
+Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js 14, Firebase, Backblaze B2 y arquitectura multi-tenant.
 
-## 🚀 Características
+## 🚀 Características Principales
 
 - **Interfaz estilo Windows**: Navegación breadcrumb, vista lista/cuadrícula, panel de detalles
-- **Sistema de Taskbar**: Barra de acceso rápido separada del navbar con carpetas específicas
-- **Autenticación**: Firebase Auth con Google y email/password
-- **Almacenamiento**: Backblaze B2 con presigned URLs
-- **Subida de archivos**: Drag & drop, multipart para archivos grandes
-- **Compartir archivos**: Enlaces públicos con Cloudflare Workers
-- **Sistema de cuotas**: Control de almacenamiento por usuario
-- **Tema claro/oscuro**: Soporte para temas personalizables
-- **Responsive**: Optimizado para móvil y desktop
+- **Sistema de Taskbar**: Barra de acceso rápido con carpetas favoritas
+- **Multi-tenant**: Un sistema, múltiples apps (ControlFile, ControlAudit, ControlDoc)
+- **Autenticación Central**: Firebase Auth con SSO entre aplicaciones
+- **Almacenamiento**: Backblaze B2 con presigned URLs (75% más barato que S3)
+- **Share Links**: Enlaces públicos con expiración y control de acceso
+- **Sistema de cuotas**: Control de almacenamiento por usuario y plan
+- **Mobile**: App nativa para Android con Capacitor
 
 ## 🛠️ Stack Tecnológico
 
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **UI Components**: shadcn/ui, Lucide React
-- **Estado**: Zustand, TanStack Query
-- **Autenticación**: Firebase Auth
-- **Base de datos**: Firestore
-- **Storage**: Backblaze B2 (S3-compatible)
-- **CDN**: Cloudflare Workers
-- **Deploy**: Vercel/Render
+| Capa | Tecnología |
+|------|------------|
+| **Frontend** | Next.js 14 (App Router), TypeScript, TailwindCSS |
+| **Estado** | Zustand, TanStack Query |
+| **Autenticación** | Firebase Auth (Central) |
+| **Base de datos** | Firestore |
+| **Storage** | Backblaze B2 (S3-compatible) |
+| **Mobile** | Capacitor 6 (Android/iOS) |
+| **Deploy** | Vercel (Frontend), Render (Backend) |
 
-## 📋 Prerrequisitos
+## 📚 Documentación
 
-- Node.js 18+ 
-- npm o yarn
-- Cuenta de Firebase
-- Cuenta de Backblaze B2
-- Cuenta de Cloudflare (opcional)
+### 🎯 Guías por Audiencia
 
-## 🔧 Instalación
+| Si eres... | Lee esto |
+|------------|----------|
+| 👨‍💻 **Desarrollador integrando ControlFile** | [📖 Integración Rápida](./docs/integracion/README_INTEGRACION_RAPIDA.md) (5 min) |
+| 🔗 **Desarrollador consumiendo share links** | [📖 Guía Share Links](./docs/integracion/GUIA_CONSUMIR_SHARE_LINKS.md) |
+| 📱 **Desarrollador móvil (Android)** | [📖 Mobile Setup](./docs/mobile/) |
+| 🚀 **DevOps/Admin desplegando** | [📖 Deployment](./docs/deployment/) |
+| 🔧 **Desarrollador backend** | [📖 Guía Backend](./docs/integracion/GUIA_BACKEND.md) |
+| 🏗️ **Arquitecto/Tech Lead** | [📖 Documentación Técnica](./docs/technical/) |
 
-### 1. Clonar el repositorio
+### 📂 Documentación Completa
+
+Ver **[docs/](./docs/)** para la documentación organizada por categorías:
+
+- **[Integración](./docs/integracion/)** - Integrar ControlFile con apps externas
+- **[Mobile](./docs/mobile/)** - Build y deployment de apps móviles
+- **[Deployment](./docs/deployment/)** - Guías de deployment y configuración
+- **[Features](./docs/features/)** - Documentación de características
+- **[Technical](./docs/technical/)** - Notas técnicas y arquitectura
+- **[Auth](./docs/auth/)** - Autenticación y OAuth
+
+### 🔗 Referencias Rápidas
+
+- **[API Reference](./API_REFERENCE.md)** - Documentación completa de endpoints
+- **[Scripts](./scripts/)** - Herramientas de administración
+
+## 🚀 Inicio Rápido
+
+### Para Desarrollo Local
 
 ```bash
-git clone https://github.com/tu-usuario/mini-onedrive.git
-cd mini-onedrive
-```
+# 1. Clonar repositorio
+git clone https://github.com/tu-usuario/controlfile.git
+cd controlfile
 
-### 2. Instalar dependencias
-
-```bash
+# 2. Instalar dependencias
 npm install
-```
 
-### 3. Configurar variables de entorno
-
-Copia el archivo de ejemplo y configura tus variables:
-
-```bash
+# 3. Configurar variables de entorno
 cp env.example .env.local
-```
+# Editar .env.local con tus credenciales
 
-Edita `.env.local` con tus credenciales:
-
-```env
-# Firebase
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-
-# Firebase Admin (para server-side)
-FIREBASE_ADMIN_PRIVATE_KEY=your_private_key
-FIREBASE_ADMIN_CLIENT_EMAIL=firebase-adminsdk@your_project.iam.gserviceaccount.com
-
-# Backblaze B2
-B2_KEY_ID=your_b2_key_id
-B2_APPLICATION_KEY=your_b2_application_key
-B2_BUCKET_ID=your_b2_bucket_id
-B2_BUCKET_NAME=your_b2_bucket_name
-B2_ENDPOINT=https://s3.us-west-004.backblazeb2.com
-
-# Cloudflare Worker (opcional)
-NEXT_PUBLIC_CLOUDFLARE_WORKER_URL=https://your-worker.your-subdomain.workers.dev
-
-# App Config
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### 4. Configurar Firebase
-
-#### Crear proyecto Firebase
-
-1. Ve a [Firebase Console](https://console.firebase.google.com/)
-2. Crea un nuevo proyecto
-3. Habilita Authentication (Google + Email/Password)
-4. Crea una base de datos Firestore
-5. Genera una clave de servicio para Admin SDK
-
-#### Desplegar reglas de Firestore
-
-```bash
-# Instalar Firebase CLI
-npm install -g firebase-tools
-
-# Login
-firebase login
-
-# Inicializar proyecto
-firebase init firestore
-
-# Desplegar reglas
-firebase deploy --only firestore:rules
-```
-
-### 5. Configurar Backblaze B2
-
-#### Crear bucket y aplicación
-
-1. Ve a [Backblaze B2](https://www.backblaze.com/b2/cloud-storage.html)
-2. Crea una cuenta y un bucket
-3. Genera una clave de aplicación con permisos de lectura/escritura
-4. Configura CORS para tu dominio
-
-#### Configurar CORS en B2
-
-```json
-[
-  {
-    "corsRuleName": "mini-onedrive-cors",
-    "allowedOrigins": ["http://localhost:3000", "https://tu-dominio.com"],
-    "allowedOperations": ["s3_get", "s3_put", "s3_delete"],
-    "allowedHeaders": ["*"],
-    "maxAgeSeconds": 3600
-  }
-]
-```
-
-### 6. Configurar Cloudflare Worker (opcional)
-
-#### Desplegar Worker
-
-```bash
-# Instalar Wrangler CLI
-npm install -g wrangler
-
-# Login a Cloudflare
-wrangler login
-
-# Configurar variables
-cd cloudflare
-wrangler secret put FIREBASE_ACCESS_TOKEN
-
-# Desplegar
-wrangler deploy
-```
-
-### 7. Ejecutar en desarrollo
-
-```bash
+# 4. Ejecutar en desarrollo
 npm run dev
 ```
 
-La aplicación estará disponible en `http://localhost:3000`
+Ver [documentación de deployment](./docs/deployment/) para configuración completa.
 
-## 🚀 Despliegue
+### Para Integración con Tu App
 
-### Vercel (Recomendado)
+```bash
+# 1. Instalar Firebase en tu proyecto
+npm install firebase
 
-1. Conecta tu repositorio a Vercel
-2. Configura las variables de entorno en el dashboard
-3. Despliega automáticamente
+# 2. Copiar el SDK de ControlFile
+# Ver docs/integracion/README_INTEGRACION_RAPIDA.md
 
-### Render
+# 3. Configurar y usar
+import { controlFile } from '@/lib/controlfile-sdk';
+await controlFile.upload(file);
+```
 
-1. Crea un nuevo servicio Web en Render
-2. Conecta tu repositorio de GitHub
-3. Configura las variables de entorno
-4. Despliega
+Ver [guía de integración rápida](./docs/integracion/README_INTEGRACION_RAPIDA.md) para código completo.
+
+## 📋 Prerrequisitos
+
+- **Node.js** 18+
+- **Firebase** (proyecto Auth Central + proyecto Data)
+- **Backblaze B2** (bucket configurado)
+- **Android Studio** (solo para mobile)
+
+## 🏗️ Arquitectura
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   APLICACIONES                        │
+│  ControlFile  │  ControlAudit  │  ControlDoc  │ ...  │
+└────────────────────┬─────────────────────────────────┘
+                     │
+                     ↓
+        ┌────────────────────────┐
+        │   Firebase Auth        │  ← Auth Central (SSO)
+        │   (Single Sign-On)     │
+        └────────────┬───────────┘
+                     │
+          ┬──────────┴──────────┬
+          ↓                     ↓
+    ┌──────────┐         ┌─────────────┐
+    │ Firestore│         │ Backblaze B2│
+    │  (Data)  │         │  (Storage)  │
+    └──────────┘         └─────────────┘
+```
+
+**Características:**
+- ✅ **Single Sign-On:** Un login para todas las apps
+- ✅ **Multi-tenant:** Control de acceso por app con custom claims
+- ✅ **Escalable:** Arquitectura desacoplada
+- ✅ **Económico:** B2 cuesta 1/4 que S3
+
+## 🔐 Seguridad
+
+- **Autenticación:** Firebase Auth con JWT tokens
+- **Autorización:** Custom claims + Firestore rules
+- **Storage:** Presigned URLs con expiración (5 min)
+- **CORS:** Configurado por dominio
+- **Share Links:** Tokens aleatorios + expiración configurable
+
+## 📊 Planes y Cuotas
+
+| Plan | Storage | Precio |
+|------|---------|--------|
+| Free | 5 GB | Gratis |
+| Basic | 50 GB | $5/mes |
+| Pro | 500 GB | $25/mes |
+| Enterprise | Ilimitado | Custom |
+
+Ver [lib/plans.ts](./lib/plans.ts) para configuración.
+
+## 🔧 Scripts Útiles
+
+```bash
+# Asignar permisos a usuario
+npm run set-claims -- --email user@example.com --apps controlfile,controlaudit
+
+# Inicializar nuevo usuario
+npm run init-user -- --email user@example.com
+
+# Reconciliar cuotas
+npm run reconcile
+
+# Deploy índices de Firestore
+npm run deploy-indexes
+
+# Build APK (Android)
+npm run build:android
+```
+
+Ver [scripts/](./scripts/) para más herramientas.
+
+## 📱 Mobile
+
+Aplicación nativa para Android/iOS usando Capacitor:
+
+```bash
+# Setup inicial
+npm run mobile:setup
+
+# Build APK
+npm run build:android
+
+# Build iOS
+npm run build:ios
+```
+
+Ver [documentación móvil](./docs/mobile/) para guía completa.
+
+## 🚀 Deploy en Producción
+
+### Frontend (Vercel)
+```bash
+vercel --prod
+```
+
+### Backend (Render)
+```bash
+# Configurar en render.yaml
+git push origin main
+```
+
+Ver [guía de deployment](./docs/deployment/DEPLOYMENT.md) para instrucciones completas.
 
 ## 📁 Estructura del Proyecto
 
 ```
-mini-onedrive/
-├── app/                    # Next.js App Router
-│   ├── api/               # API Routes
-│   ├── auth/              # Página de autenticación
-│   ├── settings/          # Página de configuración
-│   └── shared/            # Página de archivos compartidos
-├── components/            # Componentes React
-│   ├── ui/               # Componentes shadcn/ui
-│   ├── drive/            # Componentes del explorador
-│   └── common/           # Componentes comunes
-├── lib/                  # Utilidades y configuración
-│   ├── firebase.ts       # Configuración de Firebase
-│   ├── b2.ts            # Cliente de Backblaze B2
-│   ├── utils.ts         # Utilidades generales
-│   └── stores/          # Stores de Zustand
-├── hooks/               # Custom hooks
-├── types/               # Definiciones de TypeScript
-├── cloudflare/          # Worker de Cloudflare
-├── scripts/             # Scripts de mantenimiento
-└── firestore.rules      # Reglas de seguridad
+controlFile/
+├── app/                     # Next.js App Router
+│   ├── api/                # API Routes (proxy al backend)
+│   ├── auth/               # Autenticación
+│   └── share/              # Archivos compartidos
+├── components/             # Componentes React
+│   ├── drive/             # Explorador de archivos
+│   ├── ui/                # Componentes shadcn/ui
+│   └── common/            # Componentes compartidos
+├── hooks/                  # Custom React hooks
+├── lib/                    # Librerías y utilidades
+│   ├── stores/            # Zustand stores
+│   ├── firebase.ts        # Config Firebase
+│   └── b2.ts              # Cliente B2
+├── backend/                # Backend Node.js/Express
+│   └── src/
+│       ├── routes/        # Rutas de API
+│       └── services/      # Servicios (B2, metadata)
+├── docs/                   # 📚 Documentación organizada
+│   ├── integracion/       # Guías de integración
+│   ├── mobile/            # Docs móvil
+│   ├── deployment/        # Deployment
+│   ├── features/          # Features
+│   ├── technical/         # Docs técnica
+│   └── auth/              # Autenticación
+├── scripts/                # Scripts de administración
+├── android/                # Proyecto Android (Capacitor)
+└── gastos/                 # Ejemplo: integración ControlGastos
 ```
-
-## 🔐 Modelo de Datos
-
-### Firestore Collections
-
-#### users/{uid}
-```typescript
-{
-  planQuotaBytes: number;    // Cuota total (5GB por defecto)
-  usedBytes: number;         // Bytes usados
-  pendingBytes: number;      // Bytes en subida
-  createdAt: Timestamp;      // Fecha de creación
-}
-```
-
-#### files/{id}
-```typescript
-{
-  userId: string;            // ID del propietario
-  bucketKey: string;         // Clave en B2
-  name: string;              // Nombre del archivo
-  size: number;              // Tamaño en bytes
-  mime: string;              // Tipo MIME
-  checksum: string;          // Checksum del archivo
-  parentId: string | null;   // ID de la carpeta padre
-  path: string;              // Ruta completa
-  version: number;           // Versión del archivo
-  createdAt: Timestamp;      // Fecha de creación
-  modifiedAt: Timestamp;     // Fecha de modificación
-  isShared: boolean;         // Si está compartido
-}
-```
-
-#### folders/{id}
-```typescript
-{
-  userId: string;            // ID del propietario
-  name: string;              // Nombre de la carpeta
-  parentId: string | null;   // ID de la carpeta padre
-  path: string;              // Ruta completa
-  createdAt: Timestamp;      // Fecha de creación
-  modifiedAt: Timestamp;     // Fecha de modificación
-}
-```
-
-#### shares/{id}
-```typescript
-{
-  userId: string;            // ID del propietario
-  fileId: string;            // ID del archivo
-  role: 'viewer' | 'editor'; // Rol del compartir
-  isPublic: boolean;         // Si es público
-  expiresAt: Timestamp | null; // Fecha de expiración
-  revocationCounter: number; // Contador de revocación
-  createdAt: Timestamp;      // Fecha de creación
-}
-```
-
-#### uploadSessions/{id}
-```typescript
-{
-  uid: string;               // ID del usuario
-  size: number;              // Tamaño del archivo
-  parentId: string | null;   // ID de la carpeta padre
-  name: string;              // Nombre del archivo
-  mime: string;              // Tipo MIME
-  status: 'pending' | 'confirmed' | 'failed';
-  expiresAt: Timestamp;      // Fecha de expiración
-  createdAt: Timestamp;      // Fecha de creación
-  bucketKey: string;         // Clave en B2
-  uploadId: string;          // ID de subida multipart
-}
-```
-
-## 🔧 Scripts Disponibles
-
-### Desarrollo
-```bash
-npm run dev          # Servidor de desarrollo
-npm run build        # Construir para producción
-npm run start        # Servidor de producción
-npm run lint         # Linting
-```
-
-### Mantenimiento
-```bash
-npm run reconcile    # Reconciliar cuotas de usuarios
-```
-
-### Testing
-```bash
-npm test             # Tests unitarios
-npm run test:e2e     # Tests end-to-end
-```
-
-## 🛡️ Seguridad
-
-- **Autenticación**: Firebase Auth con JWT
-- **Autorización**: Reglas de Firestore por usuario
-- **Storage**: Presigned URLs con expiración
-- **CORS**: Configurado para dominios específicos
-- **Validación**: Validación de entrada en todas las APIs
-
-## 📊 Monitoreo y Mantenimiento
-
-### Reconciliación de Cuotas
-
-Ejecuta el script de reconciliación para verificar y corregir cuotas:
-
-```bash
-# Reconciliar todos los usuarios
-npm run reconcile all
-
-# Reconciliar usuario específico
-npm run reconcile user123
-```
-
-### Limpieza de Sesiones
-
-El script de reconciliación también limpia automáticamente las sesiones de subida expiradas.
-
-## 📚 Documentación de Integración y API
-
-- Guía de integración: ver `API_INTEGRATION.md`
-- Referencia completa de endpoints: ver `API_REFERENCE.md`
-- Sistema de Taskbar: ver `TASKBAR_SYSTEM.md`
 
 ## 🤝 Contribuir
 
 1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
 ## 📝 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT.
 
-## 🆘 Soporte
+## 🆘 Soporte y Troubleshooting
 
-Si tienes problemas o preguntas:
-
-1. Revisa la [documentación](https://github.com/tu-usuario/mini-onedrive/wiki)
-2. Busca en los [issues](https://github.com/tu-usuario/mini-onedrive/issues)
-3. Crea un nuevo issue si no encuentras la solución
+| Problema | Solución |
+|----------|----------|
+| Build errors | Ver [BUILD_FIXES.md](./docs/technical/BUILD_FIXES.md) |
+| CORS issues | Ver [CORS_SOLUTION.md](./docs/deployment/CORS_SOLUTION.md) |
+| Auth problems | Ver [docs/auth/](./docs/auth/) |
+| Mobile build | Ver [DEBUG_MOBILE_BUILD.md](./docs/mobile/DEBUG_MOBILE_BUILD.md) |
 
 ## 🙏 Agradecimientos
 
-- [Next.js](https://nextjs.org/) - Framework de React
-- [Firebase](https://firebase.google.com/) - Backend como servicio
-- [Backblaze B2](https://www.backblaze.com/b2/) - Almacenamiento en la nube
-- [Cloudflare](https://cloudflare.com/) - CDN y Workers
-- [shadcn/ui](https://ui.shadcn.com/) - Componentes de UI
-- [Tailwind CSS](https://tailwindcss.com/) - Framework de CSS
+- [Next.js](https://nextjs.org/) - React Framework
+- [Firebase](https://firebase.google.com/) - Auth + Database
+- [Backblaze B2](https://www.backblaze.com/b2/) - Affordable Storage
+- [shadcn/ui](https://ui.shadcn.com/) - UI Components
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
 
 ---
+
+**📚 [Ver Documentación Completa](./docs/)** | **🔗 [API Reference](./API_REFERENCE.md)** | **🚀 [Deployment Guide](./docs/deployment/)**
 
 Hecho con ❤️ para la comunidad de desarrolladores

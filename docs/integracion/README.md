@@ -10,6 +10,7 @@ Esta carpeta contiene toda la documentación necesaria para integrar aplicacione
 |-----------|-----------|-------------|-------------------|
 | **[RESUMEN_EJECUTIVO_INTEGRACION.md](./RESUMEN_EJECUTIVO_INTEGRACION.md)** | 👔 Gerentes/CTOs | Respuesta ejecutiva a la pregunta de integración, comparación de opciones | 5 min |
 | **[README_INTEGRACION_RAPIDA.md](./README_INTEGRACION_RAPIDA.md)** ⭐ | 👨‍💻 Programadores | Guía práctica paso a paso con código listo para usar | 10 min + implementación |
+| **[GUIA_CONSUMIR_SHARE_LINKS.md](./GUIA_CONSUMIR_SHARE_LINKS.md)** 🔗 | 👨‍💻 Programadores | Cómo descargar archivos compartidos desde share links públicos (sin auth) | 10 min |
 | **[MIGRACION_USUARIOS.md](./MIGRACION_USUARIOS.md)** 🔄 | 👨‍💻 DevOps/Admins | Guía completa para migrar usuarios existentes al Auth Central | 15 min + migración |
 | **[GUIA_BACKEND.md](./GUIA_BACKEND.md)** 🗂️ | 👨‍💻 Backend Devs | Creación de carpetas y estructura desde backend (ej: ControlGastos) | 20 min + implementación |
 | **[CHECKLIST_ADMIN_INTEGRACION.md](./CHECKLIST_ADMIN_INTEGRACION.md)** | 🔧 Admins Backend | Checklist de configuración del backend y asignación de accesos | 15 min |
@@ -29,6 +30,12 @@ Esta carpeta contiene toda la documentación necesaria para integrar aplicacione
 2. Sigue los 5 pasos de instalación
 3. Copia y pega el código
 4. ¡Listo! Tienes storage funcionando
+
+### Si necesitas descargar archivos desde share links públicos (sin autenticación):
+1. Lee **GUIA_CONSUMIR_SHARE_LINKS.md** 🔗
+2. Copia la clase `ControlFileShareClient`
+3. Usa `getShareInfo()` y `downloadFile()`
+4. Caso de uso típico: Bolsa de Trabajo, compartir CVs, fotos públicas
 
 ### Si desarrollas backend y necesitas crear carpetas automáticamente:
 1. Lee **GUIA_BACKEND.md** 🗂️

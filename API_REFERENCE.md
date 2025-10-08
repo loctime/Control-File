@@ -69,20 +69,35 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - **source**: `"navbar"` (default) o `"taskbar"` - Identifica el origen de la carpeta
 
 ## Shares
+
+### Crear share link (requiere autenticación)
 - POST `/api/shares/create` (auth)
-  - Body: `{ fileId, expiresIn?: number /* horas */ }`
+  - Body: `{ fileId, expiresIn?: number /* horas, default 24 */ }`
   - Respuesta: `{ shareToken, shareUrl, expiresAt, fileName }`
+  - Ejemplo: `{ fileId: "f_abc123", expiresIn: 720 }` → 30 días
 
+### Obtener información del share (público, sin auth)
 - GET `/api/shares/:token` (público)
+  - No requiere autenticación
   - Respuesta: `{ fileName, fileSize, mime, expiresAt, downloadCount }`
+  - Ejemplo: `GET /api/shares/ky7pymrmm7o9w0e6ao97uv`
+  - Errores: `404` (no encontrado), `410` (expirado/revocado)
 
+### Descargar archivo compartido (público, sin auth)
 - POST `/api/shares/:token/download` (público)
+  - No requiere autenticación
   - Respuesta: `{ downloadUrl, fileName, fileSize }`
+  - `downloadUrl` es una URL presignada de Backblaze B2 válida por 5 minutos
+  - Ejemplo: `POST /api/shares/ky7pymrmm7o9w0e6ao97uv/download`
+  - Errores: `404` (no encontrado), `410` (expirado/revocado)
 
+### Revocar share link (requiere autenticación)
 - POST `/api/shares/revoke` (auth)
   - Body: `{ shareToken }`
   - Respuesta: `{ success: true, message }`
+  - Solo el creador del share puede revocarlo
 
+### Listar shares del usuario (requiere autenticación)
 - GET `/api/shares` (auth)
   - Respuesta: `{ shares: Array<{ token, fileName, fileSize, expiresAt, createdAt, downloadCount, shareUrl }> }`
 
