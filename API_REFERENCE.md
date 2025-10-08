@@ -91,6 +91,16 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - Ejemplo: `POST /api/shares/ky7pymrmm7o9w0e6ao97uv/download`
   - Errores: `404` (no encontrado), `410` (expirado/revocado)
 
+### Obtener archivo compartido directamente (público, sin auth)
+- GET `/api/shares/:token/image` (público)
+  - No requiere autenticación
+  - Redirige directamente al archivo en Backblaze B2 (válido por 1 hora)
+  - Ideal para embeber imágenes en `<img>` tags o mostrar archivos directamente
+  - Ejemplo: `GET /api/shares/ky7pymrmm7o9w0e6ao97uv/image`
+  - Uso en HTML: `<img src="https://backend-url/api/shares/TOKEN/image" />`
+  - Incrementa el contador de descargas automáticamente
+  - Errores: `404` (no encontrado), `410` (expirado/revocado)
+
 ### Revocar share link (requiere autenticación)
 - POST `/api/shares/revoke` (auth)
   - Body: `{ shareToken }`

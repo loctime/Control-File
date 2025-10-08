@@ -166,6 +166,61 @@ router.post('/:token/download', async (req, res) => {
   }
 });
 
+// Get shared file directly (public, for embedding in <img> tags)
+router.get('/:token/image', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Get share from Firestore
+    const shareRef = admin.firestore().collection('shares').doc(token);
+    const shareDoc = await shareRef.get();
+
+    if (!shareDoc.exists) {
+      return res.status(404).json({ error: 'Enlace de compartir no encontrado' });
+    }
+
+    const shareData = shareDoc.data();
+
+    // Check if share is expired
+    if (shareData.expiresAt.toDate() < new Date()) {
+      return res.status(410).json({ error: 'Enlace expirado' });
+    }
+
+    // Check if share is active
+    if (!shareData.isActive) {
+      return res.status(410).json({ error: 'Enlace revocado' });
+    }
+
+    // Get file from Firestore
+    const fileRef = admin.firestore().collection('files').doc(shareData.fileId);
+    const fileDoc = await fileRef.get();
+
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const fileData = fileDoc.data();
+
+    if (fileData.isDeleted) {
+      return res.status(404).json({ error: 'Archivo eliminado' });
+    }
+
+    // Generate presigned URL and redirect (1 hour validity for better caching)
+    const downloadUrl = await b2Service.createPresignedGetUrl(fileData.bucketKey, 3600);
+
+    // Update download count
+    await shareRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    // Redirect to the actual file URL
+    res.redirect(downloadUrl);
+  } catch (error) {
+    console.error('Error getting shared image:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // Revoke share (protected)
 router.post('/revoke', authMiddleware, async (req, res) => {
   try {

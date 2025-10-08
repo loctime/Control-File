@@ -11,6 +11,8 @@ Esta carpeta contiene toda la documentación necesaria para integrar aplicacione
 | **[RESUMEN_EJECUTIVO_INTEGRACION.md](./RESUMEN_EJECUTIVO_INTEGRACION.md)** | 👔 Gerentes/CTOs | Respuesta ejecutiva a la pregunta de integración, comparación de opciones | 5 min |
 | **[README_INTEGRACION_RAPIDA.md](./README_INTEGRACION_RAPIDA.md)** ⭐ | 👨‍💻 Programadores | Guía práctica paso a paso con código listo para usar | 10 min + implementación |
 | **[GUIA_CONSUMIR_SHARE_LINKS.md](./GUIA_CONSUMIR_SHARE_LINKS.md)** 🔗 | 👨‍💻 Programadores | Cómo descargar archivos compartidos desde share links públicos (sin auth) | 10 min |
+| **[GUIA_IMAGENES_DIRECTAS.md](./GUIA_IMAGENES_DIRECTAS.md)** 🖼️ | 👨‍💻 Programadores | Mostrar imágenes directamente en `<img>` tags desde share links | 10 min |
+| **[EJEMPLOS_IMAGENES_DIRECTAS.md](./EJEMPLOS_IMAGENES_DIRECTAS.md)** 💡 | 👨‍💻 Programadores | Ejemplos prácticos de uso del endpoint `/api/shares/:token/image` | 15 min |
 | **[MIGRACION_USUARIOS.md](./MIGRACION_USUARIOS.md)** 🔄 | 👨‍💻 DevOps/Admins | Guía completa para migrar usuarios existentes al Auth Central | 15 min + migración |
 | **[GUIA_BACKEND.md](./GUIA_BACKEND.md)** 🗂️ | 👨‍💻 Backend Devs | Creación de carpetas y estructura desde backend (ej: ControlGastos) | 20 min + implementación |
 | **[CHECKLIST_ADMIN_INTEGRACION.md](./CHECKLIST_ADMIN_INTEGRACION.md)** | 🔧 Admins Backend | Checklist de configuración del backend y asignación de accesos | 15 min |
@@ -36,6 +38,13 @@ Esta carpeta contiene toda la documentación necesaria para integrar aplicacione
 2. Copia la clase `ControlFileShareClient`
 3. Usa `getShareInfo()` y `downloadFile()`
 4. Caso de uso típico: Bolsa de Trabajo, compartir CVs, fotos públicas
+
+### Si necesitas mostrar imágenes directamente en `<img>` tags:
+1. Lee **GUIA_IMAGENES_DIRECTAS.md** 🖼️
+2. Usa el endpoint `GET /api/shares/:token/image`
+3. Embebe directamente: `<img src=".../{token}/image" />`
+4. Ver ejemplos prácticos en **EJEMPLOS_IMAGENES_DIRECTAS.md** 💡
+5. Caso de uso: Galerías, previsualizaciones, redes sociales
 
 ### Si desarrollas backend y necesitas crear carpetas automáticamente:
 1. Lee **GUIA_BACKEND.md** 🗂️
@@ -106,6 +115,7 @@ La integración proporciona acceso completo a:
 - ✅ **Listado de archivos y carpetas**
 - ✅ **Eliminación de archivos**
 - ✅ **Compartir archivos** (enlaces públicos con expiración)
+- ✅ **Imágenes directas** (endpoint GET para embeber en `<img>` tags) 🆕
 - ✅ **Creación de carpetas**
 - ✅ **Sistema de cuotas por usuario**
 - ✅ **Gestión de versiones** (reemplazar archivos)
@@ -164,7 +174,19 @@ const shareUrl = await shareFile(fileId, 24); // 24 horas
 navigator.clipboard.writeText(shareUrl);
 ```
 
-Ver ejemplos completos en **README_INTEGRACION_RAPIDA.md**.
+### Mostrar imagen directamente 🆕
+
+```html
+<!-- Desde un share token -->
+<img src="https://files.controldoc.app/api/shares/ky7pymrmm7o9w0e6ao97uv/image" 
+     alt="Imagen compartida" />
+
+<!-- En React/Next.js -->
+<img src={`${backendUrl}/api/shares/${shareToken}/image`} 
+     alt="Imagen" />
+```
+
+Ver ejemplos completos en **README_INTEGRACION_RAPIDA.md** y **GUIA_IMAGENES_DIRECTAS.md** 🖼️.
 
 ## 🔐 Seguridad
 
