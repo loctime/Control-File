@@ -532,7 +532,7 @@ router.post('/ocr', async (req, res) => {
       return res.status(503).json({ error: 'Servicio de OCR no disponible' });
     }
 
-    const ocrResult = await cloudmersive.extractText(fileBuffer);
+    const ocrResult = await cloudmersive.extractText(fileBuffer, fileData.mime);
 
     // Guardar resultado en Firestore
     await admin.firestore().collection('files').doc(fileId).update({

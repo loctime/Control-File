@@ -44,12 +44,22 @@ class CloudmersiveService {
   }
 
   // OCR
-  async extractText(fileBuffer) {
+  async extractText(fileBuffer, mimeType = 'image/jpeg') {
     if (!this.enabled) {
       throw new Error('Cloudmersive API key not configured');
     }
     
-    const result = await this.ocrApi.imageOcrPost(fileBuffer);
+    let result;
+    
+    // Usar método apropiado según tipo de archivo
+    if (mimeType === 'application/pdf') {
+      // Para PDFs usar el método específico
+      result = await this.ocrApi.imageOcrPdfToText(fileBuffer);
+    } else {
+      // Para imágenes usar el método de fotos
+      result = await this.ocrApi.imageOcrPhotoToText(fileBuffer);
+    }
+    
     return {
       text: result.TextResult || '',
       confidence: result.MeanConfidenceLevel || 0,
