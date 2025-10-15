@@ -302,11 +302,41 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
       return res.status(403).json({ error: 'No autorizado' });
     }
 
+    // Virus scan si es archivo sospechoso
+    const cloudmersive = require('../services/cloudmersive');
+    let virusScanResult = null;
+
+    if (cloudmersive.enabled && cloudmersive.isSuspiciousFile(sessionData.name, req.file.size, req.file.mimetype)) {
+      console.log('🛡️ Scanning suspicious file for viruses...');
+      try {
+        virusScanResult = await cloudmersive.scanVirus(req.file.buffer);
+        if (!virusScanResult.clean) {
+          return res.status(400).json({ 
+            error: `Virus detectado: ${virusScanResult.virusName}`,
+            code: 'VIRUS_DETECTED'
+          });
+        }
+        console.log('✅ Virus scan passed');
+      } catch (error) {
+        console.error('⚠️ Virus scan failed:', error);
+        // Continuar sin escaneo si falla (graceful degradation)
+      }
+    }
+
+    // Conversión automática de imágenes (placeholder para futuro)
+    let fileToUpload = req.file.buffer;
+    let mimeToUpload = req.file.mimetype;
+
+    if (cloudmersive.enabled && cloudmersive.needsAutoConversion(sessionData.name, req.file.size, req.file.mimetype)) {
+      console.log('🔄 Auto-conversion needed (not implemented yet)');
+      // TODO: Implementar conversión automática de HEIC y PNG grandes
+    }
+
     // Subir archivo a B2 usando el backend
     const uploadResult = await b2Service.uploadFileDirectly(
       sessionData.bucketKey,
-      req.file.buffer,
-      req.file.mimetype
+      fileToUpload,
+      mimeToUpload
     );
 
     console.log('📤 File uploaded to B2 successfully:', uploadResult);
@@ -316,6 +346,7 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
       status: 'uploaded',
       uploadedAt: new Date(),
       etag: uploadResult.etag,
+      virusScan: virusScanResult
     });
 
     res.json({ 

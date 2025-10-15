@@ -492,6 +492,160 @@ router.post('/zip', async (req, res) => {
   }
 });
 
+// OCR - Extract text from image/PDF
+router.post('/ocr', async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const { uid } = req.user;
+
+    if (!fileId) {
+      return res.status(400).json({ error: 'ID de archivo requerido' });
+    }
+
+    // Get file
+    const fileDoc = await admin.firestore().collection('files').doc(fileId).get();
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const fileData = fileDoc.data();
+    if (fileData.userId !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    if (fileData.isDeleted) {
+      return res.status(400).json({ error: 'Archivo eliminado' });
+    }
+
+    // Verificar tipo de archivo
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/tiff', 'application/pdf'];
+    if (!supportedTypes.includes(fileData.mime)) {
+      return res.status(400).json({ error: 'Tipo de archivo no soportado para OCR' });
+    }
+
+    // Descargar archivo de B2
+    const fileBuffer = await b2Service.getObjectBuffer(fileData.bucketKey || fileData.key);
+
+    // Ejecutar OCR
+    const cloudmersive = require('../services/cloudmersive');
+    if (!cloudmersive.enabled) {
+      return res.status(503).json({ error: 'Servicio de OCR no disponible' });
+    }
+
+    const ocrResult = await cloudmersive.extractText(fileBuffer);
+
+    // Guardar resultado en Firestore
+    await admin.firestore().collection('files').doc(fileId).update({
+      ocr: {
+        processed: true,
+        text: ocrResult.text,
+        confidence: ocrResult.confidence,
+        processedAt: ocrResult.processedAt
+      }
+    });
+
+    res.json({
+      success: true,
+      text: ocrResult.text,
+      confidence: ocrResult.confidence
+    });
+
+  } catch (error) {
+    console.error('Error in OCR:', error);
+    res.status(500).json({ error: 'Error al extraer texto' });
+  }
+});
+
+// Convert to PDF
+router.post('/convert-to-pdf', async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const { uid } = req.user;
+
+    if (!fileId) {
+      return res.status(400).json({ error: 'ID de archivo requerido' });
+    }
+
+    const fileDoc = await admin.firestore().collection('files').doc(fileId).get();
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const fileData = fileDoc.data();
+    if (fileData.userId !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    if (fileData.isDeleted) {
+      return res.status(400).json({ error: 'Archivo eliminado' });
+    }
+
+    // Tipos soportados
+    const officeFormats = {
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx'
+    };
+
+    if (!officeFormats[fileData.mime]) {
+      return res.status(400).json({ error: 'Solo archivos Office son soportados' });
+    }
+
+    // Descargar archivo
+    const fileBuffer = await b2Service.getObjectBuffer(fileData.bucketKey || fileData.key);
+
+    // Convertir
+    const cloudmersive = require('../services/cloudmersive');
+    if (!cloudmersive.enabled) {
+      return res.status(503).json({ error: 'Servicio de conversión no disponible' });
+    }
+
+    let pdfBuffer;
+    
+    if (fileData.mime.includes('word')) {
+      pdfBuffer = await cloudmersive.convertDocxToPdf(fileBuffer);
+    } else if (fileData.mime.includes('spreadsheet')) {
+      pdfBuffer = await cloudmersive.convertXlsxToPdf(fileBuffer);
+    } else if (fileData.mime.includes('presentation')) {
+      pdfBuffer = await cloudmersive.convertPptxToPdf(fileBuffer);
+    }
+
+    // Subir PDF
+    const pdfName = fileData.name.replace(/\.\w+$/, '.pdf');
+    const pdfKey = `${uid}/${Date.now()}_${pdfName}`;
+    
+    await b2Service.uploadFileDirectly(pdfKey, pdfBuffer, 'application/pdf');
+
+    // Crear registro en Firestore
+    const newFileRef = admin.firestore().collection('files').doc();
+    await newFileRef.set({
+      id: newFileRef.id,
+      userId: uid,
+      name: pdfName,
+      bucketKey: pdfKey,
+      key: pdfKey,
+      size: pdfBuffer.length,
+      mime: 'application/pdf',
+      parentId: fileData.parentId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isDeleted: false,
+      appCode: fileData.appCode || 'controlfile'
+    });
+
+    res.json({
+      success: true,
+      message: 'Archivo convertido a PDF',
+      fileId: newFileRef.id,
+      fileName: pdfName
+    });
+
+  } catch (error) {
+    console.error('Error converting to PDF:', error);
+    res.status(500).json({ error: 'Error al convertir archivo' });
+  }
+});
+
 module.exports = router;
 
 // Replace file contents while keeping same metadata/id

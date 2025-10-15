@@ -196,6 +196,24 @@ async function uploadFileDirectly(key, buffer, contentType) {
   };
 }
 
+// Get object as buffer (for virus scan, OCR, etc)
+async function getObjectBuffer(key) {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  
+  // Convert stream to buffer
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(chunk);
+  }
+  
+  return Buffer.concat(chunks);
+}
+
 module.exports = {
   createPresignedPutUrl,
   createPresignedGetUrl,
@@ -208,4 +226,5 @@ module.exports = {
   calculateMultipartConfig,
   listObjects,
   uploadFileDirectly,
+  getObjectBuffer,
 };

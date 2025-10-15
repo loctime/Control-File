@@ -147,6 +147,37 @@ router.post('/:token/download', async (req, res) => {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 
+    // Virus scan si es archivo compartido sospechoso y no ha sido escaneado
+    const cloudmersive = require('../services/cloudmersive');
+    if (cloudmersive.enabled && !shareData.virusScanned && cloudmersive.isSuspiciousFile(fileData.name, fileData.size, fileData.mime)) {
+      console.log('🛡️ Scanning shared file for viruses...');
+      try {
+        const fileBuffer = await b2Service.getObjectBuffer(fileData.bucketKey);
+        const virusScanResult = await cloudmersive.scanVirus(fileBuffer);
+        
+        if (!virusScanResult.clean) {
+          // Revocar share automáticamente
+          await shareRef.update({ 
+            isActive: false,
+            revokedReason: `Virus detectado: ${virusScanResult.virusName}`
+          });
+          
+          return res.status(400).json({ 
+            error: 'Archivo contiene virus y fue bloqueado',
+            code: 'VIRUS_DETECTED'
+          });
+        }
+        
+        // Marcar como escaneado
+        await shareRef.update({ virusScanned: true });
+        console.log('✅ Shared file virus scan passed');
+        
+      } catch (error) {
+        console.error('⚠️ Virus scan failed:', error);
+        // Continuar sin escaneo si falla
+      }
+    }
+
     // Generate presigned URL
     const downloadUrl = await b2Service.createPresignedGetUrl(fileData.bucketKey, 300); // 5 minutes
 
