@@ -29,27 +29,7 @@ const limiter = rateLimit({
   }
 });
 
-// Middleware
-app.use(helmet());
-app.use(compression());
-app.use(limiter);
-
-// Body parsing middleware with logging
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Debug middleware for all requests
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/uploads')) {
-    console.log('🔍 Global middleware - Path:', req.path);
-    console.log('🔍 Global middleware - Method:', req.method);
-    console.log('🔍 Global middleware - Content-Type:', req.headers['content-type']);
-    console.log('🔍 Global middleware - Body:', req.body);
-  }
-  next();
-});
-
-// CORS configuration.
+// CORS configuration MUST come before rate limiting to handle preflight requests
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
@@ -73,6 +53,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('✅ CORS allowed origin:', origin);
       callback(null, true);
     } else {
       console.log('🚫 CORS blocked origin:', origin);
@@ -85,9 +66,32 @@ const corsOptions = {
   optionsSuccessStatus: 200,
   preflightContinue: false
 };
+
+// Apply CORS FIRST before any other middleware
 app.use(cors(corsOptions));
-// Ensure Express responds to preflight with proper CORS headers
+// Handle all OPTIONS requests with CORS
 app.options('*', cors(corsOptions));
+
+// Now apply other middleware AFTER CORS
+app.use(helmet());
+app.use(compression());
+app.use(limiter);
+
+// Body parsing middleware with logging
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Debug middleware for all requests
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/uploads')) {
+    console.log('🔍 Global middleware - Path:', req.path);
+    console.log('🔍 Global middleware - Method:', req.method);
+    console.log('🔍 Global middleware - Origin:', req.headers.origin);
+    console.log('🔍 Global middleware - Content-Type:', req.headers['content-type']);
+    console.log('🔍 Global middleware - Body:', req.body);
+  }
+  next();
+});
 
 // Health check route (no auth required)
 app.use('/api/health', healthRoutes);
@@ -103,12 +107,6 @@ app.post('/api/test-upload', (req, res) => {
   });
 });
 
-// Handle OPTIONS requests for uploads before auth middleware
-app.options('/api/uploads/*', cors(corsOptions), (req, res) => {
-  console.log('🔍 OPTIONS request for uploads - Origin:', req.headers.origin);
-  res.sendStatus(200);
-});
-
 // Protected routes with auth
 app.use('/api/uploads', authMiddleware, (req, res, next) => {
   console.log('🔍 Debug middleware - Method:', req.method);
@@ -116,21 +114,6 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   console.log('🔍 Debug middleware - Body after auth:', req.body);
   next();
 }, uploadRoutes);
-// Handle OPTIONS requests for other protected routes
-app.options('/api/files/*', cors(corsOptions), (req, res) => {
-  console.log('🔍 OPTIONS request for files - Origin:', req.headers.origin);
-  res.sendStatus(200);
-});
-
-app.options('/api/shares/*', cors(corsOptions), (req, res) => {
-  console.log('🔍 OPTIONS request for shares - Origin:', req.headers.origin);
-  res.sendStatus(200);
-});
-
-app.options('/api/folders/*', cors(corsOptions), (req, res) => {
-  console.log('🔍 OPTIONS request for folders - Origin:', req.headers.origin);
-  res.sendStatus(200);
-});
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);
