@@ -28,21 +28,24 @@ async function masterAudioFile(inputBuffer, inputFormat = 'wav', outputFormat = 
     // 11 LU LRA: Rango dinámico apropiado
     const loudnormFilter = 'loudnorm=I=-14:TP=-1.5:LRA=11';
     
+    console.log(`🎵 Iniciando masterización: ${inputFormat} → ${outputFormat}`);
+    console.log(`📊 Buffer size: ${inputBuffer.length} bytes`);
+    
     ffmpeg(inputStream)
       .inputFormat(inputFormat)
       .audioFilters(loudnormFilter)
       .audioCodec('pcm_s16le') // Para WAV
       .format(outputFormat)
       .on('error', (err) => {
-        console.error('Error en FFmpeg:', err);
+        console.error('❌ Error en FFmpeg:', err);
         reject(new Error(`Error de procesamiento: ${err.message}`));
       })
       .on('end', () => {
-        console.log('Masterización completada');
+        console.log('✅ Masterización completada');
         resolve(Buffer.concat(chunks));
       })
       .on('progress', (progress) => {
-        console.log(`Procesando: ${progress.percent}%`);
+        console.log(`⏳ Procesando: ${progress.percent}%`);
       })
       .stream()
       .on('data', (chunk) => {

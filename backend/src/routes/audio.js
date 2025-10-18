@@ -3,6 +3,7 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 const audioProcessing = require('../services/audio-processing');
+const audioProcessingSimple = require('../services/audio-processing-simple');
 const { getAppCode, assertItemVisibleForApp } = require('../services/metadata');
 
 /**
@@ -56,22 +57,56 @@ router.post('/master', async (req, res) => {
     console.log(`🎵 Iniciando masterización de audio: ${fileData.name}`);
 
     // Descargar archivo de B2
-    const inputBuffer = await b2Service.getObjectBuffer(fileData.bucketKey);
-    console.log(`📥 Archivo descargado: ${inputBuffer.length} bytes`);
-
-    // Determinar formatos de entrada y salida
-    const formats = audioProcessing.getAudioFormats(fileData.mime);
-    console.log(`🔧 Formatos: ${formats.inputFormat} → ${formats.outputFormat}`);
-
-    // Procesar audio con FFmpeg
-    let masteredBuffer;
-    if (formats.outputFormat === 'mp3') {
-      masteredBuffer = await audioProcessing.masterAudioToMp3(inputBuffer);
-    } else {
-      masteredBuffer = await audioProcessing.masterAudioFile(inputBuffer, formats.inputFormat, formats.outputFormat);
+    let inputBuffer;
+    try {
+      inputBuffer = await b2Service.getObjectBuffer(fileData.bucketKey);
+      console.log(`📥 Archivo descargado: ${inputBuffer.length} bytes`);
+    } catch (error) {
+      console.error('❌ Error descargando archivo de B2:', error);
+      return res.status(500).json({ 
+        error: 'Error descargando archivo',
+        details: error.message 
+      });
     }
 
-    console.log(`✅ Audio masterizado: ${masteredBuffer.length} bytes`);
+    // Determinar formatos de entrada y salida
+    let formats;
+    try {
+      formats = audioProcessing.getAudioFormats(fileData.mime);
+      console.log(`🔧 Formatos: ${formats.inputFormat} → ${formats.outputFormat}`);
+    } catch (error) {
+      console.error('❌ Error determinando formatos:', error);
+      return res.status(400).json({ 
+        error: 'Formato de audio no soportado',
+        details: error.message 
+      });
+    }
+
+    // Verificar si FFmpeg está disponible
+    const ffmpegAvailable = await audioProcessingSimple.checkFFmpegAvailability();
+    
+    // Procesar audio con FFmpeg o método simplificado
+    let masteredBuffer;
+    try {
+      if (ffmpegAvailable) {
+        console.log('🎵 Usando FFmpeg para masterización');
+        if (formats.outputFormat === 'mp3') {
+          masteredBuffer = await audioProcessing.masterAudioToMp3(inputBuffer);
+        } else {
+          masteredBuffer = await audioProcessing.masterAudioFile(inputBuffer, formats.inputFormat, formats.outputFormat);
+        }
+      } else {
+        console.log('⚠️ FFmpeg no disponible, usando método simplificado');
+        masteredBuffer = await audioProcessingSimple.masterAudioFileSimple(inputBuffer, formats.inputFormat, formats.outputFormat);
+      }
+      console.log(`✅ Audio masterizado: ${masteredBuffer.length} bytes`);
+    } catch (error) {
+      console.error('❌ Error procesando audio:', error);
+      return res.status(500).json({ 
+        error: 'Error procesando audio',
+        details: error.message 
+      });
+    }
 
     if (action === 'create') {
       // Crear nuevo archivo masterizado
@@ -218,6 +253,41 @@ router.get('/info/:fileId', async (req, res) => {
   } catch (error) {
     console.error('Error obteniendo info de audio:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Test FFmpeg availability
+ * GET /api/audio/test-ffmpeg
+ */
+router.get('/test-ffmpeg', async (req, res) => {
+  try {
+    const ffmpeg = require('fluent-ffmpeg');
+    
+    // Test FFmpeg availability
+    ffmpeg.getAvailableFormats((err, formats) => {
+      if (err) {
+        console.error('❌ FFmpeg not available:', err);
+        return res.status(500).json({ 
+          error: 'FFmpeg no disponible',
+          details: err.message 
+        });
+      }
+      
+      console.log('✅ FFmpeg disponible');
+      res.json({
+        success: true,
+        message: 'FFmpeg está disponible',
+        formats: Object.keys(formats).slice(0, 10) // Primeros 10 formatos
+      });
+    });
+    
+  } catch (error) {
+    console.error('❌ Error testing FFmpeg:', error);
+    res.status(500).json({ 
+      error: 'Error verificando FFmpeg',
+      details: error.message 
+    });
   }
 });
 

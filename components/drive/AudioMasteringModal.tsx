@@ -65,7 +65,12 @@ export function AudioMasteringModal({
         message: 'Masterizando archivo con FFmpeg'
       });
 
-      const response = await fetch('/api/audio/master', {
+      // Usar endpoint de prueba si está en desarrollo
+      const endpoint = process.env.NODE_ENV === 'development' 
+        ? '/api/audio/test-simple' 
+        : '/api/audio/master';
+        
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
