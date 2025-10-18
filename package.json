@@ -16,7 +16,8 @@
     "add-domain": "node scripts/add-domain.js",
     "test-domain": "node scripts/test-domain.js",
     "set-claims": "node scripts/set-claims.js",
-    "test": "jest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test",
     "android:build": "npm run build:mobile && npx cap build android",
     "android:build:prod": "npm run build:mobile:prod && npx cap build android",
@@ -63,6 +64,7 @@
     "firebase-admin": "^12.1.0",
     "lucide-react": "^0.263.1",
     "next": "14.2.5",
+    "p-retry": "^7.1.0",
     "postcss": "^8.4.38",
     "react": "^18",
     "react-dom": "^18",
@@ -73,6 +75,8 @@
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5",
+    "winston": "^3.18.3",
+    "zod": "^4.1.12",
     "zustand": "^4.5.2"
   },
   "devDependencies": {

@@ -1,6 +1,8 @@
 // lib/b2.ts
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import pRetry from 'p-retry';
+import { logger } from './logger';
 
 // Initialize S3 client for Backblaze B2
 const s3Client = new S3Client({
@@ -11,10 +13,52 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.B2_APPLICATION_KEY!,
   },
   forcePathStyle: true,
+  maxAttempts: 3, // Reintentos automáticos del SDK
 });
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME!;
 const MULTIPART_THRESHOLD = 128 * 1024 * 1024; // 128MB
+
+// Configuración de reintentos
+const RETRY_CONFIG = {
+  retries: 3,
+  factor: 2,
+  minTimeout: 1000,
+  maxTimeout: 10000,
+  onFailedAttempt: (error: any) => {
+    logger.warn('B2 operation retry', {
+      attempt: error.attemptNumber,
+      retriesLeft: error.retriesLeft,
+      error: error.message,
+    });
+  },
+};
+
+/**
+ * Helper para ejecutar operaciones con reintentos automáticos
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string
+): Promise<T> {
+  return pRetry(async () => {
+    try {
+      return await operation();
+    } catch (error: any) {
+      logger.error(`B2 ${operationName} failed`, {
+        error: error.message,
+        code: error.code,
+      });
+      
+      // No reintentar ciertos errores
+      if (error.code === 'NotFound' || error.code === 'AccessDenied') {
+        throw new pRetry.AbortError(error);
+      }
+      
+      throw error;
+    }
+  }, RETRY_CONFIG);
+}
 
 // Generate presigned URL for upload
 export async function createPresignedPutUrl(
@@ -63,37 +107,45 @@ export async function createPresignedGetUrl(
   return getSignedUrl(s3Client, command, { expiresIn });
 }
 
-// Delete object from B2
+// Delete object from B2 with retry
 export async function deleteObject(key: string): Promise<void> {
-  const command = new DeleteObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+  return withRetry(async () => {
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
 
-  await s3Client.send(command);
+    await s3Client.send(command);
+    logger.info('B2 object deleted', { key });
+  }, 'deleteObject');
 }
 
-// Get object metadata
+// Get object metadata with retry
 export async function getObjectMetadata(key: string) {
-  const command = new HeadObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+  return withRetry(async () => {
+    const command = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
 
-  try {
-    const response = await s3Client.send(command);
-    return {
-      size: response.ContentLength || 0,
-      etag: response.ETag?.replace(/"/g, '') || '',
-      lastModified: response.LastModified,
-      contentType: response.ContentType,
-    };
-  } catch (error: any) {
-    if (error.name === 'NotFound') {
-      return null;
+    try {
+      const response = await s3Client.send(command);
+      const metadata = {
+        size: response.ContentLength || 0,
+        etag: response.ETag?.replace(/"/g, '') || '',
+        lastModified: response.LastModified,
+        contentType: response.ContentType,
+      };
+      logger.debug('B2 metadata retrieved', { key, size: metadata.size });
+      return metadata;
+    } catch (error: any) {
+      if (error.name === 'NotFound') {
+        logger.debug('B2 object not found', { key });
+        return null;
+      }
+      throw error;
     }
-    throw error;
-  }
+  }, 'getObjectMetadata');
 }
 
 // Multipart upload utilities
