@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth } from '@/lib/firebase-admin';
 import { logger, logApiRequest, logApiError } from '@/lib/logger';
+import { ZodError, ZodIssue } from 'zod';
 
 export interface AuthenticatedRequest extends NextRequest {
   userId?: string;
@@ -113,7 +114,7 @@ export async function validateRequest<T>(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      const errors = parsed.error.errors.map((err) => ({
+      const errors = parsed.error.errors.map((err: ZodIssue) => ({
         field: err.path.join('.'),
         message: err.message,
       }));
