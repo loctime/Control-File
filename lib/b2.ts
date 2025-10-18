@@ -1,7 +1,7 @@
 // lib/b2.ts
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import pRetry from 'p-retry';
+import pRetry, { AbortError } from 'p-retry';
 import { logger } from './logger';
 
 // Initialize S3 client for Backblaze B2
@@ -52,7 +52,7 @@ async function withRetry<T>(
       
       // No reintentar ciertos errores
       if (error.code === 'NotFound' || error.code === 'AccessDenied') {
-        throw new pRetry.AbortError(error);
+        throw new AbortError(error.message);
       }
       
       throw error;
