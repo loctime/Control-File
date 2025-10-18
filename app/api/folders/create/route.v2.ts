@@ -11,7 +11,15 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (request: NextRequest, { userId }) => {
   try {
     // Validar request body
-    const validation = await validateRequest(request, folderCreateSchema);
+    const validation = await validateRequest<{
+      id: string;
+      name: string;
+      parentId?: string | null;
+      icon?: string;
+      color?: string;
+      source?: string;
+      appCode?: string;
+    }>(request, folderCreateSchema);
     if (!validation.success) {
       return validation.response;
     }

@@ -13,7 +13,12 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (request: NextRequest, { userId }) => {
   try {
     // Validar request body
-    const validation = await validateRequest(request, uploadPresignSchema);
+    const validation = await validateRequest<{
+      name: string;
+      size: number;
+      mime: string;
+      parentId?: string | null;
+    }>(request, uploadPresignSchema);
     if (!validation.success) {
       return validation.response;
     }

@@ -11,7 +11,10 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (request: NextRequest, { userId }) => {
   try {
     // Validar request body
-    const validation = await validateRequest(request, shareCreateSchema);
+    const validation = await validateRequest<{
+      fileId: string;
+      expiresIn: number;
+    }>(request, shareCreateSchema);
     if (!validation.success) {
       return validation.response;
     }

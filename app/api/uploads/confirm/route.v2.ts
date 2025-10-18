@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (request: NextRequest, { userId }) => {
   try {
     // Validar request body
-    const validation = await validateRequest(request, uploadConfirmSchema);
+    const validation = await validateRequest<{ uploadSessionId: string }>(request, uploadConfirmSchema);
     if (!validation.success) {
       return validation.response;
     }

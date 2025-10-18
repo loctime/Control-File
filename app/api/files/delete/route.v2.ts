@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (request: NextRequest, { userId }) => {
   try {
     // Validar request body
-    const validation = await validateRequest(request, fileDeleteSchema);
+    const validation = await validateRequest<{ fileId: string }>(request, fileDeleteSchema);
     if (!validation.success) {
       return validation.response;
     }
