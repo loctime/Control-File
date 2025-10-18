@@ -1,22 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    credential: {
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      projectId: process.env.FIREBASE_PROJECT_ID,
-    },
-  });
-}
-
-const auth = getAuth();
-const db = getFirestore();
+import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 
 // Backend URL from environment
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
@@ -34,6 +17,7 @@ export async function POST(request: NextRequest) {
     // Verify Firebase token
     let decodedToken;
     try {
+      const auth = requireAdminAuth();
       decodedToken = await auth.verifyIdToken(token);
     } catch (error) {
       console.error('Error verifying token:', error);
@@ -57,6 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify file exists and belongs to user
+    const db = requireAdminDb();
     const fileRef = db.collection('files').doc(fileId);
     const fileDoc = await fileRef.get();
 
@@ -133,6 +118,7 @@ export async function GET(request: NextRequest) {
     // Verify Firebase token
     let decodedToken;
     try {
+      const auth = requireAdminAuth();
       decodedToken = await auth.verifyIdToken(token);
     } catch (error) {
       console.error('Error verifying token:', error);
