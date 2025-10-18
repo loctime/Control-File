@@ -7,9 +7,7 @@ import {
   Share2,
   Download,
   Trash2,
-  X,
-  FileText,
-  FileSearch
+  X
 } from 'lucide-react';
 import { formatFileSize, formatDate } from '@/lib/utils';
 import { useDriveStore } from '@/lib/stores/drive';
@@ -65,77 +63,6 @@ export function DetailsPanel() {
     }
   };
 
-  const handleOCR = async (fileId: string) => {
-    try {
-      addToast({ type: 'info', title: 'Procesando...', message: 'Extrayendo texto del archivo' });
-      
-      const auth = getAuth();
-      const token = await auth.currentUser?.getIdToken();
-      
-      const response = await fetch('/api/files/ocr', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fileId })
-      });
-      
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Error al extraer texto');
-      }
-      
-      const result = await response.json();
-      addToast({ 
-        type: 'success', 
-        title: 'Texto extraído', 
-        message: `${result.text.length} caracteres encontrados` 
-      });
-      
-      // Refrescar datos
-      window.location.reload();
-      
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Error', message: error.message });
-    }
-  };
-
-  const handleConvertToPDF = async (fileId: string) => {
-    try {
-      addToast({ type: 'info', title: 'Convirtiendo...', message: 'Creando archivo PDF' });
-      
-      const auth = getAuth();
-      const token = await auth.currentUser?.getIdToken();
-      
-      const response = await fetch('/api/files/convert-to-pdf', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fileId })
-      });
-      
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Error al convertir');
-      }
-      
-      const result = await response.json();
-      addToast({ 
-        type: 'success', 
-        title: 'Convertido', 
-        message: `Creado: ${result.fileName}` 
-      });
-      
-      // Refrescar datos
-      window.location.reload();
-      
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Error', message: error.message });
-    }
-  };
 
   if (selectedFiles.length === 0) {
     return (
@@ -333,44 +260,7 @@ export function DetailsPanel() {
                   </Button>
                 </div>
 
-                {/* OCR Button - solo para imágenes/PDFs */}
-                {item.type === 'file' && (item.mime?.startsWith('image/') || item.mime === 'application/pdf') && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOCR(item.id)}
-                    className="w-full justify-start"
-                  >
-                    <FileSearch className="h-4 w-4 mr-2" />
-                    Extraer texto (OCR)
-                  </Button>
-                )}
-
-                {/* Convert to PDF - solo para Office */}
-                {item.type === 'file' && (
-                  item.mime?.includes('wordprocessing') || 
-                  item.mime?.includes('spreadsheet') || 
-                  item.mime?.includes('presentation')
-                ) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleConvertToPDF(item.id)}
-                    className="w-full justify-start"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Convertir a PDF
-                  </Button>
-                )}
               </div>
-
-              {/* Mostrar texto OCR si existe */}
-              {item.type === 'file' && (item as any).ocr?.processed && (
-                <div className="mt-4 p-3 bg-muted/30 rounded text-xs">
-                  <p className="font-semibold mb-1">Texto extraído:</p>
-                  <p className="line-clamp-6">{(item as any).ocr.text}</p>
-                </div>
-              )}
             </div>
           ) : (
                          <div className="space-y-3">

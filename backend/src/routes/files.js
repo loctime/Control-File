@@ -492,6 +492,10 @@ router.post('/zip', async (req, res) => {
   }
 });
 
+// OCR y Conversión deshabilitados - Requieren tarjeta de crédito en Cloudmersive
+// Para habilitar: agregar tarjeta en https://cloudmersive.com y descomentar estos endpoints
+
+/*
 // OCR - Extract text from image/PDF
 router.post('/ocr', async (req, res) => {
   try {
@@ -645,6 +649,7 @@ router.post('/convert-to-pdf', async (req, res) => {
     res.status(500).json({ error: 'Error al convertir archivo' });
   }
 });
+*/
 
 module.exports = router;
 
