@@ -1,13 +1,16 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { 
   File,
   Folder,
   Share2,
   Download,
   Trash2,
-  X
+  X,
+  FileText,
+  FileSearch,
+  Music
 } from 'lucide-react';
 import { formatFileSize, formatDate } from '@/lib/utils';
 import { useDriveStore } from '@/lib/stores/drive';
@@ -17,16 +20,25 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { getAuth } from 'firebase/auth';
 import { FilePreview } from '@/components/drive/details/FilePreview';
+import { AudioMasteringModal } from '@/components/drive/AudioMasteringModal';
 
 // Vista previa extraída a componente dedicado
 
 export function DetailsPanel() {
   const { items, selectedItems } = useDriveStore();
   const { toggleDetailsPanel, addToast } = useUIStore();
+  const [isAudioMasteringModalOpen, setIsAudioMasteringModalOpen] = useState(false);
 
   const selectedFiles = useMemo(() => {
     return items.filter(item => selectedItems.includes(item.id));
   }, [items, selectedItems]);
+
+  // Helper function to check if file is audio and can be mastered
+  const isAudioFile = (mime: string, size: number) => {
+    const supportedTypes = ['audio/wav', 'audio/wave', 'audio/mpeg', 'audio/mp3'];
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    return supportedTypes.includes(mime) && size <= maxSize;
+  };
 
   const downloadViaProxy = async (fileId: string, fileName: string) => {
     try {
@@ -260,6 +272,19 @@ export function DetailsPanel() {
                   </Button>
                 </div>
 
+                {/* Audio Mastering Button - solo para archivos de audio */}
+                {item.type === 'file' && isAudioFile(item.mime, item.size || 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAudioMasteringModalOpen(true)}
+                    className="w-full justify-start"
+                  >
+                    <Music className="h-4 w-4 mr-2" />
+                    Masterizar Audio
+                  </Button>
+                )}
+
               </div>
             </div>
           ) : (
@@ -329,6 +354,17 @@ export function DetailsPanel() {
           </div>
         </div>
       </div>
+
+      {/* Audio Mastering Modal */}
+      {selectedFiles.length === 1 && selectedFiles[0].type === 'file' && (
+        <AudioMasteringModal
+          isOpen={isAudioMasteringModalOpen}
+          onClose={() => setIsAudioMasteringModalOpen(false)}
+          fileId={selectedFiles[0].id}
+          fileName={selectedFiles[0].name}
+          fileSize={selectedFiles[0].size || 0}
+        />
+      )}
     </div>
   );
 }

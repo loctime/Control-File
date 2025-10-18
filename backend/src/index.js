@@ -13,6 +13,7 @@ const healthRoutes = require('./routes/health');
 const foldersRoutes = require('./routes/folders');
 const userRoutes = require('./routes/user');
 const usersRoutes = require('./routes/users');
+const audioRoutes = require('./routes/audio');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -120,6 +121,7 @@ app.use('/api/files', authMiddleware, filesRoutes);
 app.use('/api/folders', authMiddleware, foldersRoutes);
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
+app.use('/api/audio', authMiddleware, audioRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
