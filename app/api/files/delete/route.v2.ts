@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Transaction } from 'firebase-admin/firestore';
 import { deleteObject } from '@/lib/b2';
 import { withAuth, validateRequest, createErrorResponse, createSuccessResponse } from '@/lib/middleware/api-auth';
 import { fileDeleteSchema } from '@/lib/schemas/api-schemas';
@@ -75,7 +75,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
     // Usar transacción para garantizar consistencia
     const userRef = adminDb.collection('users').doc(userId);
     
-    await adminDb.runTransaction(async (transaction) => {
+    await adminDb.runTransaction(async (transaction: Transaction) => {
       // 1. Eliminar documento del archivo
       transaction.delete(fileRef);
 

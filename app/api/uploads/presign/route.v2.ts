@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb } from '@/lib/firebase-admin';
 import { createPresignedPostUrl } from '@/lib/b2';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Transaction } from 'firebase-admin/firestore';
 import { withAuth, validateRequest, createErrorResponse, createSuccessResponse } from '@/lib/middleware/api-auth';
 import { uploadPresignSchema } from '@/lib/schemas/api-schemas';
 import { logger, logUpload } from '@/lib/logger';
@@ -77,7 +77,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
     const sessionRef = adminDb.collection('uploadSessions').doc(uploadSessionId);
 
     // Usar transacción para garantizar consistencia
-    await adminDb.runTransaction(async (transaction) => {
+    await adminDb.runTransaction(async (transaction: Transaction) => {
       // 1. Crear sesión de upload
       transaction.set(sessionRef, {
         userId,

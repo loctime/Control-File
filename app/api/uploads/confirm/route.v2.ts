@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Transaction } from 'firebase-admin/firestore';
 import { withAuth, validateRequest, createErrorResponse, createSuccessResponse } from '@/lib/middleware/api-auth';
 import { uploadConfirmSchema } from '@/lib/schemas/api-schemas';
 import { logger, logUpload } from '@/lib/logger';
@@ -60,7 +60,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
     const fileId = fileRef.id;
     const userRef = adminDb.collection('users').doc(userId);
 
-    await adminDb.runTransaction(async (transaction) => {
+    await adminDb.runTransaction(async (transaction: Transaction) => {
       // 1. Crear documento de archivo
       transaction.set(fileRef, {
         id: fileId,
