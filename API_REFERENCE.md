@@ -100,6 +100,15 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - Uso en HTML: `<img src="https://backend-url/api/shares/TOKEN/image" />`
   - Incrementa el contador de descargas automáticamente
   - Errores: `404` (no encontrado), `410` (expirado/revocado)
+  - **⚡ OPTIMIZACIÓN**: Usa el Cloudflare Worker en su lugar para reducir consumo del backend (ver sección abajo)
+
+### Incrementar contador de descargas (público, usado por Worker)
+- POST `/api/shares/:token/increment-counter` (público)
+  - No requiere autenticación (el Worker ya validó el share)
+  - Incrementa el contador de descargas de un share
+  - Usado internamente por el Cloudflare Worker
+  - Respuesta: `{ success: true }`
+  - Este endpoint es ligero y no realiza validaciones adicionales
 
 ### Revocar share link (requiere autenticación)
 - POST `/api/shares/revoke` (auth)
@@ -130,6 +139,107 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
 ```bash
 node scripts/set-claims.js --email usuario@dominio --apps controlfile,controlaudit,controldoc
 ```
+
+## ⚡ Cloudflare Worker - Optimización de Shares
+
+### 🎯 Objetivo
+Minimizar el consumo del backend en **Render Free** sirviendo imágenes compartidas directamente desde Cloudflare Edge.
+
+### 📊 Comparación
+
+#### Sin Worker (método tradicional):
+```
+Usuario → Next.js → Backend Render → Firestore → Redirect a B2
+💰 Cada imagen = 1 request a Render (LIMITADO en plan Free)
+```
+
+#### Con Worker (optimizado):
+```
+Usuario → Cloudflare Worker → Firestore (directo) → Redirect a B2
+💰 Backend Render = 0 requests
+💰 Cloudflare = 100,000 requests/día gratis
+⚡ Más rápido (edge computing)
+📦 Caché de 1 hora automático
+```
+
+### 🚀 Uso del Worker
+
+Una vez desplegado el Worker, úsalo en lugar del endpoint del backend:
+
+**Antes (backend):**
+```html
+<img src="https://backend.onrender.com/api/shares/TOKEN/image" />
+```
+
+**Después (Worker):**
+```html
+<img src="https://tu-worker.workers.dev/image/TOKEN" />
+```
+
+### 📋 Endpoints del Worker
+
+#### GET `/image/{token}` - Obtener imagen compartida
+- **Público**: No requiere autenticación
+- **Response**: HTTP 302 redirect a Backblaze B2
+- **Caché**: 1 hora
+- **CORS**: Habilitado para todos los dominios
+- **Contador**: Se incrementa automáticamente (si está configurado)
+
+**Ejemplo:**
+```bash
+curl -I https://tu-worker.workers.dev/image/abc123xyz
+
+# Response:
+# HTTP/2 302
+# Location: https://bucket.s3.backblazeb2.com/...
+# Cache-Control: public, max-age=3600
+# X-Share-Token: abc123xyz
+```
+
+#### GET `/health` - Health check
+- **Response**: `"ControlFile Shares Worker - Running ✅"`
+- Úsalo para verificar que el Worker está funcionando
+
+### 🔧 Configuración
+
+Ver documentación completa en `cloudflare/README.md` y `cloudflare/QUICKSTART.md`
+
+**Quick Start (5 minutos):**
+
+```bash
+# 1. Instalar Wrangler
+npm install -g wrangler
+
+# 2. Autenticarse
+wrangler login
+
+# 3. Configurar wrangler.toml
+# Editar cloudflare/wrangler.toml con tu Firebase Project ID y B2 Bucket
+
+# 4. Desplegar
+cd cloudflare
+wrangler deploy --env production
+
+# 5. Usar
+# https://tu-worker.workers.dev/image/TOKEN
+```
+
+### ✅ Ventajas
+
+- ✅ **Render Free casi sin uso**: Solo para upload/gestión, no para servir archivos
+- ✅ **100,000 requests/día gratis**: Plan Free de Cloudflare
+- ✅ **Edge computing**: Más rápido que servidor central
+- ✅ **Multi-dominio**: Funciona desde cualquier dominio
+- ✅ **Caché automático**: Reduce consultas a Firestore
+- ✅ **CORS**: Sin problemas entre dominios
+- ✅ **Escalable**: Cloudflare maneja millones de requests
+
+### 📚 Documentación adicional
+
+- `cloudflare/README.md` - Documentación completa
+- `cloudflare/QUICKSTART.md` - Guía de inicio rápido
+- `cloudflare/wrangler.toml` - Configuración del Worker
+- Scripts de despliegue: `deploy.sh` (Linux/Mac) y `deploy.ps1` (Windows)
 
 ## Códigos de error comunes
 - 400: parámetros faltantes/invalidos

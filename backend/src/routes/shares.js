@@ -325,4 +325,32 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Increment download counter (public, called by Cloudflare Worker)
+// Este endpoint es ligero y no requiere autenticación porque el Worker ya validó el share
+router.post('/:token/increment-counter', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token requerido' });
+    }
+
+    // Incrementar el contador sin validaciones adicionales
+    // El Worker ya validó que el share existe y es válido
+    const shareRef = admin.firestore().collection('shares').doc(token);
+    
+    await shareRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1),
+      lastDownloadAt: new Date(),
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    // Si falla, no es crítico - el share ya se sirvió desde el Worker
+    console.error('Error incrementing counter:', error);
+    // Responder success de todos modos para no hacer retry innecesarios
+    res.json({ success: true, warning: 'Counter not updated' });
+  }
+});
+
 module.exports = router;

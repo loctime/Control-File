@@ -1,5 +1,5 @@
-// Cloudflare Worker for serving shared files
-// This worker acts as a CDN for shared files with caching
+// ControlFile Cloudflare Worker - Optimized Image Sharing
+// This worker minimizes Render Free backend usage by handling shares directly
 
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
@@ -8,140 +8,238 @@ addEventListener('fetch', event => {
 async function handleRequest(request) {
   const url = new URL(request.url)
   
-  // Handle share requests
-  if (url.pathname === '/share') {
-    return handleShareRequest(request)
+  // CORS headers for all responses
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
   }
   
-  // Handle health check
-  if (url.pathname === '/health') {
-    return new Response('OK', { status: 200 })
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
   }
   
-  return new Response('Not Found', { status: 404 })
+  // Route: /image/{token} - Get shared image directly
+  if (url.pathname.startsWith('/image/')) {
+    const token = url.pathname.split('/image/')[1]
+    if (token) {
+      return handleImageShare(token, request, corsHeaders)
+    }
+  }
+  
+  // Health check
+  if (url.pathname === '/health' || url.pathname === '/') {
+    return new Response('ControlFile Shares Worker - Running ✅', { 
+      status: 200,
+      headers: corsHeaders
+    })
+  }
+  
+  return new Response('Not Found. Use: /image/{share-token}', { 
+    status: 404,
+    headers: corsHeaders
+  })
 }
 
-async function handleShareRequest(request) {
-  const url = new URL(request.url)
-  const shareId = url.searchParams.get('s')
-  
-  if (!shareId) {
-    return new Response('Share ID required', { status: 400 })
-  }
+async function handleImageShare(token, request, corsHeaders) {
+  // Cache key único por token
+  const cacheKey = new Request(`https://cache.internal/share/${token}`, request)
+  const cache = caches.default
   
   try {
-    // Get share information from Firestore
-    const shareData = await getShareData(shareId)
+    // 1. Intentar obtener del caché (1 hora)
+    let cachedResponse = await cache.match(cacheKey)
+    if (cachedResponse) {
+      console.log(`Cache HIT: ${token}`)
+      // Agregar headers CORS a respuesta cacheada
+      const newHeaders = new Headers(cachedResponse.headers)
+      Object.entries(corsHeaders).forEach(([key, value]) => newHeaders.set(key, value))
+      return new Response(cachedResponse.body, {
+        status: cachedResponse.status,
+        statusText: cachedResponse.statusText,
+        headers: newHeaders
+      })
+    }
+    
+    console.log(`Cache MISS: ${token}`)
+    
+    // 2. Obtener share desde Firestore (sin backend)
+    const shareData = await getShareFromFirestore(token)
     
     if (!shareData) {
-      return new Response('Share not found', { status: 404 })
+      return jsonResponse({ error: 'Enlace de compartir no encontrado' }, 404, corsHeaders)
     }
     
-    // Check if share is expired
-    if (shareData.expiresAt && new Date(shareData.expiresAt) < new Date()) {
-      return new Response('Share expired', { status: 410 })
+    // 3. Validar expiración
+    const expiresAt = shareData.expiresAt ? new Date(shareData.expiresAt._seconds * 1000) : null
+    if (expiresAt && expiresAt < new Date()) {
+      return jsonResponse({ error: 'Enlace expirado' }, 410, corsHeaders)
     }
     
-    // Get file information
-    const fileData = await getFileData(shareData.fileId)
+    // 4. Validar estado activo
+    if (!shareData.isActive) {
+      return jsonResponse({ error: 'Enlace revocado' }, 410, corsHeaders)
+    }
+    
+    // 5. Obtener file desde Firestore
+    const fileData = await getFileFromFirestore(shareData.fileId)
     
     if (!fileData) {
-      return new Response('File not found', { status: 404 })
+      return jsonResponse({ error: 'Archivo no encontrado' }, 404, corsHeaders)
     }
     
-    // Generate presigned URL for B2
-    const downloadUrl = await generateB2DownloadUrl(fileData.bucketKey)
-    
-    // Fetch file from B2
-    const response = await fetch(downloadUrl)
-    
-    if (!response.ok) {
-      return new Response('File not available', { status: 404 })
+    if (fileData.isDeleted) {
+      return jsonResponse({ error: 'Archivo eliminado' }, 404, corsHeaders)
     }
     
-    // Create response with appropriate headers
-    const headers = new Headers(response.headers)
-    headers.set('Cache-Control', 'public, max-age=86400, immutable')
-    headers.set('Content-Disposition', `inline; filename="${fileData.name}"`)
+    // 6. Generar URL de B2 (público o presignado)
+    const b2Url = generateB2Url(fileData.bucketKey)
     
-    // Add custom headers for cache invalidation
-    headers.set('X-Share-Id', shareId)
-    headers.set('X-Revocation-Counter', shareData.revocationCounter.toString())
-    
-    return new Response(response.body, {
+    // 7. Crear respuesta redirect con caché
+    const response = Response.redirect(b2Url, 302)
+    const newResponse = new Response(response.body, {
       status: response.status,
-      headers: headers
-    })
-    
-  } catch (error) {
-    console.error('Error handling share request:', error)
-    return new Response('Internal Server Error', { status: 500 })
-  }
-}
-
-async function getShareData(shareId) {
-  // This would typically use Firestore REST API
-  // For now, we'll return a mock response
-  // In production, you'd make an authenticated request to Firestore
-  
-  const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/shares/${shareId}`
-  
-  try {
-    const response = await fetch(firestoreUrl, {
+      statusText: response.statusText,
       headers: {
-        'Authorization': `Bearer ${FIREBASE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
+        ...corsHeaders,
+        'Location': b2Url,
+        'Cache-Control': 'public, max-age=3600, s-maxage=3600', // 1 hora
+        'X-Share-Token': token,
+        'X-Cache-Status': 'MISS'
       }
     })
     
+    // 8. Guardar en caché por 1 hora
+    await cache.put(cacheKey, newResponse.clone())
+    
+    // 9. Incrementar contador de descargas (async, no bloquea respuesta)
+    // Solo si está configurado el backend
+    if (typeof BACKEND_URL !== 'undefined' && BACKEND_URL) {
+      // waitUntil no está disponible aquí, pero la respuesta ya se envía
+      incrementDownloadCount(token).catch(err => console.error('Error incrementing counter:', err))
+    }
+    
+    return newResponse
+    
+  } catch (error) {
+    console.error(`Error handling share ${token}:`, error)
+    return jsonResponse({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    }, 500, corsHeaders)
+  }
+}
+
+// Obtener share directamente de Firestore REST API (público, sin auth)
+async function getShareFromFirestore(token) {
+  // Firestore REST API no requiere autenticación para lecturas si las reglas lo permiten
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/shares/${token}`
+  
+  try {
+    const response = await fetch(url)
+    
     if (!response.ok) {
+      if (response.status === 404) return null
+      console.error(`Firestore error for share ${token}: ${response.status}`)
       return null
     }
     
     const data = await response.json()
-    return data.fields
+    return parseFirestoreDocument(data)
   } catch (error) {
-    console.error('Error fetching share data:', error)
+    console.error(`Error fetching share ${token}:`, error)
     return null
   }
 }
 
-async function getFileData(fileId) {
-  // Similar to getShareData, but for files
-  const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/files/${fileId}`
+// Obtener file directamente de Firestore
+async function getFileFromFirestore(fileId) {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/files/${fileId}`
   
   try {
-    const response = await fetch(firestoreUrl, {
-      headers: {
-        'Authorization': `Bearer ${FIREBASE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await fetch(url)
     
     if (!response.ok) {
+      if (response.status === 404) return null
+      console.error(`Firestore error for file ${fileId}: ${response.status}`)
       return null
     }
     
     const data = await response.json()
-    return data.fields
+    return parseFirestoreDocument(data)
   } catch (error) {
-    console.error('Error fetching file data:', error)
+    console.error(`Error fetching file ${fileId}:`, error)
     return null
   }
 }
 
-async function generateB2DownloadUrl(bucketKey) {
-  // This would use B2's download authorization API
-  // For now, we'll use a presigned URL approach
+// Generar URL de B2
+function generateB2Url(bucketKey) {
+  // Si el bucket es público, usar URL directa
+  if (typeof B2_PUBLIC_URL !== 'undefined' && B2_PUBLIC_URL) {
+    return `${B2_PUBLIC_URL}/${bucketKey}`
+  }
   
-  const b2Url = `https://s3.us-west-004.backblazeb2.com/${B2_BUCKET_NAME}/${bucketKey}`
-  
-  // In production, you'd generate a proper presigned URL
-  // This is a simplified version
-  return b2Url
+  // URL estándar de B2 S3-compatible
+  const endpoint = typeof B2_ENDPOINT !== 'undefined' ? B2_ENDPOINT : 's3.us-west-004.backblazeb2.com'
+  return `https://${B2_BUCKET_NAME}.${endpoint}/${bucketKey}`
 }
 
-// Environment variables (set in Cloudflare dashboard)
-const FIREBASE_PROJECT_ID = 'your-firebase-project-id'
-const FIREBASE_ACCESS_TOKEN = 'your-firebase-access-token'
-const B2_BUCKET_NAME = 'your-b2-bucket-name'
+// Parsear documento de Firestore a objeto JavaScript
+function parseFirestoreDocument(doc) {
+  if (!doc || !doc.fields) return null
+  
+  const result = {}
+  
+  for (const [key, value] of Object.entries(doc.fields)) {
+    // Extraer el valor según el tipo de Firestore
+    if (value.stringValue !== undefined) {
+      result[key] = value.stringValue
+    } else if (value.integerValue !== undefined) {
+      result[key] = parseInt(value.integerValue)
+    } else if (value.doubleValue !== undefined) {
+      result[key] = value.doubleValue
+    } else if (value.booleanValue !== undefined) {
+      result[key] = value.booleanValue
+    } else if (value.timestampValue !== undefined) {
+      // Convertir timestamp ISO a objeto con _seconds
+      const date = new Date(value.timestampValue)
+      result[key] = { _seconds: date.getTime() / 1000 }
+    } else if (value.nullValue !== undefined) {
+      result[key] = null
+    } else if (value.referenceValue !== undefined) {
+      result[key] = value.referenceValue
+    }
+  }
+  
+  return result
+}
+
+// Incrementar contador de descargas (async, no bloquea la respuesta)
+async function incrementDownloadCount(token) {
+  try {
+    const url = `${BACKEND_URL}/api/shares/${token}/increment-counter`
+    const response = await fetch(url, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (!response.ok) {
+      console.warn(`Failed to increment counter for ${token}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error incrementing counter for ${token}:`, error)
+  }
+}
+
+// Helper para respuestas JSON
+function jsonResponse(data, status = 200, additionalHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...additionalHeaders
+    }
+  })
+}
