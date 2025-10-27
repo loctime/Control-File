@@ -182,9 +182,13 @@ export function useTaskbar() {
         appCode: folder.appCode
       }));
 
-      // Filtrar items que ya existen en el taskbar
-      const existingIds = taskbarItems.map(item => item.id);
-      const itemsToAdd = newTaskbarItems.filter(item => !existingIds.includes(item.id));
+      // Filtrar items que ya existen en el taskbar (por folderId para evitar duplicados)
+      const existingFolderIds = taskbarItems
+        .filter(item => item.folderId)
+        .map(item => item.folderId);
+      const itemsToAdd = newTaskbarItems.filter(item => 
+        !existingFolderIds.includes(item.folderId)
+      );
 
       if (itemsToAdd.length > 0) {
         console.log('➕ Agregando carpetas de otras apps al taskbar:', itemsToAdd.length);

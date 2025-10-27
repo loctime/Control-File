@@ -87,9 +87,11 @@ router.get('/list', cacheFiles, async (req, res) => {
         foldersQuery = foldersQuery.where('parentId', '==', parentId);
       }
 
+      // Solo filtrar por appCode si no es controlfile (para mostrar todas las carpetas)
       if (APP_CODE !== 'controlfile') {
         foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);
       }
+      // Si es controlfile, no filtrar por appCode para mostrar carpetas de todas las apps
 
       foldersQuery = foldersQuery.orderBy('createdAt', 'desc');
 
