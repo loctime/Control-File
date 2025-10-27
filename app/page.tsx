@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { SimpleMigration } from '@/components/drive/SimpleMigration';
+import { FileExplorer } from '@/components/drive/FileExplorer';
 import { useUIStore } from '@/lib/stores/ui';
 import { Button } from '@/components/ui/button';
 
@@ -36,7 +36,7 @@ export default function HomePage() {
 
   return (
     <div className="relative">
-      <SimpleMigration />
+      <FileExplorer />
     </div>
   );
 }
