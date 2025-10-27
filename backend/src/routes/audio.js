@@ -44,7 +44,7 @@ router.post('/master', async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'Archivo eliminado' });
     }
 
@@ -129,7 +129,7 @@ router.post('/master', async (req, res) => {
         parentId: fileData.parentId,
         createdAt: new Date(),
         updatedAt: new Date(),
-        isDeleted: false,
+        deletedAt: null,
         appCode: fileData.appCode || APP_CODE,
         originalFileId: fileId, // Referencia al archivo original
         mastered: true // Marcar como masterizado
@@ -233,7 +233,7 @@ router.get('/info/:fileId', async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'Archivo eliminado' });
     }
 

@@ -29,7 +29,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 
@@ -143,7 +143,7 @@ router.post('/:token/download', async (req, res) => {
 
     const fileData = fileDoc.data();
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 
@@ -232,7 +232,7 @@ router.get('/:token/image', async (req, res) => {
 
     const fileData = fileDoc.data();
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 

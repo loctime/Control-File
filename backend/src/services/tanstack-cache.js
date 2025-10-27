@@ -139,7 +139,7 @@ class TanStackCache {
       let filesQuery = admin.firestore()
         .collection('files')
         .where('userId', '==', userId)
-        .where('isDeleted', '==', false);
+        .where('deletedAt', '==', null);
 
       if (folderId === null) {
         filesQuery = filesQuery.where('parentId', '==', null);

@@ -218,7 +218,6 @@ router.post('/confirm', async (req, res) => {
       etag: etag || metadata.etag,
       createdAt: new Date(),
       updatedAt: new Date(),
-      isDeleted: false,
       deletedAt: null,
       // appCode eliminado
       ancestors: Array.isArray(sessionData.ancestors) ? sessionData.ancestors : [],

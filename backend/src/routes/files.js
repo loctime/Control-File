@@ -162,7 +162,7 @@ router.post('/presign-get', async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 
@@ -273,7 +273,7 @@ router.post('/rename', invalidateCache('update'), async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
     }
 
@@ -422,7 +422,7 @@ router.post('/zip', async (req, res) => {
         continue;
       }
       const data = fileDoc.data();
-      if (!data || data.userId !== uid || data.isDeleted || data.type === 'folder') {
+      if (!data || data.userId !== uid || data.deletedAt || data.type === 'folder') {
         continue;
       }
       if (!assertItemVisibleForApp(data)) {
@@ -511,7 +511,7 @@ router.post('/ocr', async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'Archivo eliminado' });
     }
 
@@ -574,7 +574,7 @@ router.post('/convert-to-pdf', async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'Archivo eliminado' });
     }
 
@@ -627,7 +627,7 @@ router.post('/convert-to-pdf', async (req, res) => {
       parentId: fileData.parentId,
       createdAt: new Date(),
       updatedAt: new Date(),
-      isDeleted: false,
+      deletedAt: null,
       // appCode eliminado
     });
 
@@ -671,7 +671,7 @@ router.post('/replace', multer({ storage: multer.memoryStorage() }).single('file
     if (fileData.userId !== uid) {
       return res.status(403).json({ error: 'No autorizado' });
     }
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'El archivo está eliminado' });
     }
 
