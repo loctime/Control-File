@@ -21,15 +21,21 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid;
 
     // Parse request body
-    const { id, name, parentId, icon, color, source, metadata } = await request.json();
+    const requestBody = await request.json();
+    const { id, name, parentId, icon, color, source, metadata } = requestBody;
 
     if (!id || !name) {
       return NextResponse.json({ error: 'ID y nombre son requeridos' }, { status: 400 });
     }
 
+    // DEBUG: Log completo del request
+    console.log('🔍 DEBUG - Request body completo:', JSON.stringify(requestBody, null, 2));
+    console.log('🔍 DEBUG - metadata extraído:', metadata);
+    console.log('🔍 DEBUG - source extraído:', source);
+
     // ARREGLADO: Usar source de metadata si existe, sino del nivel raíz
     const finalSource = metadata?.source || source || 'navbar';
-    console.log('📁 Creating folder:', { name, parentId, userId, source: finalSource });
+    console.log('📁 Creating folder:', { name, parentId, userId, finalSource, metadataSource: metadata?.source, rootSource: source });
 
     // Get Firestore instance
     const adminDb = requireAdminDb();
