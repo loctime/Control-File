@@ -165,11 +165,12 @@ class TanStackCache {
         });
       });
 
-      // Get folders from 'folders' collection
+      // Get folders from 'files' collection
       let foldersQuery = admin.firestore()
-        .collection('folders')
+        .collection('files')
         .where('userId', '==', userId)
-        .where('isDeleted', '==', false);
+        .where('type', '==', 'folder')
+        .where('deletedAt', '==', null);
 
       if (folderId === null) {
         foldersQuery = foldersQuery.where('parentId', '==', null);
@@ -217,9 +218,10 @@ class TanStackCache {
       const folders = [];
 
       let foldersQuery = admin.firestore()
-        .collection('folders')
+        .collection('files')
         .where('userId', '==', userId)
-        .where('isDeleted', '==', false);
+        .where('type', '==', 'folder')
+        .where('deletedAt', '==', null);
 
       if (APP_CODE !== 'controlfile') {
         foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);

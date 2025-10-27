@@ -38,24 +38,18 @@ export function Taskbar() {
   const { user } = useAuth();
   const { items } = useDriveStore();
   
-  // Filtrar carpetas creadas desde el taskbar
+  // Filtrar carpetas con source: 'taskbar'
   const folders = useMemo(() => {
     const userId = user?.uid;
     if (!userId) return [];
-    // Solo mostrar carpetas creadas desde el taskbar
+    // Solo mostrar carpetas con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
       item.type === 'folder' && 
-      item.parentId === null &&
-      item.metadata?.isMainFolder &&
       item.userId === userId &&
       !item.deletedAt && // Excluir carpetas en la papelera
-      item.appCode === 'controlfile' && // Solo carpetas de ControlFile
       item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
     );
     
-    // LOGS COMENTADOS PARA EVITAR SPAM
-    // console.log('📁 Taskbar - carpetas del taskbar:', taskbarFolders.length);
-    // console.log('📁 Taskbar - items totales en store:', items.length);
     return taskbarFolders;
   }, [items, user]);
   const { navigateToFolder } = useNavigation();

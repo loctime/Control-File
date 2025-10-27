@@ -150,39 +150,25 @@ export function useTaskbar() {
     }
   };
 
-  // Detectar carpetas de otras apps y carpetas con source: 'taskbar'
+  // Detectar carpetas con source: 'taskbar'
   useEffect(() => {
     if (!user?.uid || !items.length || isLoading) return;
 
     const userId = user.uid;
     
-    // Encontrar carpetas de otras apps (no de ControlFile)
-    const otherAppFolders = items.filter(item => 
-      item.type === 'folder' && 
-      item.parentId === null &&
-      item.metadata?.isMainFolder &&
-      item.userId === userId &&
-      !item.deletedAt && // Excluir carpetas en la papelera
-      item.appCode && 
-      item.appCode !== 'controlfile' // Solo carpetas de otras apps
-    );
-
-    // ✅ AGREGAR: También detectar carpetas con source: 'taskbar'
+    // Solo detectar carpetas con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
       item.type === 'folder' && 
       item.userId === userId &&
       !item.deletedAt &&
-      item.metadata?.source === 'taskbar' // Carpetas marcadas para taskbar
+      item.metadata?.source === 'taskbar' // Solo carpetas marcadas para taskbar
     );
 
-    // Combinar ambas listas
-    const allFolders = [...otherAppFolders, ...taskbarFolders];
-
-    if (allFolders.length > 0) {
-      console.log('🔍 Detectadas carpetas para taskbar:', allFolders.length);
+    if (taskbarFolders.length > 0) {
+      console.log('🔍 Detectadas carpetas para taskbar:', taskbarFolders.length);
       
       // Crear items del taskbar para estas carpetas
-      const newTaskbarItems = allFolders.map(folder => ({
+      const newTaskbarItems = taskbarFolders.map(folder => ({
         id: `auto-${folder.id}`,
         name: folder.name,
         icon: folder.metadata?.icon || 'Folder',

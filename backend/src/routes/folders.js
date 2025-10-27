@@ -36,13 +36,14 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
     let slug = baseSlug;
     
     // Check for slug uniqueness within the same parent
-    const foldersCol = admin.firestore().collection('folders');
+    const filesCol = admin.firestore().collection('files');
     let counter = 1;
     while (true) {
-      const existingQuery = await foldersCol
+      const existingQuery = await filesCol
         .where('userId', '==', uid)
         .where('parentId', '==', parentId || null)
         .where('slug', '==', slug)
+        .where('type', '==', 'folder')
         .limit(1)
         .get();
       
@@ -63,7 +64,7 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
     }
 
     // Create folder in Firestore
-    const folderRef = admin.firestore().collection('folders').doc(folderId);
+    const folderRef = admin.firestore().collection('files').doc(folderId);
     await folderRef.set({
       id: folderId,
       userId: uid,
@@ -154,12 +155,12 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
     let currentFolder = null;
 
     for (const slug of pathSegments) {
-      const foldersCol = admin.firestore().collection('folders');
-      const folderQuery = await foldersCol
+      const filesCol = admin.firestore().collection('files');
+      const folderQuery = await filesCol
         .where('userId', '==', targetUserId)
         .where('parentId', '==', currentParentId)
         .where('slug', '==', slug)
-        .where('appCode', '==', APP_CODE)
+        .where('type', '==', 'folder')
         .limit(1)
         .get();
 
@@ -173,7 +174,7 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
 
     // Update view count
     if (currentFolder) {
-      const folderRef = admin.firestore().collection('folders').doc(currentFolder.id);
+      const folderRef = admin.firestore().collection('files').doc(currentFolder.id);
       await folderRef.update({
         'metadata.viewCount': (currentFolder.metadata?.viewCount || 0) + 1,
         'metadata.lastAccessedAt': new Date()
@@ -206,13 +207,14 @@ router.get('/root', async (req, res) => {
       return res.status(400).json({ error: 'Nombre inválido' });
     }
 
-    const foldersCol = admin.firestore().collection('folders');
+    const filesCol = admin.firestore().collection('files');
 
     // Buscar raíz por usuario + parentId null + nombre exacto
-    const existingSnap = await foldersCol
+    const existingSnap = await filesCol
       .where('userId', '==', uid)
       .where('parentId', '==', null)
       .where('name', '==', name)
+      .where('type', '==', 'folder')
       .limit(1)
       .get();
 
@@ -226,7 +228,7 @@ router.get('/root', async (req, res) => {
     } else {
       // Crear si no existe
       const generatedId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const folderRef = foldersCol.doc(generatedId);
+      const folderRef = filesCol.doc(generatedId);
 
       const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
       const path = `/${slug}`;

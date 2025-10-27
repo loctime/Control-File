@@ -47,41 +47,21 @@ const fetchFiles = async (userId: string, folderId: string | null): Promise<Driv
   const items: DriveItem[] = [];
 
   try {
-    // Fetch folders and files in parallel
-    const [foldersSnap, filesSnap] = await Promise.all([
-      getDocs(query(
-        collection(db, 'folders'),
-        where('userId', '==', userId),
-        where('parentId', '==', folderId),
-        orderBy('createdAt', 'desc')
-      )),
-      getDocs(query(
-        collection(db, 'files'),
-        where('userId', '==', userId),
-        where('parentId', '==', folderId),
-        orderBy('name', 'asc')
-      ))
-    ]);
+    // Fetch all items from files collection
+    const allItemsSnap = await getDocs(query(
+      collection(db, 'files'),
+      where('userId', '==', userId),
+      where('parentId', '==', folderId),
+      orderBy('createdAt', 'desc')
+    ));
 
-    // Process folders
-    foldersSnap.forEach((doc) => {
+    // Process all items
+    allItemsSnap.forEach((doc) => {
       const data = doc.data();
       items.push({
         ...data,
         id: doc.id,
-        type: 'folder',
-        createdAt: data.createdAt.toDate(),
-        modifiedAt: data.modifiedAt?.toDate() || data.createdAt.toDate(),
-      } as DriveItem);
-    });
-
-    // Process files
-    filesSnap.forEach((doc) => {
-      const data = doc.data();
-      items.push({
-        ...data,
-        id: doc.id,
-        type: 'file',
+        type: data.type || 'file',
         createdAt: data.createdAt.toDate(),
         modifiedAt: data.modifiedAt?.toDate() || data.createdAt.toDate(),
       } as DriveItem);

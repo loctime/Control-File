@@ -21,13 +21,13 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid;
 
     // Parse request body
-    const { id, name, parentId, icon, color, source, appCode } = await request.json();
+    const { id, name, parentId, icon, color, source } = await request.json();
 
     if (!id || !name) {
       return NextResponse.json({ error: 'ID y nombre son requeridos' }, { status: 400 });
     }
 
-    console.log('📁 Creating folder:', { name, parentId, userId, source, appCode });
+    console.log('📁 Creating folder:', { name, parentId, userId, source });
 
     // Get Firestore instance
     const adminDb = requireAdminDb();
@@ -67,7 +67,6 @@ export async function POST(request: NextRequest) {
       parentId: parentId || null,
       path,
       type: 'folder',
-      appCode: appCode || 'controlfile',
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,

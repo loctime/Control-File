@@ -375,8 +375,8 @@ async function getParentPath(parentId) {
     return '';
   }
   
-  // Buscar en la colección 'folders'
-  const folderRef = admin.firestore().collection('folders').doc(parentId);
+  // Buscar en la colección 'files'
+  const folderRef = admin.firestore().collection('files').doc(parentId);
   const folderDoc = await folderRef.get();
   
   if (!folderDoc.exists) {

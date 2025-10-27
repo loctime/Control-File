@@ -197,7 +197,6 @@ export const useDriveStore = create<DriveState>()(
           createdAt: new Date(),
           modifiedAt: new Date(),
           type: 'folder',
-          appCode: 'controlfile',
           metadata: {
             icon,
             color,
@@ -237,7 +236,6 @@ export const useDriveStore = create<DriveState>()(
               icon: newFolder.metadata.icon,
               color: newFolder.metadata.color,
               source: newFolder.metadata.source,
-              appCode: 'controlfile',
             }),
           });
           
@@ -296,7 +294,6 @@ export const useDriveStore = create<DriveState>()(
           createdAt: new Date(),
           modifiedAt: new Date(),
           type: 'folder',
-          appCode: 'controlfile',
           metadata: {
             icon: 'Folder',
             color: 'text-blue-500',
@@ -322,7 +319,6 @@ export const useDriveStore = create<DriveState>()(
               parentId: newSubfolder.parentId,
               icon: newSubfolder.metadata.icon,
               color: newSubfolder.metadata.color,
-              appCode: 'controlfile',
             }),
           });
           

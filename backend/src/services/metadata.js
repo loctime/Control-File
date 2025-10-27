@@ -8,18 +8,19 @@ function getAppCode() {
 
 async function getFolderDoc(folderId) {
   if (!folderId) return null;
-  const ref = admin.firestore().collection('folders').doc(folderId);
+  const ref = admin.firestore().collection('files').doc(folderId);
   const snap = await ref.get();
   return snap.exists ? { id: ref.id, data: snap.data() } : null;
 }
 
 async function getOrCreateAppRootFolder(uid) {
-  const foldersCol = admin.firestore().collection('folders');
+  const filesCol = admin.firestore().collection('files');
 
-  const q = await foldersCol
+  const q = await filesCol
     .where('userId', '==', uid)
     .where('parentId', '==', null)
     .where('name', '==', APP_CODE)
+    .where('type', '==', 'folder')
     .limit(1)
     .get();
 
@@ -30,7 +31,7 @@ async function getOrCreateAppRootFolder(uid) {
 
   // Create root folder for this app
   const folderId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const folderRef = foldersCol.doc(folderId);
+  const folderRef = filesCol.doc(folderId);
 
   const slug = APP_CODE.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
   const folderDoc = {

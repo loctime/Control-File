@@ -76,10 +76,11 @@ router.get('/list', cacheFiles, async (req, res) => {
     }
 
     try {
-      // Get folders from 'folders' collection
+      // Get folders from 'files' collection
       let foldersQuery = admin.firestore()
-        .collection('folders')
-        .where('userId', '==', uid);
+        .collection('files')
+        .where('userId', '==', uid)
+        .where('type', '==', 'folder');
 
       if (parentId === null) {
         foldersQuery = foldersQuery.where('parentId', '==', null);

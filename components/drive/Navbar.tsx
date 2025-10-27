@@ -28,15 +28,13 @@ export function Navbar() {
   const folders = useMemo(() => {
     const userId = user?.uid;
     if (!userId) return [];
-    // Filtrar carpetas directamente desde items para ser reactivo
-    // Solo mostrar carpetas de ControlFile del navbar (no del taskbar)
+    // Filtrar carpetas del navbar (no del taskbar)
     const mainFolders = items.filter(item => 
       item.type === 'folder' && 
       item.parentId === null &&
       item.metadata?.isMainFolder &&
       item.userId === userId &&
       !item.deletedAt && // Excluir carpetas en la papelera
-      item.appCode === 'controlfile' && // Solo carpetas de ControlFile
       (item.metadata?.source === 'navbar' || !item.metadata?.source) // Solo navbar o sin source (compatibilidad)
     );
     
