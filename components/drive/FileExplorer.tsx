@@ -27,7 +27,6 @@ import { useProxyUpload } from '@/hooks/useProxyUpload';
 import { auth } from '@/lib/firebase';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { useExplorerShortcuts } from '@/hooks/useExplorerShortcuts';
-import { useMergeCurrentFolderItems } from '@/hooks/useMergeCurrentFolderItems';
 import { useNavigation } from '@/hooks/useNavigation';
 
 
@@ -73,7 +72,7 @@ export function FileExplorer() {
   }, [uploadProgress]);
   
   const { detailsPanelOpen, sidebarOpen, toggleSidebar, setSidebarOpen, isTrashView, toggleTrashView, closeTrashView, toggleDetailsPanel, addToast } = useUIStore();
-  const { files, loading, error, isFetching, isMutating } = useFiles(currentFolderId);
+  const { files, isLoading: loading, error, isFetching, isMutating } = useFiles(currentFolderId);
   const historyNavigatingRef = useRef(false);
   
   // Estado para el ancho del sidebar (hook)

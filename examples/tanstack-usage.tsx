@@ -8,7 +8,7 @@ import { useCreateFolderForm } from '@/hooks/useFileForm';
 import { useOptimizedUpload } from '@/hooks/useOptimizedUpload';
 import { FileTable } from '@/components/drive/FileTable';
 import { CreateFolderForm } from '@/components/drive/CreateFolderForm';
-import { OptimizedFileExplorer } from '@/components/drive/OptimizedFileExplorer';
+import { FileExplorer } from '@/components/drive/FileExplorer';
 import { useDriveStore } from '@/lib/stores/drive';
 
 // Ejemplo 1: Uso básico del hook useFiles
@@ -132,7 +132,7 @@ function UploadExample() {
 function CompleteExplorerExample() {
   return (
     <div style={{ height: '100vh' }}>
-      <OptimizedFileExplorer folderId="folder-123" />
+      <FileExplorer />
     </div>
   );
 }
