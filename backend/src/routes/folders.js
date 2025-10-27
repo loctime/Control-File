@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { getAppCode, getFolderDoc } = require('../services/metadata');
+const { cacheFolders, invalidateCache } = require('../middleware/cache');
 
 // Create folder endpoint
-router.post('/create', async (req, res) => {
+router.post('/create', invalidateCache('create'), async (req, res) => {
   try {
     const { 
       name, 

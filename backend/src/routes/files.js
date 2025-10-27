@@ -6,9 +6,10 @@ const multer = require('multer');
 const archiver = require('archiver');
 const { Readable } = require('stream');
 const { getAppCode, assertItemVisibleForApp } = require('../services/metadata');
+const { cacheFiles, invalidateCache } = require('../middleware/cache');
 
-// List files and folders with pagination
-router.get('/list', async (req, res) => {
+// List files and folders with pagination (with TanStack cache)
+router.get('/list', cacheFiles, async (req, res) => {
   try {
     const uid = req.user?.uid;
     const APP_CODE = getAppCode();
@@ -20,6 +21,17 @@ router.get('/list', async (req, res) => {
     // Validar que el usuario esté autenticado
     if (!uid) {
       return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    // Si tenemos datos en cache, usarlos
+    if (req.cachedFiles && req.cacheHit) {
+      console.log('🚀 Using cached files data');
+      return res.json({
+        success: true,
+        data: req.cachedFiles,
+        message: 'Files retrieved from cache',
+        cacheHit: true
+      });
     }
 
     const items = [];
@@ -185,7 +197,7 @@ router.post('/presign-get', async (req, res) => {
 });
 
 // Delete file
-router.post('/delete', async (req, res) => {
+router.post('/delete', invalidateCache('delete'), async (req, res) => {
   try {
     const { fileId } = req.body;
     const { uid } = req.user;
@@ -243,7 +255,7 @@ router.post('/delete', async (req, res) => {
 });
 
 // Rename file
-router.post('/rename', async (req, res) => {
+router.post('/rename', invalidateCache('update'), async (req, res) => {
   try {
     const { fileId, newName } = req.body;
     const { uid } = req.user;
@@ -290,7 +302,7 @@ router.post('/rename', async (req, res) => {
 });
 
 // Permanently delete file (from trash)
-router.post('/permanent-delete', async (req, res) => {
+router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => {
   try {
     const { fileId } = req.body;
     const { uid } = req.user;
@@ -341,7 +353,7 @@ router.post('/permanent-delete', async (req, res) => {
 });
 
 // Restore file from trash
-router.post('/restore', async (req, res) => {
+router.post('/restore', invalidateCache('create'), async (req, res) => {
   try {
     const { fileId } = req.body;
     const { uid } = req.user;

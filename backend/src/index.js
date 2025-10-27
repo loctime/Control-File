@@ -14,6 +14,7 @@ const foldersRoutes = require('./routes/folders');
 const userRoutes = require('./routes/user');
 const usersRoutes = require('./routes/users');
 const audioRoutes = require('./routes/audio');
+const { getCacheStats, clearCache } = require('./middleware/cache');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -125,6 +126,10 @@ app.use('/api/audio', authMiddleware, audioRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
+
+// TanStack Cache endpoints
+app.get('/api/cache/stats', authMiddleware, getCacheStats);
+app.post('/api/cache/clear', authMiddleware, clearCache);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
