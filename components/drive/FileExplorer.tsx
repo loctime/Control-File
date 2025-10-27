@@ -34,7 +34,7 @@ import { useNavigation } from '@/hooks/useNavigation';
 
 export function FileExplorer() {
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
-  const { syncStateWithUrl, navigateToFolder } = useNavigation();
+  const { syncStateWithUrl, navigateToFolder, navigateToRoot } = useNavigation();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemsToDelete, setItemsToDelete] = useState<Array<{ id: string; name: string; type: 'file' | 'folder' }>>([]);
   const [showUploadOverlay, setShowUploadOverlay] = useState(false);
@@ -49,6 +49,7 @@ export function FileExplorer() {
     getSubfolders,
     getMainFolders,
     getMainFolder,
+    setMainFolder,
     initializeDefaultFolder,
     items,
     createMainFolder,
@@ -80,7 +81,8 @@ export function FileExplorer() {
 
 
   // Merge de items del folder actual al store global
-  useMergeCurrentFolderItems(files, currentFolderId, loading);
+  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE INFINITO
+  // useMergeCurrentFolderItems(files, currentFolderId, loading);
 
   // Filtrar archivos que fueron movidos a papelera (deletedAt en el store)
   const visibleFiles = useMemo(() => {
@@ -125,25 +127,40 @@ export function FileExplorer() {
   });
 
   // Inicializar carpeta por defecto si no hay una seleccionada
-  useEffect(() => {
-    if (!currentFolderId) {
-      initializeDefaultFolder();
-    }
-  }, [currentFolderId, initializeDefaultFolder]);
+  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE DE NAVEGACIÓN
+  // useEffect(() => {
+  //   if (!currentFolderId) {
+  //     initializeDefaultFolder();
+  //   }
+  // }, [currentFolderId, initializeDefaultFolder]);
 
   // Si hay carpetas disponibles pero no hay carpeta actual, abrir automáticamente
-  useEffect(() => {
-    if (currentFolderId || loading) return;
-    const mainId = getMainFolder();
-    if (mainId) {
-      navigateToFolder(mainId);
-      return;
-    }
-    const firstRootFolder = (files || []).find((i: any) => i.type === 'folder');
-    if (firstRootFolder) {
-      navigateToFolder(firstRootFolder.id);
-    }
-  }, [currentFolderId, loading, files, getMainFolder, navigateToFolder]);
+  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE DE NAVEGACIÓN
+  // useEffect(() => {
+  //   if (currentFolderId || loading) return;
+  //   
+  //   // Verificar si la carpeta principal existe y es accesible
+  //   const mainId = getMainFolder();
+  //   if (mainId) {
+  //     const mainFolder = files?.find((i: any) => i.id === mainId && i.type === 'folder');
+  //     if (mainFolder) {
+  //       navigateToFolder(mainId);
+  //       return;
+  //     } else {
+  //       // Si la carpeta principal no existe, limpiarla
+  //       setMainFolder(null);
+  //     }
+  //   }
+  //   
+  //   // Buscar la primera carpeta raíz disponible
+  //   const firstRootFolder = (files || []).find((i: any) => i.type === 'folder' && i.parentId === null);
+  //   if (firstRootFolder) {
+  //     navigateToFolder(firstRootFolder.id);
+  //   } else {
+  //     // Si no hay carpetas, navegar a la raíz del usuario
+  //     navigateToRoot();
+  //   }
+  // }, [currentFolderId, loading, files]); // Removidas las dependencias problemáticas
 
   // Obtener subcarpetas de la carpeta actual
   const subfolders = getSubfolders(currentFolderId || '');

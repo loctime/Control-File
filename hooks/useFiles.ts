@@ -9,6 +9,7 @@ import {
   useIsFetching,
   useIsMutating
 } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc, updateDoc, limit, startAfter } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { DriveFile, DriveFolder, DriveItem } from '@/types';
@@ -297,9 +298,12 @@ export function useFiles(folderId: string | null = null) {
   const isFetching = useIsFetching({ queryKey: fileQueryKeys.list(user?.uid || 'no-user', folderId) });
   const isMutating = useIsMutating({ mutationKey: ['files'] });
 
+  // Estabilizar el array files para evitar re-renders innecesarios
+  const files = useMemo(() => filesQuery.data || [], [filesQuery.data]);
+
   return {
     // Data
-    files: filesQuery.data || [],
+    files,
     isLoading: filesQuery.isLoading,
     isFetching: isFetching > 0,
     isMutating: isMutating > 0,

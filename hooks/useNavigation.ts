@@ -73,6 +73,10 @@ export function useNavigation() {
     const username = getUserUsername(user || {});
     if (!username) return;
     
+    // Limpiar la carpeta actual
+    setCurrentFolder(null, []);
+    
+    // Navegar a la página principal del usuario
     router.push(`/${username}`);
   };
 

@@ -7,6 +7,8 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FileExplorer } from '@/components/drive/FileExplorer';
 import { useUIStore } from '@/lib/stores/ui';
 import { Button } from '@/components/ui/button';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { EmergencyExit } from '@/components/ui/EmergencyExit';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -35,8 +37,11 @@ export default function HomePage() {
 
 
   return (
-    <div className="relative">
-      <FileExplorer />
-    </div>
+    <ErrorBoundary>
+      <div className="relative">
+        <FileExplorer />
+        <EmergencyExit />
+      </div>
+    </ErrorBoundary>
   );
 }

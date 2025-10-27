@@ -13,11 +13,12 @@ export function useFilesCompatible(folderId: string | null = null) {
   const { setItems, items } = useDriveStore();
 
   // Sincronizar datos con el store para mantener compatibilidad
-  useMemo(() => {
-    if (optimizedFiles.files.length > 0) {
-      setItems(optimizedFiles.files);
-    }
-  }, [optimizedFiles.files, setItems]);
+  // COMENTADO TEMPORALMENTE PARA EVITAR BUCLES INFINITOS
+  // useMemo(() => {
+  //   if (optimizedFiles.files.length > 0) {
+  //     setItems(optimizedFiles.files);
+  //   }
+  // }, [optimizedFiles.files, setItems]);
 
   // Filtrar archivos que fueron movidos a papelera (compatibilidad con código existente)
   const visibleFiles = useMemo(() => {

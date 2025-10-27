@@ -8,7 +8,6 @@ import { useNavigation } from '@/hooks/useNavigation';
 import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { useRouter } from 'next/navigation';
 import { useFiles } from '@/hooks/useFiles';
-import { useMergeCurrentFolderItems } from '@/hooks/useMergeCurrentFolderItems';
 import { Button } from '@/components/ui/button';
 import { 
   Home, 
@@ -54,8 +53,9 @@ export function Taskbar() {
       item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
     );
     
-    console.log('📁 Taskbar - carpetas del taskbar:', taskbarFolders.length);
-    console.log('📁 Taskbar - items totales en store:', items.length);
+    // LOGS COMENTADOS PARA EVITAR SPAM
+    // console.log('📁 Taskbar - carpetas del taskbar:', taskbarFolders.length);
+    // console.log('📁 Taskbar - items totales en store:', items.length);
     return taskbarFolders;
   }, [items, user]);
   const { navigateToFolder } = useNavigation();

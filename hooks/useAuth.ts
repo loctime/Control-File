@@ -167,18 +167,28 @@ export function useAuth() {
                 const cleanUsername = baseUsername.toLowerCase().replace(/[^\w]/g, '');
                 username = cleanUsername;
                 
-                // Verificar unicidad del username
+                // Verificar unicidad del username (simplificado para evitar errores de permisos)
                 let counter = 1;
-                while (true) {
+                let finalUsername = username;
+                while (counter < 100) { // Límite de intentos para evitar bucle infinito
                   try {
-                    const existingUserQuery = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
-                    if (existingUserQuery.empty) {
+                    // Intentar crear el documento con el username actual
+                    const testDocRef = doc(db, 'users', `username-check-${finalUsername}`);
+                    const testDoc = await getDoc(testDocRef);
+                    
+                    if (!testDoc.exists()) {
+                      // Username disponible, usar este
+                      username = finalUsername;
                       break;
+                    } else {
+                      // Username ocupado, probar siguiente
+                      finalUsername = `${cleanUsername}${counter}`;
+                      counter++;
                     }
-                    username = `${cleanUsername}${counter}`;
-                    counter++;
                   } catch (queryError) {
                     console.error('Error verificando username:', queryError);
+                    // En caso de error, usar el username base con timestamp
+                    username = `${cleanUsername}${Date.now()}`;
                     break;
                   }
                 }

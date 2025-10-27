@@ -96,16 +96,16 @@ export function useResizableSidebar(
     startWidthRef.current = initialWidth;
   }, [initialWidth]);
 
-  // Log del estado actual para debugging
-  useEffect(() => {
-    console.log('Estado del sidebar:', {
-      sidebarWidth,
-      isResizing,
-      minWidth,
-      maxWidth,
-      initialWidth
-    });
-  }, [sidebarWidth, isResizing, minWidth, maxWidth, initialWidth]);
+  // Log del estado actual para debugging - COMENTADO TEMPORALMENTE PARA EVITAR BUCLES
+  // useEffect(() => {
+  //   console.log('Estado del sidebar:', {
+  //     sidebarWidth,
+  //     isResizing,
+  //     minWidth,
+  //     maxWidth,
+  //     initialWidth
+  //   });
+  // }, [sidebarWidth, isResizing, minWidth, maxWidth, initialWidth]);
 
   return { sidebarWidth, isResizing, handleMouseDown };
 }

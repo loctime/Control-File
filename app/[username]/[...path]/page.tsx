@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { MigrationToggle } from '@/components/drive/MigrationToggle';
+import { FolderNotFoundError } from '@/components/ui/ErrorBoundary';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -77,7 +78,9 @@ export default function FolderPage() {
           // Usar el mismo sistema de navegación que useNavigation para construir el breadcrumb correctamente
           navigateToFolder(targetFolder.id);
         } else {
-          setError('Carpeta no encontrada');
+          // Si no se encuentra la carpeta, navegar a la raíz del usuario
+          console.log('Carpeta no encontrada, navegando a la raíz');
+          router.push(`/${username}`);
         }
       } else {
         // TODO: Implementar acceso a carpetas públicas de otros usuarios
@@ -126,18 +129,9 @@ export default function FolderPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => router.push('/')}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Volver al inicio
-          </button>
-        </div>
-      </div>
+      <FolderNotFoundError 
+        onGoHome={() => router.push('/')} 
+      />
     );
   }
 
