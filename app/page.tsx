@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { CompleteMigration } from '@/components/drive/CompleteMigration';
+import { SimpleMigration } from '@/components/drive/SimpleMigration';
 import { useUIStore } from '@/lib/stores/ui';
 import { Button } from '@/components/ui/button';
 
@@ -36,7 +36,7 @@ export default function HomePage() {
 
   return (
     <div className="relative">
-      <CompleteMigration />
+      <SimpleMigration />
     </div>
   );
 }

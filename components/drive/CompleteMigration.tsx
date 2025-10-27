@@ -37,6 +37,8 @@ export function CompleteMigration() {
   const handleCompleteMigration = () => {
     setMigrationStep(3);
     setShowOldVersion(false);
+    // Redirigir a la aplicación principal
+    window.location.href = '/';
   };
 
   const handleShowOldVersion = () => {
