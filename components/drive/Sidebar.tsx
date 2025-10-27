@@ -216,19 +216,16 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
   }, [removeItem]);
 
   const handleCreateFolder = useCallback(() => {
-    // TODO: Implementar crear carpeta
-    console.log('Crear carpeta');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La creación de carpetas no está implementada' });
+  }, [addToast]);
 
   const handlePasteItems = useCallback(() => {
-    // TODO: Implementar pegar
-    console.log('Pegar items');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El pegado no está implementado' });
+  }, [addToast]);
 
   const handleSelectAll = useCallback(() => {
-    // TODO: Implementar seleccionar todo
-    console.log('Seleccionar todo');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La selección múltiple no está implementada' });
+  }, [addToast]);
 
   // Renderizar carpeta y sus subcarpetas recursivamente
   const renderFolder = (folder: DriveItem, level: number = 0) => {

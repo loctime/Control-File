@@ -121,23 +121,19 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - Respuesta: `{ shares: Array<{ token, fileName, fileSize, expiresAt, createdAt, downloadCount, shareUrl }> }`
 
 ## User
-- GET `/api/user/taskbar` (auth)
-  - Respuesta: `{ items: TaskbarItem[] }`
-  - **NOTA**: Este endpoint está deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
+- ~~GET `/api/user/taskbar`~~ (deprecated)
+- ~~POST `/api/user/taskbar`~~ (deprecated)
+  - **NOTA**: Estos endpoints están deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
 
-- POST `/api/user/taskbar` (auth)
-  - Body: `{ items: TaskbarItem[] }`
-  - Respuesta: `{ success: true }`
-  - **NOTA**: Este endpoint está deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
+## Control de Acceso
+- El control de acceso se maneja mediante **Firebase Auth** (token válido).
+- Cada usuario solo puede acceder a sus propios datos mediante `userId`.
+- **CORS** controla qué dominios pueden hacer requests al backend.
 
-## Control de Acceso por Aplicación
-- El backend utiliza `APP_CODE=controlfile` para todas las integraciones (fijo, no configurable por app externa).
-- El control de acceso se maneja mediante el claim `allowedApps` del usuario en Firebase Auth.
-- Para que un usuario pueda acceder desde aplicaciones externas (ej. ControlAudit, ControlDoc), debe tener las apps correspondientes en su claim `allowedApps`.
-
-**Configuración de claims**: Usar el script `scripts/set-claims.js` para asignar permisos:
-```bash
-node scripts/set-claims.js --email usuario@dominio --apps controlfile,controlaudit,controldoc
+**Autenticación**: Usar Firebase Auth directamente:
+```typescript
+const user = getAuth().currentUser;
+const idToken = await user.getIdToken();
 ```
 
 ## ⚡ Cloudflare Worker - Optimización de Shares

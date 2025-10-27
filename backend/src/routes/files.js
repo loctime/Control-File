@@ -49,9 +49,7 @@ router.get('/list', cacheFiles, async (req, res) => {
         filesQuery = filesQuery.where('parentId', '==', parentId);
       }
 
-      if (APP_CODE !== 'controlfile') {
-        filesQuery = filesQuery.where('appCode', '==', APP_CODE);
-      }
+      // Ya no filtramos por appCode - todos los archivos del usuario
 
       filesQuery = filesQuery.orderBy('updatedAt', 'desc');
 
@@ -88,11 +86,7 @@ router.get('/list', cacheFiles, async (req, res) => {
         foldersQuery = foldersQuery.where('parentId', '==', parentId);
       }
 
-      // Solo filtrar por appCode si no es controlfile (para mostrar todas las carpetas)
-      if (APP_CODE !== 'controlfile') {
-        foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);
-      }
-      // Si es controlfile, no filtrar por appCode para mostrar carpetas de todas las apps
+      // Ya no filtramos por appCode - todas las carpetas del usuario
 
       foldersQuery = foldersQuery.orderBy('createdAt', 'desc');
 
@@ -222,13 +216,12 @@ router.post('/delete', invalidateCache('delete'), async (req, res) => {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (fileData.isDeleted) {
+    if (fileData.deletedAt) {
       return res.status(400).json({ error: 'Archivo ya eliminado' });
     }
 
     // Soft delete - mark as deleted
     await fileRef.update({
-      isDeleted: true,
       deletedAt: new Date(),
     });
 
@@ -236,15 +229,6 @@ router.post('/delete', invalidateCache('delete'), async (req, res) => {
     const userRef = admin.firestore().collection('users').doc(uid);
     await userRef.update({
       usedBytes: admin.firestore.FieldValue.increment(-fileData.size),
-    });
-
-    // Move to trash collection
-    const trashRef = admin.firestore().collection('trash').doc(fileId);
-    await trashRef.set({
-      ...fileData,
-      isDeleted: true,
-      deletedAt: new Date(),
-      originalId: fileId,
     });
 
     res.json({ 
@@ -314,21 +298,21 @@ router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => 
       return res.status(400).json({ error: 'ID de archivo requerido' });
     }
 
-    // Get file from trash
-    const trashRef = admin.firestore().collection('trash').doc(fileId);
-    const trashDoc = await trashRef.get();
+    // Get file from files collection
+    const fileRef = admin.firestore().collection('files').doc(fileId);
+    const fileDoc = await fileRef.get();
 
-    if (!trashDoc.exists) {
-      return res.status(404).json({ error: 'Archivo no encontrado en la papelera' });
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
     }
 
-    const fileData = trashDoc.data();
+    const fileData = fileDoc.data();
     if (fileData.userId !== uid) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (!assertItemVisibleForApp(fileData)) {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!fileData.deletedAt) {
+      return res.status(400).json({ error: 'Archivo no está en la papelera' });
     }
 
     // Delete from B2
@@ -339,10 +323,6 @@ router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => 
     }
 
     // Delete from Firestore
-    await trashRef.delete();
-
-    // Also delete from files collection if it exists
-    const fileRef = admin.firestore().collection('files').doc(fileId);
     await fileRef.delete();
 
     res.json({ 
@@ -365,21 +345,21 @@ router.post('/restore', invalidateCache('create'), async (req, res) => {
       return res.status(400).json({ error: 'ID de archivo requerido' });
     }
 
-    // Get file from trash
-    const trashRef = admin.firestore().collection('trash').doc(fileId);
-    const trashDoc = await trashRef.get();
+    // Get file from files collection
+    const fileRef = admin.firestore().collection('files').doc(fileId);
+    const fileDoc = await fileRef.get();
 
-    if (!trashDoc.exists) {
-      return res.status(404).json({ error: 'Archivo no encontrado en la papelera' });
+    if (!fileDoc.exists) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
     }
 
-    const fileData = trashDoc.data();
+    const fileData = fileDoc.data();
     if (fileData.userId !== uid) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    if (!assertItemVisibleForApp(fileData)) {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (!fileData.deletedAt) {
+      return res.status(400).json({ error: 'Archivo no está en la papelera' });
     }
 
     // Check if user has enough quota
@@ -393,11 +373,8 @@ router.post('/restore', invalidateCache('create'), async (req, res) => {
       });
     }
 
-    // Restore to files collection
-    const fileRef = admin.firestore().collection('files').doc(fileId);
-    await fileRef.set({
-      ...fileData,
-      isDeleted: false,
+    // Restore file
+    await fileRef.update({
       deletedAt: null,
       updatedAt: new Date(),
     });
@@ -406,9 +383,6 @@ router.post('/restore', invalidateCache('create'), async (req, res) => {
     await userRef.update({
       usedBytes: admin.firestore.FieldValue.increment(fileData.size),
     });
-
-    // Delete from trash
-    await trashRef.delete();
 
     res.json({ 
       success: true,
@@ -649,7 +623,7 @@ router.post('/convert-to-pdf', async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date(),
       isDeleted: false,
-      appCode: fileData.appCode || 'controlfile'
+      // appCode eliminado
     });
 
     res.json({

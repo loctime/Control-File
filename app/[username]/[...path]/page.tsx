@@ -83,8 +83,7 @@ export default function FolderPage() {
           router.push(`/${username}`);
         }
       } else {
-        // TODO: Implementar acceso a carpetas públicas de otros usuarios
-        setError('Acceso a carpetas de otros usuarios no implementado aún');
+        setError('Acceso a carpetas de otros usuarios no disponible');
       }
     } catch (err) {
       console.error('Error loading folder:', err);

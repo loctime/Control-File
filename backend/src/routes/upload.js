@@ -93,8 +93,8 @@ router.post('/presign', async (req, res) => {
       });
     }
 
-    // Resolve parent and ancestors (auto-create app root if needed)
-    console.log('📁 Resolving parent folder:', { parentId, uid, appCode: APP_CODE });
+    // Resolve parent and ancestors
+    console.log('📁 Resolving parent folder:', { parentId, uid });
     const resolved = await resolveParentAndAncestors(uid, parentId);
     const parentPath = resolved.path || '';
     const effectiveParentId = resolved.parentId || parentId || null;
@@ -148,34 +148,11 @@ router.post('/presign', async (req, res) => {
       createdAt: new Date(),
       bucketKey: fileKey,
       uploadId: uploadSessionData.multipart?.uploadId || null,
-      appCode: APP_CODE,
+      // appCode eliminado
       ancestors,
     });
 
-    // Asegurar acceso a la carpeta raíz del APP_CODE en la barra de tareas del usuario
-    try {
-      if (APP_CODE !== 'controlfile' && !parentId && effectiveParentId) {
-        const settingsRef = admin.firestore().collection('userSettings').doc(uid);
-        await admin.firestore().runTransaction(async (t) => {
-          const snap = await t.get(settingsRef);
-          const data = snap.exists ? snap.data() : {};
-          const items = Array.isArray(data.taskbarItems) ? data.taskbarItems : [];
-          const exists = items.some((it) => it && it.id === effectiveParentId);
-          if (!exists) {
-            items.push({
-              id: effectiveParentId,
-              name: APP_CODE,
-              icon: 'Folder',
-              color: 'text-purple-600',
-              type: 'folder',
-            });
-            t.set(settingsRef, { taskbarItems: items, updatedAt: new Date() }, { merge: true });
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('No se pudo asegurar el acceso del APP_CODE en taskbar:', e);
-    }
+    // Lógica de taskbar eliminada - ya no necesitamos APP_CODE
 
     // Update user's pending bytes
     await userRef.update({
@@ -243,7 +220,7 @@ router.post('/confirm', async (req, res) => {
       updatedAt: new Date(),
       isDeleted: false,
       deletedAt: null,
-      appCode: APP_CODE,
+      // appCode eliminado
       ancestors: Array.isArray(sessionData.ancestors) ? sessionData.ancestors : [],
     });
 
@@ -328,8 +305,7 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     let mimeToUpload = req.file.mimetype;
 
     if (cloudmersive.enabled && cloudmersive.needsAutoConversion(sessionData.name, req.file.size, req.file.mimetype)) {
-      console.log('🔄 Auto-conversion needed (not implemented yet)');
-      // TODO: Implementar conversión automática de HEIC y PNG grandes
+      console.log('🔄 Auto-conversion needed (not implemented)');
     }
 
     // Subir archivo a B2 usando el backend

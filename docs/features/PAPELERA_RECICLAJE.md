@@ -2,7 +2,7 @@
 
 ## Descripción
 
-La papelera de reciclaje es una funcionalidad que permite recuperar archivos y carpetas eliminados antes de que sean eliminados permanentemente. Los elementos eliminados se mantienen en la papelera por 1 semana antes de ser eliminados automáticamente.
+La papelera de reciclaje es una funcionalidad que permite recuperar archivos y carpetas eliminados antes de que sean eliminados permanentemente. Los elementos eliminados se mantienen en la papelera hasta que el usuario los elimine manualmente.
 
 ## Características
 
@@ -16,12 +16,9 @@ La papelera de reciclaje es una funcionalidad que permite recuperar archivos y c
 
 4. **Eliminación Permanente**: Opción para eliminar permanentemente elementos desde la papelera.
 
-5. **Limpieza Automática**: Los elementos se eliminan automáticamente después de 1 semana.
-
-6. **Indicadores Visuales**: 
-   - Días restantes hasta la expiración
-   - Estados de expiración (normal, pronto, hoy, expirado)
-   - Iconos de advertencia para elementos próximos a expirar
+5. **Indicadores Visuales**: 
+   - Fecha de eliminación
+   - Tamaño del archivo
 
 7. **Menú Contextual**: Opciones específicas para la papelera (restaurar, eliminar permanentemente).
 
@@ -51,50 +48,27 @@ La papelera de reciclaje es una funcionalidad que permite recuperar archivos y c
 1. En la vista de la papelera, haz clic en **"Vaciar papelera"**
 2. Confirma la acción en el diálogo
 
-## Estados de Expiración
-
-- **Normal**: Más de 3 días restantes
-- **Pronto**: 1-3 días restantes (icono amarillo)
-- **Hoy**: Expira hoy (icono naranja)
-- **Expirado**: Ya expiró (icono rojo, opacidad reducida)
-
 ## Configuración Técnica
 
 ### Persistencia
-- Los elementos de la papelera se guardan en el almacenamiento local del navegador
+- Los elementos de la papelera se guardan en Firestore
 - Se mantienen entre sesiones
 
-### Limpieza Automática
-- Se ejecuta cada hora automáticamente
-- Elimina elementos que han expirado (más de 1 semana)
-- Se ejecuta al cargar la aplicación
-
-### Estructura de Datos
+### Estructura de Datos Simplificada
 ```typescript
 interface DriveItem {
   // ... campos existentes
-  deletedAt?: Date;        // Fecha de eliminación
-  expiresAt?: Date;        // Fecha de expiración (1 semana después)
-  originalPath?: string;   // Ruta original antes de eliminar
+  deletedAt?: Date | null; // Fecha de eliminación (null = no eliminado)
 }
 ```
 
 ## Archivos Modificados
 
-### Nuevos Archivos
+### Archivos Principales
 - `components/drive/TrashView.tsx` - Vista principal de la papelera
-- `components/common/TrashCleanupInitializer.tsx` - Inicializador de limpieza automática
-- `lib/trash-cleanup.ts` - Utilidades para la limpieza de la papelera
+- `lib/stores/drive.ts` - Funciones simplificadas de papelera
+- `backend/src/routes/files.js` - Endpoints simplificados
 - `PAPELERA_RECICLAJE.md` - Esta documentación
-
-### Archivos Modificados
-- `types/index.ts` - Agregados campos para papelera
-- `lib/stores/drive.ts` - Agregadas funciones de papelera
-- `components/drive/ContextMenu.tsx` - Agregadas opciones de papelera
-- `components/drive/DeleteConfirmModal.tsx` - Mejorado para papelera
-- `components/drive/Sidebar.tsx` - Agregado botón de papelera
-- `components/drive/FileExplorer.tsx` - Integrada vista de papelera
-- `app/layout.tsx` - Agregado inicializador de limpieza
 
 ## Funciones del Store
 
@@ -114,14 +88,12 @@ getTrashItems()
 // Limpiar toda la papelera
 clearTrash()
 
-// Limpiar elementos expirados
-cleanupExpiredTrash()
 ```
 
 ## Notas de Implementación
 
-- La papelera funciona completamente en el cliente (localStorage)
-- No requiere conexión a internet para funcionar
+- La papelera funciona con Firestore (sincronizado)
+- Requiere conexión a internet para funcionar
+- Sistema simplificado sin expiración automática
 - Los elementos eliminados mantienen su estructura original
 - La restauración devuelve los elementos a su ubicación original
-- La limpieza automática es silenciosa y no interrumpe al usuario

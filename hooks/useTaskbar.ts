@@ -13,7 +13,7 @@ interface TaskbarItem {
   type: 'folder' | 'app';
   isCustom?: boolean;
   folderId?: string; // Referencia a la carpeta real
-  appCode?: string; // Código de la app que creó la carpeta
+  // appCode eliminado - ya no es necesario
 }
 
 export function useTaskbar() {
@@ -176,7 +176,7 @@ export function useTaskbar() {
         type: 'folder' as const,
         isCustom: false,
         folderId: folder.id, // Guardar referencia a la carpeta real
-        appCode: folder.appCode
+        // appCode eliminado
       }));
 
       // Filtrar items que ya existen en el taskbar (por folderId para evitar duplicados)

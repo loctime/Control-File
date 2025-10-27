@@ -40,13 +40,12 @@ interface DriveState {
   setMainFolder: (folderId: string) => void;
   getMainFolder: () => string | null;
   
-  // Trash operations
+  // Trash operations (simplified)
   moveToTrash: (itemId: string) => void;
   restoreFromTrash: (itemId: string) => void;
   permanentlyDelete: (itemId: string) => void;
   getTrashItems: () => any[];
   clearTrash: () => void;
-  cleanupExpiredTrash: () => number;
 }
 
 export const useDriveStore = create<DriveState>()(
@@ -412,21 +411,16 @@ export const useDriveStore = create<DriveState>()(
           const item = state.items.find(i => i.id === itemId);
           if (!item) return state;
 
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 1 semana
-
           const updatedItem = {
             ...item,
-            deletedAt: now,
-            expiresAt: expiresAt,
-            originalPath: item.path
+            deletedAt: new Date()
           };
 
           console.log('🗑️ Moviendo a papelera:', updatedItem);
 
           return {
             items: state.items.map(i => i.id === itemId ? updatedItem : i),
-            selectedItems: state.selectedItems.filter(id => id !== itemId) // Limpiar selección del elemento movido
+            selectedItems: state.selectedItems.filter(id => id !== itemId)
           };
         }),
 
@@ -435,21 +429,16 @@ export const useDriveStore = create<DriveState>()(
           const item = state.items.find(i => i.id === itemId);
           if (!item || !item.deletedAt) return state;
 
-          // Restaurar el elemento a su ubicación original
           const restoredItem = {
             ...item,
-            deletedAt: undefined,
-            expiresAt: undefined,
-            // Mantener la ruta original si existe, sino usar la actual
-            path: item.originalPath || item.path,
-            originalPath: undefined
+            deletedAt: null
           };
 
           console.log('🔄 Restaurando desde papelera:', restoredItem);
 
           return {
             items: state.items.map(i => i.id === itemId ? restoredItem : i),
-            selectedItems: state.selectedItems.filter(id => id !== itemId) // Limpiar selección del elemento restaurado
+            selectedItems: state.selectedItems.filter(id => id !== itemId)
           };
         }),
 
@@ -480,33 +469,6 @@ export const useDriveStore = create<DriveState>()(
           };
         }),
 
-      cleanupExpiredTrash: () => {
-        const state = get();
-        const now = new Date();
-        const expiredItems = state.items.filter(item => 
-          item.deletedAt && 
-          item.expiresAt && 
-          new Date(item.expiresAt) <= now
-        );
-
-        if (expiredItems.length > 0) {
-          console.log(`🗑️ Limpiando ${expiredItems.length} elementos expirados`);
-          
-          set((state) => ({
-            items: state.items.filter(item => 
-              !item.deletedAt || 
-              !item.expiresAt || 
-              new Date(item.expiresAt) > now
-            ),
-            selectedItems: state.selectedItems.filter(id => {
-              const item = state.items.find(i => i.id === id);
-              return item && (!item.deletedAt || !item.expiresAt || new Date(item.expiresAt) > now);
-            })
-          }));
-        }
-
-        return expiredItems.length;
-      }
     }),
     {
       name: 'drive-storage',

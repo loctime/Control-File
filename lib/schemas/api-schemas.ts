@@ -80,7 +80,7 @@ export const folderCreateSchema = z.object({
   icon: z.string().optional(),
   color: z.string().optional(),
   source: z.string().optional(),
-  appCode: z.string().optional(),
+  // appCode eliminado
 });
 
 export const folderDeleteSchema = z.object({

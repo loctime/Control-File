@@ -5,7 +5,6 @@ import { Inter } from 'next/font/google';
 import { Providers } from './providers';
 import { ClientWrapper } from '@/components/common/ClientWrapper';
 import { ConnectionStatus } from '@/components/common/ConnectionStatus';
-import { TrashCleanupInitializer } from '@/components/common/TrashCleanupInitializer';
 import { DomainConfigProvider } from '@/components/common/DomainConfigProvider';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -27,7 +26,6 @@ export default function RootLayout({
           <DomainConfigProvider>
             <ClientWrapper>
               <ConnectionStatus />
-              <TrashCleanupInitializer />
             </ClientWrapper>
             {children}
           </DomainConfigProvider>

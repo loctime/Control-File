@@ -18,13 +18,13 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       icon?: string;
       color?: string;
       source?: string;
-      appCode?: string;
+      // appCode eliminado
     }>(request, folderCreateSchema);
     if (!validation.success) {
       return validation.response;
     }
 
-    const { id, name, parentId, icon, color, source, appCode } = validation.data;
+    const { id, name, parentId, icon, color, source } = validation.data;
 
     logger.info('Creating folder', { userId, name, parentId });
 
@@ -76,7 +76,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       parentId: parentId || null,
       path,
       type: 'folder',
-      appCode: appCode || 'controlfile',
+      // appCode eliminado
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,

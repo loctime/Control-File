@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /*
-  Uso:
-    node scripts/set-claims.js --uid <UID> --apps controlfile,controlaudit,controldoc --plans controlfile=pro;controlaudit=basic;controldoc=trial
-    node scripts/set-claims.js --email <correo@dominio> --apps controlfile
-
-  Requisitos:
-    - FB_ADMIN_IDENTITY en el entorno (JSON de service account del proyecto de Auth central)
+  ⚠️  SCRIPT OBSOLETO - allowedApps ya no se usa
+  
+  Este script se mantiene solo para compatibilidad histórica.
+  El sistema ahora usa solo Firebase Auth sin claims adicionales.
+  
+  Para autenticación, usar directamente:
+  - Firebase Auth (token válido)
+  - userId para aislamiento de datos
+  - source para separación visual
 */
 
 require('dotenv').config();

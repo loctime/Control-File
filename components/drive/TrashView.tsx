@@ -108,22 +108,10 @@ export function TrashView({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteModalItemName, setDeleteModalItemName] = useState<string>('');
 
-  // Calcular días restantes para un elemento
-  const getDaysLeft = (item: any) => {
-    if (!item.expiresAt) return null;
-    const expiresDate = new Date(item.expiresAt);
-    const daysLeft = Math.ceil((expiresDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return daysLeft > 0 ? daysLeft : 0;
-  };
-
-  // Obtener el estado de expiración
-  const getExpirationStatus = (item: any) => {
-    const daysLeft = getDaysLeft(item);
-    if (daysLeft === null) return 'unknown';
-    if (daysLeft <= 0) return 'expired';
-    if (daysLeft <= 1) return 'today';
-    if (daysLeft <= 3) return 'soon';
-    return 'normal';
+  // Función simplificada - solo mostrar fecha de eliminación
+  const getDeletedDate = (item: any) => {
+    if (!item.deletedAt) return null;
+    return new Date(item.deletedAt).toLocaleDateString();
   };
 
   // Restaurar elementos seleccionados
@@ -377,8 +365,6 @@ export function TrashView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {trashItems.map((item, index) => {
               const isSelected = selectedItems.includes(item.id);
-              const daysLeft = getDaysLeft(item);
-              const expirationStatus = getExpirationStatus(item);
               
               return (
                 <ContextMenu
@@ -400,7 +386,6 @@ export function TrashView({
                       flex flex-col p-4 rounded-lg border cursor-pointer
                       hover:bg-accent/50 transition-colors group relative
                       ${isSelected ? 'bg-accent border-primary' : 'border-border'}
-                      ${expirationStatus === 'expired' ? 'opacity-50' : ''}
                     `}
                     onClick={(e) => handleItemClick(e, index, item.id)}
                     onContextMenu={(e) => handleContextMenu(e, isSelected, item.id)}
@@ -429,37 +414,10 @@ export function TrashView({
                         </p>
                       )}
                       
-                      {/* Ubicación original */}
-                      {item.originalPath && (
-                        <p className="text-xs text-muted-foreground" title={`Ubicación original: ${item.originalPath}`}>
-                          📁 {item.originalPath.split('/').pop() || 'Raíz'}
-                        </p>
-                      )}
-                      
-                      {/* Estado de expiración */}
-                      <div className="flex items-center justify-center space-x-1">
-                        {expirationStatus === 'expired' && (
-                          <AlertTriangle className="w-3 h-3 text-red-500" />
-                        )}
-                        {expirationStatus === 'today' && (
-                          <Clock className="w-3 h-3 text-orange-500" />
-                        )}
-                        {expirationStatus === 'soon' && (
-                          <Clock className="w-3 h-3 text-yellow-500" />
-                        )}
-                        
-                        <span className={`text-xs ${
-                          expirationStatus === 'expired' ? 'text-red-500' :
-                          expirationStatus === 'today' ? 'text-orange-500' :
-                          expirationStatus === 'soon' ? 'text-yellow-500' :
-                          'text-muted-foreground'
-                        }`}>
-                          {daysLeft === null ? 'Sin fecha' :
-                           daysLeft <= 0 ? 'Expirado' :
-                           daysLeft === 1 ? 'Expira hoy' :
-                           `${daysLeft} días`}
-                        </span>
-                      </div>
+                      {/* Fecha de eliminación */}
+                      <p className="text-xs text-muted-foreground">
+                        Eliminado: {getDeletedDate(item)}
+                      </p>
                     </div>
 
                     {/* Indicador de selección */}

@@ -170,8 +170,7 @@ export function FileExplorer() {
       if (item.type === 'folder') {
         navigateToFolder(itemId);
       } else {
-        // TODO: Implementar apertura de archivos
-        console.log('Abrir archivo:', itemId);
+        addToast({ type: 'info', title: 'Función no disponible', message: 'La apertura de archivos no está implementada' });
       }
     }
   };
@@ -179,8 +178,7 @@ export function FileExplorer() {
   const handleDownloadFile = (itemId: string) => {
     const item = items.find(i => i.id === itemId);
     if (item && item.type === 'file') {
-      // TODO: Implementar descarga
-      console.log('Descargar archivo:', itemId);
+      addToast({ type: 'info', title: 'Función no disponible', message: 'La descarga no está implementada' });
     }
   };
 
@@ -269,8 +267,7 @@ export function FileExplorer() {
   };
 
   const handlePasteItems = () => {
-    // TODO: Implementar pegar
-    console.log('Pegar items');
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El pegado no está implementado' });
   };
 
   const handleSelectAll = () => {

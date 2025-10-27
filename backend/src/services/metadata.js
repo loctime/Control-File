@@ -1,10 +1,6 @@
 const admin = require('firebase-admin');
 
-const APP_CODE = process.env.APP_CODE || 'controlfile';
-
-function getAppCode() {
-  return APP_CODE;
-}
+// APP_CODE eliminado - ya no es necesario
 
 async function getFolderDoc(folderId) {
   if (!folderId) return null;
@@ -13,81 +9,17 @@ async function getFolderDoc(folderId) {
   return snap.exists ? { id: ref.id, data: snap.data() } : null;
 }
 
-async function getOrCreateAppRootFolder(uid) {
-  const filesCol = admin.firestore().collection('files');
-
-  const q = await filesCol
-    .where('userId', '==', uid)
-    .where('parentId', '==', null)
-    .where('name', '==', APP_CODE)
-    .where('type', '==', 'folder')
-    .limit(1)
-    .get();
-
-  if (!q.empty) {
-    const d = q.docs[0];
-    return { id: d.id, data: d.data() };
-  }
-
-  // Create root folder for this app
-  const folderId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const folderRef = filesCol.doc(folderId);
-
-  const slug = APP_CODE.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-  const folderDoc = {
-    id: folderId,
-    userId: uid,
-    name: APP_CODE,
-    slug: slug,
-    parentId: null,
-    path: `/${slug}`,
-    appCode: APP_CODE,
-    ancestors: [],
-    createdAt: new Date(),
-    modifiedAt: new Date(),
-    type: 'folder',
-    metadata: {
-      isMainFolder: true,
-      isDefault: true,
-      icon: 'Folder',
-      color: 'text-purple-600',
-      description: '',
-      tags: [],
-      isPublic: false,
-      viewCount: 0,
-      lastAccessedAt: new Date(),
-      permissions: {
-        canEdit: true,
-        canDelete: true,
-        canShare: true,
-        canDownload: true
-      },
-      customFields: {}
-    },
-  };
-
-  await folderRef.set(folderDoc);
-  return { id: folderId, data: folderDoc };
-}
+// Función eliminada - ya no necesitamos carpetas raíz por app
 
 async function resolveParentAndAncestors(uid, parentId) {
   if (parentId) {
     const parent = await getFolderDoc(parentId);
     if (!parent) {
-      console.warn(`⚠️ Carpeta padre no encontrada: ${parentId}, usando carpeta raíz por defecto`);
-      // En lugar de fallar, usar la carpeta raíz por defecto
-      if (APP_CODE === 'controlfile') {
-        return {
-          parentId: null,
-          path: '',
-          ancestors: [],
-        };
-      }
-      const root = await getOrCreateAppRootFolder(uid);
+      console.warn(`⚠️ Carpeta padre no encontrada: ${parentId}, usando raíz`);
       return {
-        parentId: root.id,
-        path: root.data.path || `/${APP_CODE}`,
-        ancestors: [root.id],
+        parentId: null,
+        path: '',
+        ancestors: [],
       };
     }
     const parentAncestors = Array.isArray(parent.data.ancestors) ? parent.data.ancestors : [];
@@ -98,35 +30,19 @@ async function resolveParentAndAncestors(uid, parentId) {
     };
   }
 
-  // Compatibilidad: para controlfile mantenemos raíz clásica (parentId null)
-  if (APP_CODE === 'controlfile') {
-    return {
-      parentId: null,
-      path: '',
-      ancestors: [],
-    };
-  }
-
-  const root = await getOrCreateAppRootFolder(uid);
+  // Siempre usar raíz clásica (parentId null)
   return {
-    parentId: root.id,
-    path: root.data.path || `/${APP_CODE}`,
-    ancestors: [root.id],
+    parentId: null,
+    path: '',
+    ancestors: [],
   };
 }
 
-function assertItemVisibleForApp(itemData) {
-  if (!itemData) return false;
-  if (APP_CODE === 'controlfile') return true; // super-app ve todo
-  return itemData.appCode === APP_CODE;
-}
+// Función eliminada - ya no necesitamos filtrar por app
 
 module.exports = {
-  getAppCode,
   getFolderDoc,
-  getOrCreateAppRootFolder,
   resolveParentAndAncestors,
-  assertItemVisibleForApp,
 };
 
 

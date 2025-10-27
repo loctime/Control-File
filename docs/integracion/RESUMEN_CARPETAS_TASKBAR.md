@@ -74,9 +74,9 @@ const response = await fetch('https://controlfile.onrender.com/api/folders/creat
 
 ## 🔐 Seguridad
 
-- ✅ **Autenticación** requerida
-- ✅ **Aislamiento** por usuario
-- ✅ **Claims** de acceso validados
+- ✅ **Firebase Auth** (token válido)
+- ✅ **Aislamiento** por usuario (`userId`)
+- ✅ **CORS** (control de dominios)
 - ✅ **Sin acceso** entre usuarios
 
 ## 📝 Próximos Pasos

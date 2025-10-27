@@ -134,7 +134,7 @@ const createSubfolder = async (parentId: string, subfolderName: string) => {
   type: "folder",
   parentId: null, // ✅ Siempre null para taskbar
   metadata: {
-    source: "taskbar", // ✅ CLAVE
+    source: "taskbar", // ✅ CLAVE - Solo esto importa
     isMainFolder: true,
     icon: "Taskbar",
     color: "text-blue-600",
@@ -244,22 +244,23 @@ const uploadFile = async (file: File, folderId: string) => {
 - ✅ **Claims de usuario** validan acceso a la app
 - ✅ **Aislamiento total** entre usuarios
 
-### Claims Requeridos
+### Autenticación Requerida
 ```typescript
-// El usuario debe tener este claim en Firebase Auth
-{
-  "allowedApps": ["controlfile", "controlaudit", "controldoc"]
-}
+// El usuario debe estar autenticado con Firebase Auth
+const user = getAuth().currentUser;
+const idToken = await user.getIdToken();
 ```
 
 ## 🐛 Troubleshooting
 
 ### Error: "No autorizado"
 ```typescript
-// Verificar que el usuario tenga el claim correcto
+// Verificar que el usuario esté autenticado
 const user = getAuth().currentUser;
-const tokenResult = await user.getIdTokenResult();
-console.log('Claims:', tokenResult.claims.allowedApps);
+if (!user) {
+  console.log('Usuario no autenticado');
+  // Redirigir a login
+}
 ```
 
 ### Error: "Carpeta ya existe"
@@ -431,7 +432,7 @@ const checkFolderExists = async (folderName: string) => {
 ## 📞 Soporte
 
 **¿Problemas?**
-1. Verifica que el usuario tenga claims correctos
+1. Verifica que el usuario esté autenticado
 2. Revisa la consola del navegador
 3. Verifica que `source: 'taskbar'` esté correcto
 4. Contacta: soporte@controldoc.app

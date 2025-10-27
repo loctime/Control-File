@@ -40,11 +40,9 @@ export const FileGrid = memo(function FileGrid({ items }: FileGridProps) {
 
   const handleDoubleClick = (item: DriveItem) => {
     if (item.type === 'folder') {
-      // TODO: Navigate to folder
-      console.log('Navigate to folder:', item.id);
+      onNavigateToFolder?.(item.id);
     } else {
-      // TODO: Open file
-      console.log('Open file:', item.id);
+      addToast({ type: 'info', title: 'Función no disponible', message: 'La apertura de archivos no está implementada' });
     }
   };
 
@@ -54,8 +52,7 @@ export const FileGrid = memo(function FileGrid({ items }: FileGridProps) {
   };
 
   const handleRename = (itemId: string) => {
-    // TODO: Implement rename
-    console.log('Rename item:', itemId, 'to:', editName);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El renombrado no está implementado' });
     setEditingItem(null);
     setEditName('');
   };

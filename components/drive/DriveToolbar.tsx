@@ -74,8 +74,7 @@ export function DriveToolbar() {
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files) {
-        // TODO: Handle file upload
-        console.log('Upload files:', files);
+        addToast({ type: 'info', title: 'Función no disponible', message: 'La subida de archivos no está implementada' });
       }
     };
     input.click();

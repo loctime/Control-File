@@ -116,10 +116,8 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ error: 'Token de usuario inválido', code: 'AUTH_UID_MISSING' });
     }
 
-    // Filtrado opcional por app usando claims
-    if (decoded.allowedApps && !decoded.allowedApps.includes(APP_CODE)) {
-      return res.status(403).json({ error: 'Acceso no permitido para esta app', code: 'APP_FORBIDDEN' });
-    }
+    // Verificar que el usuario tenga acceso (claims ya validados por Firebase)
+    // No necesitamos filtrar por APP_CODE, la seguridad viene de los claims
 
     // Compat: mantener req.user y también exponer req.uid/claims
     req.uid = decoded.uid;

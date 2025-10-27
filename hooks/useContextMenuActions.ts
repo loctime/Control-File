@@ -93,20 +93,17 @@ export function useContextMenuActions() {
 
   // Renombrar elemento
   const handleRenameItem = useCallback((itemId: string) => {
-    // TODO: Implementar modal de renombrado
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'El renombrado estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El renombrado no está implementado' });
   }, [addToast]);
 
   // Copiar elemento
   const handleCopyItem = useCallback((itemId: string) => {
-    // TODO: Implementar copia al portapapeles
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'La copia estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La copia no está implementada' });
   }, [addToast]);
 
   // Cortar elemento
   const handleCutItem = useCallback((itemId: string) => {
-    // TODO: Implementar corte al portapapeles
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'El corte estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El corte no está implementado' });
   }, [addToast]);
 
   // Eliminar elemento (mover a papelera)
@@ -123,26 +120,22 @@ export function useContextMenuActions() {
 
   // Mostrar propiedades
   const handleShowProperties = useCallback((itemId: string) => {
-    // TODO: Implementar modal de propiedades
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'Las propiedades estarán disponibles pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'Las propiedades no están implementadas' });
   }, [addToast]);
 
   // Crear carpeta
   const handleCreateFolder = useCallback(() => {
-    // TODO: Implementar modal de creación de carpeta
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'La creación de carpetas estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La creación de carpetas no está implementada' });
   }, [addToast]);
 
   // Pegar elementos
   const handlePasteItems = useCallback(() => {
-    // TODO: Implementar pegado desde portapapeles
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'El pegado estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El pegado no está implementado' });
   }, [addToast]);
 
   // Seleccionar todo
   const handleSelectAll = useCallback(() => {
-    // TODO: Implementar selección de todos los elementos visibles
-    addToast({ type: 'info', title: 'Función en desarrollo', message: 'La selección múltiple estará disponible pronto' });
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La selección múltiple no está implementada' });
   }, [addToast]);
 
   return {

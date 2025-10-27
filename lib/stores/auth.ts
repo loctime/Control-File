@@ -39,7 +39,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     })),
   setPlanQuota: (planQuotaBytes) => set({ planQuotaBytes }),
   refreshUserQuota: async () => {
-    // TODO: Implementar refresh de quota desde el servidor
     console.log('Refreshing user quota...');
   },
 }));

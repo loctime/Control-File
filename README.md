@@ -11,7 +11,7 @@ Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js
 - **Almacenamiento**: Backblaze B2 con presigned URLs (75% más barato que S3)
 - **Share Links**: Enlaces públicos con expiración y control de acceso
 - **Sistema de cuotas**: Control de almacenamiento por usuario y plan
-- **Mobile**: App nativa para Android con Capacitor
+- **Web**: Interfaz web responsive y moderna
 
 ## 🛠️ Stack Tecnológico
 
@@ -22,7 +22,7 @@ Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js
 | **Autenticación** | Firebase Auth (Central) |
 | **Base de datos** | Firestore |
 | **Storage** | Backblaze B2 (S3-compatible) |
-| **Mobile** | Capacitor 6 (Android/iOS) |
+| **Web** | Responsive Design |
 | **Deploy** | Vercel (Frontend), Render (Backend) |
 
 ## 📚 Documentación
@@ -31,11 +31,9 @@ Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js
 
 | Si eres... | Lee esto |
 |------------|----------|
-| 👨‍💻 **Desarrollador integrando ControlFile** | [📖 Integración Rápida](./docs/integracion/README_INTEGRACION_RAPIDA.md) (5 min) |
+| 👨‍💻 **Desarrollador integrando ControlFile** | [📖 Documentación Simple](./docs/README_SIMPLE.md) ⭐ **RECOMENDADO** |
 | 🔗 **Desarrollador consumiendo share links** | [📖 Guía Share Links](./docs/integracion/GUIA_CONSUMIR_SHARE_LINKS.md) |
-| 📱 **Desarrollador móvil (Android)** | [📖 Mobile Setup](./docs/mobile/) |
 | 🚀 **DevOps/Admin desplegando** | [📖 Deployment](./docs/deployment/) |
-| 🔧 **Desarrollador backend** | [📖 Guía Backend](./docs/integracion/GUIA_BACKEND.md) |
 | 🏗️ **Arquitecto/Tech Lead** | [📖 Documentación Técnica](./docs/technical/) |
 
 ### 📂 Documentación Completa
@@ -43,7 +41,6 @@ Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js
 Ver **[docs/](./docs/)** para la documentación organizada por categorías:
 
 - **[Integración](./docs/integracion/)** - Integrar ControlFile con apps externas
-- **[Mobile](./docs/mobile/)** - Build y deployment de apps móviles
 - **[Deployment](./docs/deployment/)** - Guías de deployment y configuración
 - **[Features](./docs/features/)** - Documentación de características
 - **[Technical](./docs/technical/)** - Notas técnicas y arquitectura

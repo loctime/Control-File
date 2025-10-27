@@ -69,9 +69,8 @@ export function Navbar() {
   }, [newFolderName, createMainFolder, isCreating]);
 
   const handleProfileClick = useCallback(() => {
-    // TODO: Navegar a página de perfil
-    console.log('Ir a perfil');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El perfil no está implementado' });
+  }, [addToast]);
 
   const handleUserMenuToggle = useCallback(() => {
     setIsUserMenuOpen(!isUserMenuOpen);
@@ -132,14 +131,12 @@ export function Navbar() {
   }, []);
 
   const handlePasteItems = useCallback(() => {
-    // TODO: Implementar pegar
-    console.log('Pegar items');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'El pegado no está implementado' });
+  }, [addToast]);
 
   const handleSelectAll = useCallback(() => {
-    // TODO: Implementar seleccionar todo
-    console.log('Seleccionar todo');
-  }, []);
+    addToast({ type: 'info', title: 'Función no disponible', message: 'La selección múltiple no está implementada' });
+  }, [addToast]);
 
   // Función para obtener el icono y color de una carpeta
   const getFolderIconAndColor = useCallback((folder: DriveItem) => {

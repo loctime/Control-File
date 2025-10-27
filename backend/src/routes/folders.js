@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const { getAppCode, getFolderDoc } = require('../services/metadata');
+const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 
 // Create folder endpoint
@@ -20,7 +20,6 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
       source 
     } = req.body;
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Nombre de carpeta requerido' });
@@ -72,7 +71,6 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
       slug: slug,
       parentId: parentId || null,
       path: path,
-      appCode: APP_CODE,
       ancestors,
       createdAt: new Date(),
       modifiedAt: new Date(),
@@ -117,7 +115,6 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
   try {
     const { username, path } = req.params;
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
 
     if (!username || !path) {
       return res.status(400).json({ error: 'Username y path requeridos' });
@@ -146,7 +143,6 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
 
     // Check if the folder is public or if user is the owner
     if (targetUserId !== uid) {
-      // TODO: Implement public folder access logic
       return res.status(403).json({ error: 'Acceso denegado' });
     }
 
@@ -201,7 +197,6 @@ router.get('/root', async (req, res) => {
     const rawName = (req.query.name || 'ControlAudit').toString();
     const name = rawName.trim();
     const shouldPin = String(req.query.pin || '0') === '1';
-    const APP_CODE = getAppCode();
 
     if (!name) {
       return res.status(400).json({ error: 'Nombre inválido' });
@@ -239,7 +234,6 @@ router.get('/root', async (req, res) => {
         slug: slug,
         parentId: null,
         path,
-        appCode: APP_CODE,
         ancestors: [],
         createdAt: new Date(),
         modifiedAt: new Date(),

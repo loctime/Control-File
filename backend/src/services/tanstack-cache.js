@@ -131,10 +131,8 @@ class TanStackCache {
   // Fetch real de base de datos usando Firestore
   async fetchFilesFromDB(userId, folderId) {
     const admin = require('firebase-admin');
-    const { getAppCode } = require('./metadata');
     
     try {
-      const APP_CODE = getAppCode();
       const items = [];
 
       // Get files from 'files' collection
@@ -149,9 +147,7 @@ class TanStackCache {
         filesQuery = filesQuery.where('parentId', '==', folderId);
       }
 
-      if (APP_CODE !== 'controlfile') {
-        filesQuery = filesQuery.where('appCode', '==', APP_CODE);
-      }
+      // Ya no filtramos por appCode - todos los archivos del usuario
 
       filesQuery = filesQuery.orderBy('updatedAt', 'desc');
 
@@ -178,9 +174,7 @@ class TanStackCache {
         foldersQuery = foldersQuery.where('parentId', '==', folderId);
       }
 
-      if (APP_CODE !== 'controlfile') {
-        foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);
-      }
+      // Ya no filtramos por appCode - todas las carpetas del usuario
 
       foldersQuery = foldersQuery.orderBy('updatedAt', 'desc');
 
@@ -211,10 +205,8 @@ class TanStackCache {
 
   async fetchFoldersFromDB(userId) {
     const admin = require('firebase-admin');
-    const { getAppCode } = require('./metadata');
     
     try {
-      const APP_CODE = getAppCode();
       const folders = [];
 
       let foldersQuery = admin.firestore()
@@ -223,9 +215,7 @@ class TanStackCache {
         .where('type', '==', 'folder')
         .where('deletedAt', '==', null);
 
-      if (APP_CODE !== 'controlfile') {
-        foldersQuery = foldersQuery.where('appCode', '==', APP_CODE);
-      }
+      // Ya no filtramos por appCode - todas las carpetas del usuario
 
       foldersQuery = foldersQuery.orderBy('updatedAt', 'desc');
 

@@ -42,9 +42,7 @@ export default function UserProfilePage() {
       setLoading(true);
       setError(null);
 
-      // TODO: Implementar carga de perfil público del usuario
-      // Por ahora, mostrar error
-      setError('Perfil público no implementado aún');
+      setError('Perfil público no disponible');
     } catch (err) {
       console.error('Error loading user profile:', err);
       setError('Error al cargar el perfil del usuario');
