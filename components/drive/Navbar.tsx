@@ -15,7 +15,7 @@ import { DriveItem, DriveFolder } from '@/types';
 
 export function Navbar() {
   const { createMainFolder, items, toggleItemSelection, moveToTrash, currentFolderId } = useDriveStore();
-  const { sidebarOpen, closeTrashView } = useUIStore();
+  const { sidebarOpen, closeTrashView, addToast } = useUIStore();
   const { user, logOut } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);

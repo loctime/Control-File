@@ -43,7 +43,7 @@ export function Sidebar({ isOpen, onToggle, width = 320 }: SidebarProps) {
     toggleItemSelection,
     removeItem
   } = useDriveStore();
-  const { toggleSidebar, closeTrashView } = useUIStore();
+  const { toggleSidebar, closeTrashView, addToast } = useUIStore();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCreatingSubfolder, setIsCreatingSubfolder] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { DriveItem } from '@/types';
 import { useDriveStore } from '@/lib/stores/drive';
+import { useUIStore } from '@/lib/stores/ui';
 import { formatFileSize, getMimeTypeIcon, isImageFile } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { 
@@ -27,10 +28,12 @@ import { Input } from '@/components/ui/input';
 
 interface FileListProps {
   items: DriveItem[];
+  onNavigateToFolder?: (folderId: string) => void;
 }
 
-export const FileList = memo(function FileList({ items }: FileListProps) {
+export const FileList = memo(function FileList({ items, onNavigateToFolder }: FileListProps) {
   const { selectedItems, toggleItemSelection } = useDriveStore();
+  const { addToast } = useUIStore();
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 

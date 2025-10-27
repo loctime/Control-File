@@ -38,6 +38,7 @@ export function DriveToolbar() {
   const [newFolderName, setNewFolderName] = useState('');
   const { navigateToRoot } = useNavigation();
   const { invalidateFiles } = useQueryInvalidation();
+  const { addToast } = useUIStore();
   
   const { 
     viewMode, 
