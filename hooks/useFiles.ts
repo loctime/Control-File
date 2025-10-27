@@ -55,7 +55,7 @@ const fetchFiles = async (userId: string, folderId: string | null): Promise<Driv
       orderBy('createdAt', 'desc')
     ));
 
-    // Process all items
+    // Process all items from files collection
     allItemsSnap.forEach((doc) => {
       const data = doc.data();
       items.push({
@@ -65,6 +65,38 @@ const fetchFiles = async (userId: string, folderId: string | null): Promise<Driv
         createdAt: data.createdAt.toDate(),
         modifiedAt: data.modifiedAt?.toDate() || data.createdAt.toDate(),
       } as DriveItem);
+    });
+
+    // Fetch items from folders collection (for compatibility with ControlBio)
+    try {
+      const foldersSnap = await getDocs(query(
+        collection(db, 'folders'),
+        where('userId', '==', userId),
+        where('parentId', '==', folderId),
+        orderBy('createdAt', 'desc')
+      ));
+
+      // Process items from folders collection
+      foldersSnap.forEach((doc) => {
+        const data = doc.data();
+        items.push({
+          ...data,
+          id: doc.id,
+          type: data.type || 'folder',
+          createdAt: data.createdAt.toDate(),
+          modifiedAt: data.modifiedAt?.toDate() || data.createdAt.toDate(),
+        } as DriveItem);
+      });
+    } catch (foldersError) {
+      console.warn('Error reading folders collection:', foldersError);
+      // No lanzar error, solo continuar con los items de files
+    }
+
+    // Ordenar todos los items por fecha de creación descendente
+    items.sort((a, b) => {
+      const aTime = a.createdAt.getTime();
+      const bTime = b.createdAt.getTime();
+      return bTime - aTime;
     });
 
     return items;

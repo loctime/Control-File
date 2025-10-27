@@ -102,7 +102,37 @@ router.get('/list', cacheFiles, async (req, res) => {
       });
 
     } catch (foldersError) {
-      console.warn('Error consultando carpetas:', foldersError.message);
+      console.warn('Error consultando carpetas de files:', foldersError.message);
+    }
+
+    try {
+      // Get folders from 'folders' collection (for compatibility with ControlBio)
+      let foldersColQuery = admin.firestore()
+        .collection('folders')
+        .where('userId', '==', uid)
+        .where('type', '==', 'folder');
+
+      if (parentId === null) {
+        foldersColQuery = foldersColQuery.where('parentId', '==', null);
+      } else if (typeof parentId === 'string' && parentId.length > 0) {
+        foldersColQuery = foldersColQuery.where('parentId', '==', parentId);
+      }
+
+      foldersColQuery = foldersColQuery.orderBy('createdAt', 'desc');
+
+      const foldersColSnap = await foldersColQuery.limit(limit).get();
+      foldersColSnap.forEach(doc => {
+        const data = doc.data();
+        items.push({ 
+          id: doc.id, 
+          ...data,
+          type: 'folder', // Asegurar que tenga el tipo correcto
+          updatedAt: data.modifiedAt || data.createdAt // Usar modifiedAt como updatedAt para consistencia
+        });
+      });
+
+    } catch (foldersColError) {
+      console.warn('Error consultando carpetas de folders:', foldersColError.message);
     }
 
     // Ordenar todos los items por updatedAt/modifiedAt descendente
