@@ -21,13 +21,15 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid;
 
     // Parse request body
-    const { id, name, parentId, icon, color, source } = await request.json();
+    const { id, name, parentId, icon, color, source, metadata } = await request.json();
 
     if (!id || !name) {
       return NextResponse.json({ error: 'ID y nombre son requeridos' }, { status: 400 });
     }
 
-    console.log('📁 Creating folder:', { name, parentId, userId, source });
+    // ARREGLADO: Usar source de metadata si existe, sino del nivel raíz
+    const finalSource = metadata?.source || source || 'navbar';
+    console.log('📁 Creating folder:', { name, parentId, userId, source: finalSource });
 
     // Get Firestore instance
     const adminDb = requireAdminDb();
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
         isPublic: false,
         viewCount: 0,
         lastAccessedAt: new Date(),
-        source: source || 'navbar',
+        source: finalSource,
         permissions: {
           canEdit: true,
           canDelete: true,
