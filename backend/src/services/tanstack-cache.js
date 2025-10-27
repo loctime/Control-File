@@ -199,6 +199,14 @@ class TanStackCache {
       return items;
     } catch (error) {
       console.error('Error fetching files from DB:', error);
+      
+      // Si es error de índice, mostrar enlace para crear índice
+      if (error.code === 9 && error.details && error.details.includes('index')) {
+        console.log('🔗 ENLACE PARA CREAR ÍNDICE:');
+        console.log('🔗 ' + error.details);
+        console.log('🔗 Copia este enlace y ábrelo en el navegador para crear el índice automáticamente');
+      }
+      
       throw error;
     }
   }
@@ -233,6 +241,14 @@ class TanStackCache {
       return folders;
     } catch (error) {
       console.error('Error fetching folders from DB:', error);
+      
+      // Si es error de índice, mostrar enlace para crear índice
+      if (error.code === 9 && error.details && error.details.includes('index')) {
+        console.log('🔗 ENLACE PARA CREAR ÍNDICE:');
+        console.log('🔗 ' + error.details);
+        console.log('🔗 Copia este enlace y ábrelo en el navegador para crear el índice automáticamente');
+      }
+      
       throw error;
     }
   }
