@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { FileExplorer } from '@/components/drive/FileExplorer';
+import { MigrationToggle } from '@/components/drive/MigrationToggle';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 
@@ -80,7 +80,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="relative">
-      <FileExplorer />
+      <MigrationToggle />
     </div>
   );
 }

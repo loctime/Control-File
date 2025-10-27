@@ -6,7 +6,7 @@ import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useContextMenuActions } from '@/hooks/useContextMenuActions';
-import { useFiles } from '@/hooks/useFiles';
+import { useFilesCompatible } from '@/hooks/useFilesCompatible';
 import { isKeyboardShortcut } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
 import { OfflineMessage } from '@/components/common/OfflineMessage';
@@ -14,7 +14,7 @@ import { Navbar } from '@/components/drive/Navbar';
 import { Taskbar } from '@/components/drive/Taskbar';
 import { Sidebar } from '@/components/drive/Sidebar';
 import { ContextMenu } from '@/components/drive/ContextMenu';
-import { CreateFolderModal } from '@/components/drive/CreateFolderModal';
+import { CreateFolderModalOptimized } from '@/components/drive/CreateFolderModalOptimized';
 import { DeleteConfirmModal } from '@/components/drive/DeleteConfirmModal';
 import { TrashViewLazy } from '@/components/drive/lazy/TrashViewLazy';
 import { DetailsPanelLazy } from '@/components/drive/lazy/DetailsPanelLazy';
@@ -72,7 +72,7 @@ export function FileExplorer() {
   }, [uploadProgress]);
   
   const { detailsPanelOpen, sidebarOpen, toggleSidebar, setSidebarOpen, isTrashView, toggleTrashView, closeTrashView, toggleDetailsPanel, addToast } = useUIStore();
-  const { files, loading, error } = useFiles(currentFolderId);
+  const { files, loading, error, isFetching, isMutating } = useFilesCompatible(currentFolderId);
   const historyNavigatingRef = useRef(false);
   
   // Estado para el ancho del sidebar (hook)
@@ -478,10 +478,9 @@ export function FileExplorer() {
       </div>
       
       {/* Modal para crear carpeta */}
-      <CreateFolderModal
+      <CreateFolderModalOptimized
         isOpen={isCreateFolderModalOpen}
         onClose={() => setIsCreateFolderModalOpen(false)}
-        onCreateFolder={handleCreateFolderSubmit}
         currentFolderId={currentFolderId}
       />
 

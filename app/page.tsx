@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { FileExplorer } from '@/components/drive/FileExplorer';
+import { MigrationToggle } from '@/components/drive/MigrationToggle';
 import { useUIStore } from '@/lib/stores/ui';
 import { Button } from '@/components/ui/button';
 
@@ -37,7 +37,7 @@ export default function HomePage() {
   return (
     <div className="relative">
       
-      <FileExplorer />
+      <MigrationToggle />
     </div>
   );
 }
