@@ -150,7 +150,7 @@ export function useTaskbar() {
     }
   };
 
-  // Detectar carpetas de otras apps y agregarlas automáticamente al taskbar
+  // Detectar carpetas de otras apps y carpetas con source: 'taskbar'
   useEffect(() => {
     if (!user?.uid || !items.length || isLoading) return;
 
@@ -167,11 +167,22 @@ export function useTaskbar() {
       item.appCode !== 'controlfile' // Solo carpetas de otras apps
     );
 
-    if (otherAppFolders.length > 0) {
-      console.log('🔍 Detectadas carpetas de otras apps:', otherAppFolders.length);
+    // ✅ AGREGAR: También detectar carpetas con source: 'taskbar'
+    const taskbarFolders = items.filter(item => 
+      item.type === 'folder' && 
+      item.userId === userId &&
+      !item.deletedAt &&
+      item.metadata?.source === 'taskbar' // Carpetas marcadas para taskbar
+    );
+
+    // Combinar ambas listas
+    const allFolders = [...otherAppFolders, ...taskbarFolders];
+
+    if (allFolders.length > 0) {
+      console.log('🔍 Detectadas carpetas para taskbar:', allFolders.length);
       
       // Crear items del taskbar para estas carpetas
-      const newTaskbarItems = otherAppFolders.map(folder => ({
+      const newTaskbarItems = allFolders.map(folder => ({
         id: `auto-${folder.id}`,
         name: folder.name,
         icon: folder.metadata?.icon || 'Folder',
@@ -191,7 +202,7 @@ export function useTaskbar() {
       );
 
       if (itemsToAdd.length > 0) {
-        console.log('➕ Agregando carpetas de otras apps al taskbar:', itemsToAdd.length);
+        console.log('➕ Agregando carpetas al taskbar:', itemsToAdd.length);
         const updatedItems = [...taskbarItems, ...itemsToAdd];
         setTaskbarItems(updatedItems);
         saveTaskbarItems(updatedItems);
