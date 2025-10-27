@@ -44,7 +44,7 @@ router.get('/list', cacheFiles, async (req, res) => {
       let filesQuery = admin.firestore()
         .collection('files')
         .where('userId', '==', uid)
-        .where('isDeleted', '==', false);
+        .where('deletedAt', '==', null);
 
       if (parentId === null) {
         filesQuery = filesQuery.where('parentId', '==', null);
