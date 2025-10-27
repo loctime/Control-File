@@ -6,7 +6,7 @@ import { useDropzone } from 'react-dropzone';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useContextMenuActions } from '@/hooks/useContextMenuActions';
-import { useFilesCompatible } from '@/hooks/useFilesCompatible';
+import { useFiles } from '@/hooks/useFiles';
 import { isKeyboardShortcut } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
 import { OfflineMessage } from '@/components/common/OfflineMessage';
@@ -73,7 +73,7 @@ export function FileExplorer() {
   }, [uploadProgress]);
   
   const { detailsPanelOpen, sidebarOpen, toggleSidebar, setSidebarOpen, isTrashView, toggleTrashView, closeTrashView, toggleDetailsPanel, addToast } = useUIStore();
-  const { files, loading, error, isFetching, isMutating } = useFilesCompatible(currentFolderId);
+  const { files, loading, error, isFetching, isMutating } = useFiles(currentFolderId);
   const historyNavigatingRef = useRef(false);
   
   // Estado para el ancho del sidebar (hook)
@@ -127,22 +127,21 @@ export function FileExplorer() {
   });
 
   // Inicializar carpeta por defecto si no hay una seleccionada
-  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE DE NAVEGACIÓN
-  // useEffect(() => {
-  //   if (!currentFolderId) {
-  //     initializeDefaultFolder();
-  //   }
-  // }, [currentFolderId, initializeDefaultFolder]);
+  useEffect(() => {
+    if (!currentFolderId && !loading) {
+      initializeDefaultFolder();
+    }
+  }, [currentFolderId, loading, initializeDefaultFolder]);
 
   // Si hay carpetas disponibles pero no hay carpeta actual, abrir automáticamente
-  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE DE NAVEGACIÓN
+  // TEMPORALMENTE COMENTADO PARA EVITAR BUCLE INFINITO
   // useEffect(() => {
-  //   if (currentFolderId || loading) return;
+  //   if (currentFolderId || loading || !files) return;
   //   
   //   // Verificar si la carpeta principal existe y es accesible
   //   const mainId = getMainFolder();
   //   if (mainId) {
-  //     const mainFolder = files?.find((i: any) => i.id === mainId && i.type === 'folder');
+  //     const mainFolder = files.find((i: any) => i.id === mainId && i.type === 'folder');
   //     if (mainFolder) {
   //       navigateToFolder(mainId);
   //       return;
@@ -153,14 +152,14 @@ export function FileExplorer() {
   //   }
   //   
   //   // Buscar la primera carpeta raíz disponible
-  //   const firstRootFolder = (files || []).find((i: any) => i.type === 'folder' && i.parentId === null);
+  //   const firstRootFolder = files.find((i: any) => i.type === 'folder' && i.parentId === null);
   //   if (firstRootFolder) {
   //     navigateToFolder(firstRootFolder.id);
   //   } else {
   //     // Si no hay carpetas, navegar a la raíz del usuario
   //     navigateToRoot();
   //   }
-  // }, [currentFolderId, loading, files]); // Removidas las dependencias problemáticas
+  // }, [currentFolderId, loading, files, getMainFolder, navigateToFolder, setMainFolder, navigateToRoot]);
 
   // Obtener subcarpetas de la carpeta actual
   const subfolders = getSubfolders(currentFolderId || '');

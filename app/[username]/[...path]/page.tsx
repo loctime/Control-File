@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { MigrationToggle } from '@/components/drive/MigrationToggle';
+import { FileExplorer } from '@/components/drive/FileExplorer';
 import { FolderNotFoundError } from '@/components/ui/ErrorBoundary';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
@@ -137,7 +137,7 @@ export default function FolderPage() {
 
   return (
     <div className="relative">
-      <MigrationToggle />
+      <FileExplorer />
     </div>
   );
 }
