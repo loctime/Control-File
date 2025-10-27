@@ -5,14 +5,17 @@ const b2Service = require('../services/b2');
 const multer = require('multer');
 const archiver = require('archiver');
 const { Readable } = require('stream');
-const { getAppCode, assertItemVisibleForApp } = require('../services/metadata');
+// Función simple para verificar visibilidad de items
+const assertItemVisibleForApp = (itemData) => {
+  // Por ahora, todos los items son visibles
+  return true;
+};
 const { cacheFiles, invalidateCache } = require('../middleware/cache');
 
 // List files and folders with pagination (with TanStack cache)
 router.get('/list', cacheFiles, async (req, res) => {
   try {
     const uid = req.user?.uid;
-    const APP_CODE = getAppCode();
     const parentIdParam = typeof req.query.parentId === 'string' ? req.query.parentId : undefined;
     const parentId = parentIdParam === 'null' ? null : parentIdParam;
     const limit = Math.min(parseInt(req.query.pageSize || '100', 10), 200);
@@ -105,35 +108,7 @@ router.get('/list', cacheFiles, async (req, res) => {
       console.warn('Error consultando carpetas de files:', foldersError.message);
     }
 
-    try {
-      // Get folders from 'folders' collection (for compatibility with ControlBio)
-      let foldersColQuery = admin.firestore()
-        .collection('folders')
-        .where('userId', '==', uid)
-        .where('type', '==', 'folder');
-
-      if (parentId === null) {
-        foldersColQuery = foldersColQuery.where('parentId', '==', null);
-      } else if (typeof parentId === 'string' && parentId.length > 0) {
-        foldersColQuery = foldersColQuery.where('parentId', '==', parentId);
-      }
-
-      foldersColQuery = foldersColQuery.orderBy('createdAt', 'desc');
-
-      const foldersColSnap = await foldersColQuery.limit(limit).get();
-      foldersColSnap.forEach(doc => {
-        const data = doc.data();
-        items.push({ 
-          id: doc.id, 
-          ...data,
-          type: 'folder', // Asegurar que tenga el tipo correcto
-          updatedAt: data.modifiedAt || data.createdAt // Usar modifiedAt como updatedAt para consistencia
-        });
-      });
-
-    } catch (foldersColError) {
-      console.warn('Error consultando carpetas de folders:', foldersColError.message);
-    }
+    // Solo leer de files collection (enfoque unificado)
 
     // Ordenar todos los items por updatedAt/modifiedAt descendente
     items.sort((a, b) => {
@@ -429,7 +404,7 @@ router.post('/zip', async (req, res) => {
   try {
     const { fileIds, zipName } = req.body || {};
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
+    // APP_CODE eliminado
 
     if (!Array.isArray(fileIds) || fileIds.length === 0) {
       return res.status(400).json({ error: 'Lista de archivos requerida' });

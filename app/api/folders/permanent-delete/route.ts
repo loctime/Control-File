@@ -30,8 +30,9 @@ async function deleteFolderRecursive(adminDb: FirebaseFirestore.Firestore, userI
 
   // 2) Obtener subcarpetas y borrarlas recursivamente
   const subfoldersSnap = await adminDb
-    .collection('folders')
+    .collection('files')
     .where('userId', '==', userId)
+    .where('type', '==', 'folder')
     .where('parentId', '==', folderId)
     .get();
 
@@ -40,7 +41,7 @@ async function deleteFolderRecursive(adminDb: FirebaseFirestore.Firestore, userI
   }
 
   // 3) Finalmente borrar la carpeta actual
-  await adminDb.collection('folders').doc(folderId).delete();
+  await adminDb.collection('files').doc(folderId).delete();
 }
 
 export async function POST(request: NextRequest) {
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const adminDb = requireAdminDb();
     console.log('[folders/permanent-delete] Solicitud recibida', { userId, folderId });
-    const folderRef = adminDb.collection('folders').doc(folderId);
+    const folderRef = adminDb.collection('files').doc(folderId);
     const folderDoc = await folderRef.get();
     if (!folderDoc.exists) {
       // Si no existe, considerar operación idempotente: nada que borrar

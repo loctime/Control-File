@@ -21,7 +21,7 @@ Sistema que permite a las aplicaciones externas crear carpetas que aparecen auto
 
 ### Código Mínimo
 ```typescript
-// Crear carpeta en taskbar
+// Crear carpeta en taskbar (colección files)
 const response = await fetch('https://controlfile.onrender.com/api/folders/create', {
   method: 'POST',
   headers: {
@@ -37,6 +37,11 @@ const response = await fetch('https://controlfile.onrender.com/api/folders/creat
   })
 });
 ```
+
+### ⚠️ IMPORTANTE: Colección Unificada
+- **Todas las carpetas** se crean en la colección `files` con `type: 'folder'`
+- **NO usar** la colección `folders` (deprecated)
+- **Consistencia total** entre todos los endpoints
 
 ### Resultado Visual
 ```

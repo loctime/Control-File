@@ -94,7 +94,7 @@ async function migrateUsers() {
 async function migrateFolders() {
   console.log('🔄 Migrando carpetas...');
   
-  const foldersRef = db.collection('folders');
+  const foldersRef = db.collection('files').where('type', '==', 'folder');
   const foldersSnapshot = await foldersRef.get();
   
   let migratedCount = 0;

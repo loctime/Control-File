@@ -90,7 +90,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
 
       // 4. Si hay parent folder, actualizar su timestamp
       if (sessionData.parentId) {
-        const folderRef = adminDb.collection('folders').doc(sessionData.parentId);
+        const folderRef = adminDb.collection('files').doc(sessionData.parentId);
         transaction.update(folderRef, {
           updatedAt: new Date(),
         });

@@ -26,6 +26,11 @@ Esta guía explica cómo las aplicaciones externas pueden crear carpetas que apa
 
 ## 🚀 Implementación Rápida
 
+### ⚠️ IMPORTANTE: Colección Unificada
+- **Todas las carpetas** se crean en la colección `files` con `type: 'folder'`
+- **NO usar** la colección `folders` (deprecated)
+- **Consistencia total** entre todos los endpoints
+
 ### 1. Crear Carpeta en Taskbar
 
 ```typescript

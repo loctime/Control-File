@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // If parent is a folder, update its metadata
     if (sessionData.parentId) {
-      const folderRef = adminDb.collection('folders').doc(sessionData.parentId);
+      const folderRef = adminDb.collection('files').doc(sessionData.parentId);
       await folderRef.update({
         updatedAt: new Date(),
       });
