@@ -42,6 +42,10 @@ export function Taskbar() {
   const folders = useMemo(() => {
     const userId = user?.uid;
     if (!userId) return [];
+    
+    console.log('🔍 Taskbar - Total items en store:', items.length);
+    console.log('🔍 Taskbar - Items:', items.map(item => ({ id: item.id, name: item.name, source: item.metadata?.source })));
+    
     // Solo mostrar carpetas con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
       item.type === 'folder' && 
@@ -49,6 +53,9 @@ export function Taskbar() {
       !item.deletedAt && // Excluir carpetas en la papelera
       item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
     );
+    
+    console.log('🔍 Taskbar - Carpetas encontradas:', taskbarFolders.length);
+    console.log('🔍 Taskbar - Carpetas:', taskbarFolders.map(f => ({ id: f.id, name: f.name, source: f.metadata?.source })));
     
     return taskbarFolders;
   }, [items, user]);

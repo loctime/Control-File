@@ -7,6 +7,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useContextMenuActions } from '@/hooks/useContextMenuActions';
 import { useFiles } from '@/hooks/useFiles';
+import { useAllFolders } from '@/hooks/useAllFolders';
 import { isKeyboardShortcut } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth';
 import { OfflineMessage } from '@/components/common/OfflineMessage';
@@ -73,6 +74,7 @@ export function FileExplorer() {
   
   const { detailsPanelOpen, sidebarOpen, toggleSidebar, setSidebarOpen, isTrashView, toggleTrashView, closeTrashView, toggleDetailsPanel, addToast } = useUIStore();
   const { files, isLoading: loading, error, isFetching, isMutating } = useFiles(currentFolderId);
+  const { isLoading: allFoldersLoading } = useAllFolders(); // Cargar todas las carpetas
   const historyNavigatingRef = useRef(false);
   
   // Estado para el ancho del sidebar (hook)
