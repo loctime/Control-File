@@ -155,11 +155,12 @@ export function useTaskbar() {
 
     const userId = user.uid;
     
-    // Solo detectar carpetas con source: 'taskbar'
+    // Solo detectar carpetas principales con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
       item.type === 'folder' && 
       item.userId === userId &&
       !item.deletedAt &&
+      item.parentId === null && // Solo carpetas principales (sin padre)
       item.metadata?.source === 'taskbar' // Solo carpetas marcadas para taskbar
     );
 

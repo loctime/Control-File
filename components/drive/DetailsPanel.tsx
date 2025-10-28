@@ -15,6 +15,7 @@ import {
 import { formatFileSize, formatDate } from '@/lib/utils';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
+import { useFiles } from '@/hooks/useFiles';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -25,13 +26,30 @@ import { AudioMasteringModal } from '@/components/drive/AudioMasteringModal';
 // Vista previa extraída a componente dedicado
 
 export function DetailsPanel() {
-  const { items, selectedItems } = useDriveStore();
+  const { currentFolderId, items, selectedItems, getSubfolders } = useDriveStore();
   const { toggleDetailsPanel, addToast } = useUIStore();
   const [isAudioMasteringModalOpen, setIsAudioMasteringModalOpen] = useState(false);
+  
+  // Obtener archivos directamente del hook useFiles para asegurar sincronización
+  const { files } = useFiles(currentFolderId);
+  
+  // Obtener subcarpetas de la carpeta actual
+  const subfolders = getSubfolders(currentFolderId || '');
 
   const selectedFiles = useMemo(() => {
-    return items.filter(item => selectedItems.includes(item.id));
-  }, [items, selectedItems]);
+    // Combinar archivos y carpetas
+    const allItems = [...(files || []), ...subfolders];
+    
+    // Primero intentar obtener de allItems (fuente actualizada)
+    const foundItems = allItems.filter((item: any) => selectedItems.includes(item.id));
+    
+    // Si no se encontraron, buscar en items del store como fallback
+    if (foundItems.length === 0) {
+      return items.filter(item => selectedItems.includes(item.id));
+    }
+    
+    return foundItems;
+  }, [files, subfolders, items, selectedItems]);
 
   // Helper function to check if file is audio and can be mastered
   const isAudioFile = (mime: string, size: number) => {

@@ -25,19 +25,19 @@ El sistema de taskbar en ControlFile proporciona un acceso rápido a carpetas es
 ### **Estructura de Datos en Firestore**
 
 ```typescript
-// Colección: folders/{folderId}
+// Colección: files/{fileId}
 {
   id: string,
   userId: string,
   name: string,
   slug: string,
   parentId: null, // Siempre null para carpetas principales
-  path: string,
-  appCode: "controlfile",
-  ancestors: [],
+  path: string[],
+  ancestors: string[],
   createdAt: Date,
-  modifiedAt: Date,
+  updatedAt: Date,
   type: "folder",
+  deletedAt: null,
   metadata: {
     isMainFolder: true,
     isDefault: false,
@@ -48,7 +48,7 @@ El sistema de taskbar en ControlFile proporciona un acceso rápido a carpetas es
     isPublic: false,
     viewCount: 0,
     lastAccessedAt: Date,
-    source: "navbar" | "taskbar", // NUEVO CAMPO - Identifica el origen
+    source: "navbar" | "taskbar", // Identifica el origen
     permissions: {
       canEdit: true,
       canDelete: true,
@@ -135,11 +135,10 @@ createMainFolder: (name: string, icon: string, color: string, source?: string) =
 ```typescript
 const taskbarFolders = items.filter(item => 
   item.type === 'folder' && 
-  item.parentId === null &&
+  item.parentId === null && // Solo carpetas principales (sin padre)
   item.metadata?.isMainFolder &&
   item.userId === userId &&
   !item.deletedAt &&
-  item.appCode === 'controlfile' &&
   item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
 );
 ```
@@ -152,22 +151,23 @@ const navbarFolders = items.filter(item =>
   item.metadata?.isMainFolder &&
   item.userId === userId &&
   !item.deletedAt &&
-  item.appCode === 'controlfile' &&
   (item.metadata?.source === 'navbar' || !item.metadata?.source) // navbar o sin source (compatibilidad)
 );
 ```
 
 ## 🔄 Sincronización
 
-### **useFiles Hook**
-- Ambos componentes usan `useFiles(null)` para cargar carpetas principales
-- `useMergeCurrentFolderItems` sincroniza con el store global
-- Las carpetas se actualizan automáticamente cuando se crean
+### **useAllFolders Hook**
+- El hook `useAllFolders` carga todas las carpetas principales desde Firestore
+- Se ejecuta en `FileExplorer` para poblar el store global
+- Todas las carpetas se almacenan en `useDriveStore.items`
+- Los componentes `Taskbar` y `Navbar` filtran directamente del store
 
 ### **Reactividad**
 - Los filtros son reactivos a cambios en `items` y `user`
 - Las carpetas aparecen inmediatamente después de crearse
 - No requiere recarga de página
+- Actualización automática cuando se crean nuevas carpetas
 
 ## 🚀 Beneficios del Sistema
 

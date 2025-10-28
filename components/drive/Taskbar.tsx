@@ -46,11 +46,12 @@ export function Taskbar() {
     console.log('🔍 Taskbar - Total items en store:', items.length);
     console.log('🔍 Taskbar - Items:', items.map(item => ({ id: item.id, name: item.name, source: item.metadata?.source })));
     
-    // Solo mostrar carpetas con source: 'taskbar'
+    // Solo mostrar carpetas principales con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
       item.type === 'folder' && 
       item.userId === userId &&
       !item.deletedAt && // Excluir carpetas en la papelera
+      item.parentId === null && // Solo carpetas principales (sin padre)
       item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
     );
     
