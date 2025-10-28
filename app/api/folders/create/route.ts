@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     console.log('🔍 DEBUG - source extraído:', source);
     console.log('🔍 DEBUG - source del requestBody:', requestBody.source);
 
-    // ARREGLADO: Usar source del nivel raíz si existe, sino de metadata, sino 'navbar'
-    const finalSource = source || metadata?.source || 'navbar';
+    // ARREGLADO: Usar source de metadata si existe, sino del nivel raíz, sino 'navbar'
+    const finalSource = metadata?.source || source || 'navbar';
     console.log('📁 Creating folder:', { name, parentId, userId, finalSource, metadataSource: metadata?.source, rootSource: source });
 
     // Get Firestore instance
