@@ -8,6 +8,8 @@ import { useDriveStore } from '@/lib/stores/drive';
 
 // Función para cargar todas las carpetas del usuario
 const fetchAllFolders = async (userId: string) => {
+  console.log('🔍 fetchAllFolders - Iniciando carga para usuario:', userId);
+  
   if (!db) {
     throw new Error('Firestore no está disponible');
   }
@@ -19,6 +21,8 @@ const fetchAllFolders = async (userId: string) => {
   const items: any[] = [];
 
   try {
+    console.log('🔍 fetchAllFolders - Ejecutando query en Firestore...');
+    
     // Cargar todas las carpetas del usuario
     const foldersSnap = await getDocs(query(
       collection(db, 'files'),
@@ -27,19 +31,25 @@ const fetchAllFolders = async (userId: string) => {
       orderBy('createdAt', 'desc')
     ));
 
+    console.log('🔍 fetchAllFolders - Query completada, documentos encontrados:', foldersSnap.size);
+
     foldersSnap.forEach((doc) => {
       const data = doc.data();
-      items.push({
+      const item = {
         ...data,
         id: doc.id,
         type: 'folder',
         createdAt: data.createdAt?.toDate?.() || new Date(),
         modifiedAt: data.modifiedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
-      });
+      };
+      console.log('🔍 fetchAllFolders - Procesando carpeta:', item.name, 'source:', item.metadata?.source);
+      items.push(item);
     });
 
+    console.log('🔍 fetchAllFolders - Total carpetas cargadas:', items.length);
     return items;
   } catch (error: any) {
+    console.error('🔍 fetchAllFolders - Error:', error);
     if (error.code === 'unavailable' || 
         error.message.includes('network') || 
         error.message.includes('offline')) {
@@ -52,6 +62,8 @@ const fetchAllFolders = async (userId: string) => {
 export function useAllFolders() {
   const { user } = useAuthStore();
   const { setItems } = useDriveStore();
+
+  console.log('🔍 useAllFolders - Usuario:', user?.uid);
 
   const foldersQuery = useQuery({
     queryKey: ['all-folders', user?.uid],
@@ -69,9 +81,16 @@ export function useAllFolders() {
     refetchOnReconnect: true,
   });
 
+  console.log('🔍 useAllFolders - Estado:', { 
+    data: foldersQuery.data, 
+    isLoading: foldersQuery.isLoading, 
+    error: foldersQuery.error 
+  });
+
   // Actualizar el store cuando se cargan las carpetas
   useEffect(() => {
     if (foldersQuery.data) {
+      console.log('🔍 useAllFolders - Actualizando store con carpetas:', foldersQuery.data);
       setItems(foldersQuery.data);
     }
   }, [foldersQuery.data, setItems]);
