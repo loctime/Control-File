@@ -122,7 +122,6 @@ export function useOptimizedUpload() {
         createdAt: new Date(),
         modifiedAt: new Date(),
         isTrashed: false,
-        // appCode eliminado
       }));
 
       // Agregar a la cache actual

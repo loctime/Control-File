@@ -68,7 +68,7 @@ if (!admin.apps.length) {
   }
 }
 
-const APP_CODE = process.env.APP_CODE || 'controlfile';
+// APP_CODE eliminado - ya no es necesario
 
 // Auto-inicializar usuario en Firestore si no existe
 async function ensureUserExists(uid, email) {

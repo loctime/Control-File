@@ -137,7 +137,6 @@ export function useFiles(folderId: string | null = null) {
         modifiedAt: new Date(),
         mimeType: 'folder',
         isTrashed: false,
-        // appCode eliminado
         path: `/${name}`,
         slug: name.toLowerCase().replace(/\s+/g, '-')
       } as DriveItem;

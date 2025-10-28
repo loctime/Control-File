@@ -18,7 +18,6 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       icon?: string;
       color?: string;
       source?: string;
-      // appCode eliminado
     }>(request, folderCreateSchema);
     if (!validation.success) {
       return validation.response;
@@ -76,7 +75,6 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       parentId: parentId || null,
       path,
       type: 'folder',
-      // appCode eliminado
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,

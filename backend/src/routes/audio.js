@@ -4,7 +4,7 @@ const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 const audioProcessing = require('../services/audio-processing');
 const audioProcessingSimple = require('../services/audio-processing-simple');
-const { getAppCode, assertItemVisibleForApp } = require('../services/metadata');
+const { assertItemVisibleForApp } = require('../services/metadata');
 
 /**
  * Masterizar archivo de audio
@@ -15,7 +15,6 @@ router.post('/master', async (req, res) => {
   try {
     const { fileId, action } = req.body;
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
 
     if (!fileId) {
       return res.status(400).json({ error: 'ID de archivo requerido' });
@@ -130,7 +129,7 @@ router.post('/master', async (req, res) => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-        appCode: fileData.appCode || APP_CODE,
+        // appCode eliminado
         originalFileId: fileId, // Referencia al archivo original
         mastered: true // Marcar como masterizado
       });

@@ -3,7 +3,7 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 const multer = require('multer'); // Added multer for file uploads
-const { getAppCode, resolveParentAndAncestors } = require('../services/metadata');
+const { resolveParentAndAncestors } = require('../services/metadata');
 
 // Test endpoint for debugging (no auth required)
 router.post('/test-no-auth', async (req, res) => {
@@ -50,7 +50,6 @@ router.post('/presign', async (req, res) => {
     const size = (typeof sizeDirect === 'number' ? sizeDirect : undefined) ?? fileSize;
     const mime = mimeDirect || mimeType;
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
 
     console.log('📤 Parsed data (normalized):', { name, size, mime, parentId, uid });
 
@@ -171,7 +170,6 @@ router.post('/confirm', async (req, res) => {
   try {
     const { uploadSessionId, etag, parts } = req.body;
     const { uid } = req.user;
-    const APP_CODE = getAppCode();
 
     if (!uploadSessionId) {
       return res.status(400).json({ error: 'ID de sesión requerido' });
