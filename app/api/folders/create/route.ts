@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     console.log('🔍 DEBUG - Request body completo:', JSON.stringify(requestBody, null, 2));
     console.log('🔍 DEBUG - metadata extraído:', metadata);
     console.log('🔍 DEBUG - source extraído:', source);
+    console.log('🔍 DEBUG - source del requestBody:', requestBody.source);
 
     // ARREGLADO: Usar source del nivel raíz si existe, sino de metadata, sino 'navbar'
     const finalSource = source || metadata?.source || 'navbar';
