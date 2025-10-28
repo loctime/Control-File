@@ -42,7 +42,7 @@ const fetchAllFolders = async (userId: string) => {
         createdAt: data.createdAt?.toDate?.() || new Date(),
         modifiedAt: data.modifiedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
       };
-      console.log('🔍 fetchAllFolders - Procesando carpeta:', item.name, 'source:', item.metadata?.source);
+      console.log('🔍 fetchAllFolders - Procesando carpeta:', data.name, 'source:', data.metadata?.source);
       items.push(item);
     });
 
