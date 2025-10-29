@@ -11,7 +11,7 @@ const {
   createProductSheet,
   readProductsFromSheet,
   createSheetBackup
-} = require('../utils/googleAuth');
+} = require('../../utils/googleAuth');
 
 // Cache simple en memoria (en producción usar Redis)
 const cache = new Map();
