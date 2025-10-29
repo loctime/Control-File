@@ -2,9 +2,9 @@
 
 ## 🎯 **¿Cómo integrar tu app con ControlFile?**
 
-**ControlFile ofrece dos formas de integración dependiendo de tu situación:**
+**ControlFile ofrece múltiples formas de integración dependiendo de tu caso de uso:**
 
-## 📚 **Documentación Disponible:**
+## 📚 **Documentación Organizada por Categoría:**
 
 ### 🚀 **Integración Directa con Firestore (RECOMENDADA)**
 - **[Integración Directa](./firestore-directo/)** - Sin APIs, directo a Firestore
@@ -13,6 +13,15 @@
 ### 🔌 **Integración con APIs Externas**
 - **[Integración con APIs](./api-externa/)** - Con APIs de ControlFile
 - **Ventajas:** Validaciones del backend, pero más complejo
+
+### 📊 **Funcionalidades Específicas**
+- **[Google Sheets Integration](./google-sheets/)** - Gestión de productos con Google Sheets
+- **[Share Links](./share-links/)** - Enlaces públicos para compartir archivos
+- **[Avatares y Perfiles](./avatares-perfiles/)** - Gestión de fotos de perfil
+- **[Imágenes Directas](./imagenes-directas/)** - Mostrar imágenes sin autenticación
+
+### 🔄 **Migración y Cambios del Sistema**
+- **[Migración del Sistema](./migracion-sistema/)** - Cambios importantes en la arquitectura
 
 ## 🎯 **¿Cuál Usar?**
 
@@ -25,6 +34,17 @@
 - Tu app NO comparte Firestore con ControlFile
 - Necesitas validaciones complejas del backend
 - Quieres que ControlFile maneje la lógica de negocio
+
+### 📊 **Usa Funcionalidades Específicas si:**
+- Necesitas **Google Sheets** para gestión de productos
+- Quieres **compartir archivos** con enlaces públicos
+- Necesitas **gestionar avatares** de usuarios
+- Quieres **mostrar imágenes** sin autenticación
+
+### 🔄 **Lee Migración si:**
+- Tu app usa el sistema antiguo con `appCode`
+- Necesitas actualizar a la nueva arquitectura
+- Quieres entender los cambios del sistema
 
 ## 🚀 **Inicio Rápido - Integración Directa**
 

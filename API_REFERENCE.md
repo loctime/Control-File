@@ -7,6 +7,12 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
 ## Health
 - GET `/api/health` → `{ status, timestamp, uptime, environment, version }`
 
+## Google Sheets Integration (Control Store)
+- POST `/api/stores/:storeId/sheets/create` (auth) - Crear hoja de productos
+- GET `/api/stores/:storeId/products` (auth) - Obtener productos con caché
+- POST `/api/stores/:storeId/sheets/sync` (auth) - Sincronizar con Firestore
+- POST `/api/stores/:storeId/backup` (auth) - Crear backup en Drive
+
 ## Files
 - GET `/api/files/list` (auth)
   - Query: `parentId` (string | `null`), `pageSize` (1-200), `cursor`

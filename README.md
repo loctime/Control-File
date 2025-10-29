@@ -11,6 +11,7 @@ Una aplicación de almacenamiento en la nube estilo Windows/OneDrive con Next.js
 - **Almacenamiento**: Backblaze B2 con presigned URLs (75% más barato que S3)
 - **Share Links**: Enlaces públicos con expiración y control de acceso
 - **Sistema de cuotas**: Control de almacenamiento por usuario y plan
+- **Google Sheets Integration**: Gestión de productos con Google Sheets para tiendas
 - **Web**: Interfaz web responsive y moderna
 
 ## 🛠️ Stack Tecnológico
