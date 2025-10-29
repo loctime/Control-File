@@ -165,23 +165,6 @@ npm run build:android
 
 Ver [scripts/](./scripts/) para más herramientas.
 
-## 📱 Mobile
-
-Aplicación nativa para Android/iOS usando Capacitor:
-
-```bash
-# Setup inicial
-npm run mobile:setup
-
-# Build APK
-npm run build:android
-
-# Build iOS
-npm run build:ios
-```
-
-Ver [documentación móvil](./docs/mobile/) para guía completa.
-
 ## 🚀 Deploy en Producción
 
 ### Frontend (Vercel)

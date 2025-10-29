@@ -1,8 +1,8 @@
-# Mini-OneDrive - Next.js + Firebase + B2 + Cloudflare
+# ControlFile - Next.js + Firebase + B2 + Cloudflare
 
 ## Project Structure
 ```
-mini-onedrive/
+controlfile/
 ├── README.md
 ├── package.json
 ├── next.config.js
@@ -116,7 +116,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ## Package.json
 ```json
 {
-  "name": "mini-onedrive",
+  "name": "controlfile",
   "version": "0.1.0",
   "private": true,
   "scripts": {

@@ -111,6 +111,9 @@ Thumbs.db
 logs
 *.log
 
+# Build artifacts
+tsconfig.tsbuildinfo
+
 # Temporary files
 tmp/
 temp/

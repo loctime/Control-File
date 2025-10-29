@@ -166,11 +166,6 @@ const { downloadUrl } = await urlResp.json();
 - GET `/api/shares` (auth)
   - Respuesta: `{ shares: Array<{ token, fileName, fileSize, expiresAt, createdAt, downloadCount, shareUrl }> }`
 
-## User
-- ~~GET `/api/user/taskbar`~~ (deprecated)
-- ~~POST `/api/user/taskbar`~~ (deprecated)
-  - **NOTA**: Estos endpoints están deprecated. El taskbar ahora usa carpetas reales con `metadata.source === 'taskbar'`
-
 ## Control de Acceso
 - El control de acceso se maneja mediante **Firebase Auth** (token válido).
 - Cada usuario solo puede acceder a sus propios datos mediante `userId`.

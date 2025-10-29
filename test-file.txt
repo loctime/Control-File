@@ -1,6 +1,0 @@
-Este es un archivo de prueba para verificar la funcionalidad de subida de archivos.
-
-Fecha: 2025-08-26
-Hora: 04:44
-
-Este archivo se usa para probar que el sistema de subida de archivos funciona correctamente.
