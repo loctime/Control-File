@@ -1,24 +1,22 @@
-# 🔌 **Integración con APIs Externas**
+# Integración con APIs Externas
 
-## 🎯 **Para Apps que NO Comparten Firestore con ControlFile**
+## Descripción
+Integración con APIs de ControlFile para apps que NO comparten el mismo proyecto de Firestore. Usa las APIs REST para interactuar con el sistema.
 
-**Si tu app NO comparte el mismo proyecto de Firestore que ControlFile, usa esta integración con APIs.**
+## 🚀 Características
 
-## 🚀 **Ventajas:**
+- ✅ **Validaciones** - ControlFile maneja la lógica de negocio
+- ✅ **Seguridad** - Autenticación y permisos centralizados
+- ✅ **Consistencia** - Misma lógica para todas las apps
+- ✅ **Mantenimiento** - Actualizaciones centralizadas
 
-- **✅ Validaciones** - ControlFile maneja la lógica de negocio
-- **✅ Seguridad** - Autenticación y permisos centralizados
-- **✅ Consistencia** - Misma lógica para todas las apps
-- **✅ Mantenimiento** - Actualizaciones centralizadas
+## 📚 Documentación Disponible
 
-## 📚 **Documentación Disponible:**
+- **[Guía Carpetas Taskbar](./GUIA_CARPETAS_TASKBAR.md)** - Crear carpetas en taskbar (guía completa)
+- **[API Reference](../../API_REFERENCE.md)** - Documentación completa de APIs
 
-### 🚀 **Guías Principales:**
-- **[Guía Carpetas Taskbar](./GUIA_CARPETAS_TASKBAR.md)** - Crear carpetas en taskbar
-- **[Resumen Ejecutivo](./RESUMEN_CARPETAS_TASKBAR.md)** - Resumen rápido
-- **[API Reference](./api-reference/)** - Documentación completa de APIs
+## 🎯 Funcionalidades
 
-### 🎯 **Funcionalidades:**
 - **📁 Carpetas** - Crear en taskbar/navbar via API
 - **📤 Archivos** - Subir y gestionar via API
 - **🔗 Enlaces** - Compartir y descargar via API

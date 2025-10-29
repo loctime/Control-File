@@ -1,4 +1,4 @@
-# 📚 ControlFile - Documentación Simple
+# 📚 ControlFile - Documentación
 
 ## 🎯 ¿Qué es ControlFile?
 

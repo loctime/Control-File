@@ -1,26 +1,24 @@
-# 🔥 **Integración Directa con Firestore**
+# Integración Directa con Firestore
 
-## 🎯 **Para Apps que Comparten Firestore con ControlFile**
+## Descripción
+Integración directa con Firestore para apps que comparten el mismo proyecto de base de datos que ControlFile. Sin APIs, acceso directo a la base de datos.
 
-**Si tu app comparte el mismo proyecto de Firestore que ControlFile, usa esta integración directa.**
+## 🚀 Características
 
-## 🚀 **Ventajas:**
+- ✅ **Sin APIs** - Directo a Firestore
+- ✅ **Sin complicaciones** - Estructura exacta
+- ✅ **Control total** - Tu app maneja todo
+- ✅ **Más rápido** - Sin API calls
+- ✅ **Más simple** - Menos código
+- ✅ **Más confiable** - Sin dependencias externas
 
-- **✅ Sin APIs** - Directo a Firestore
-- **✅ Sin complicaciones** - Estructura exacta
-- **✅ Control total** - Tu app maneja todo
-- **✅ Más rápido** - Sin API calls
-- **✅ Más simple** - Menos código
-- **✅ Más confiable** - Sin dependencias externas
+## 📚 Documentación Disponible
 
-## 📚 **Documentación Disponible:**
-
-### 🚀 **Guías Principales:**
 - **[Guía Completa](./GUIA_FIRESTORE_DIRECTO.md)** - Todo lo que necesitas saber
 - **[Ejemplos Prácticos](./ejemplos/)** - Código listo para usar
-- **[Configuración](./configuracion/)** - Setup de Firebase
 
-### 🎯 **Funcionalidades:**
+## 🎯 Funcionalidades
+
 - **📁 Carpetas** - Crear en taskbar/navbar
 - **📤 Archivos** - Subir y gestionar
 - **🔗 Enlaces** - Compartir y descargar

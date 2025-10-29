@@ -1,215 +1,207 @@
-# 📚 Documentación de ControlFile
+# 📚 ControlFile - Documentación
 
-Bienvenido a la documentación completa de ControlFile, un sistema de almacenamiento en la nube con integración a Backblaze B2 y Firebase.
+## 🎯 ¿Qué es ControlFile?
 
-## 📂 Documentación por Categoría
+**ControlFile** es un sistema de archivos en la nube que permite:
+- ✅ **Subir archivos** de forma segura
+- ✅ **Descargar archivos** cuando los necesites
+- ✅ **Crear carpetas** para organizar contenido
+- ✅ **Eliminar archivos** (van a papelera para recuperar)
+- ✅ **Compartir archivos** con enlaces temporales
+
+## 📚 Documentación Organizada
 
 ### 🔗 [Integración con Apps Externas](./integracion/)
-Guías completas para integrar ControlFile con aplicaciones externas (ControlAudit, ControlDoc, etc.)
+Guías completas para integrar ControlFile con aplicaciones externas
 
 **Documentos principales:**
-- **[README_INTEGRACION_RAPIDA.md](./integracion/README_INTEGRACION_RAPIDA.md)** ⭐ - Guía práctica de 5 minutos
-- **[GUIA_CONSUMIR_SHARE_LINKS.md](./integracion/GUIA_CONSUMIR_SHARE_LINKS.md)** 🔗 - Descargar archivos compartidos sin autenticación
-- **[GUIA_BACKEND.md](./integracion/GUIA_BACKEND.md)** - Crear carpetas desde backend
-- **[MIGRACION_USUARIOS.md](./integracion/MIGRACION_USUARIOS.md)** - Migrar usuarios existentes
-
-**Audiencia:** Desarrolladores que integran ControlFile en sus apps
-
----
-
-### 📱 [Mobile (Android/iOS)](./mobile/)
-Documentación para construir y deployar la aplicación móvil
-
-**Documentos principales:**
-- **[BUILD_APK_GUIDE.md](./mobile/BUILD_APK_GUIDE.md)** - Construir APK de producción
-- **[MOBILE_SETUP.md](./mobile/MOBILE_SETUP.md)** - Configuración inicial
-- **[CAPACITOR_MOBILE_DOCS.md](./mobile/CAPACITOR_MOBILE_DOCS.md)** - Documentación de Capacitor
-
-**Audiencia:** Desarrolladores móvil, DevOps
-
----
-
-### 🚀 [Deployment y Configuración](./deployment/)
-Guías de deployment, dominios, CORS y configuración de servicios
-
-**Documentos principales:**
-- **[DEPLOYMENT.md](./deployment/DEPLOYMENT.md)** - Guía general de deployment
-- **[VERCEL_DEPLOYMENT.md](./deployment/VERCEL_DEPLOYMENT.md)** - Deployment en Vercel
-- **[DOMAIN_MANAGEMENT.md](./deployment/DOMAIN_MANAGEMENT.md)** - Gestión de dominios
-- **[CORS_SOLUTION.md](./deployment/CORS_SOLUTION.md)** - Configuración CORS
-
-**Audiencia:** DevOps, Administradores
-
----
+- **[Guía de Integración](./integracion/README_INTEGRACION.md)** ⭐ - Guía principal
+- **[Google Sheets Integration](./integracion/google-sheets/)** - Gestión de productos
+- **[Share Links](./integracion/share-links/)** - Enlaces públicos
+- **[Avatares y Perfiles](./integracion/avatares-perfiles/)** - Gestión de fotos
 
 ### ✨ [Features del Sistema](./features/)
-Documentación de las características y funcionalidades
-
-**Documentos principales:**
-- **[TASKBAR_SYSTEM.md](./features/TASKBAR_SYSTEM.md)** - Sistema de barra de tareas
-- **[MENU_CONTEXTUAL.md](./features/MENU_CONTEXTUAL.md)** - Menú contextual
-- **[PAPELERA_RECICLAJE.md](./features/PAPELERA_RECICLAJE.md)** - Sistema de papelera
-- **[NOTIFICACIONES_MEJORADAS.md](./features/NOTIFICACIONES_MEJORADAS.md)** - Sistema de notificaciones
-
-**Audiencia:** Desarrolladores, Product Managers
-
----
+Documentación de características y funcionalidades
 
 ### 🔧 [Documentación Técnica](./technical/)
-Notas técnicas, fixes y decisiones arquitectónicas
+Notas técnicas, arquitectura y decisiones de implementación
 
-**Documentos principales:**
-- **[BUILD_FIXES.md](./technical/BUILD_FIXES.md)** - Soluciones a problemas de build
-- **[FIREBASE_INDEX_FIX.md](./technical/FIREBASE_INDEX_FIX.md)** - Configuración de índices
-- **[PROXY_SOLUTION.md](./technical/PROXY_SOLUTION.md)** - Implementación del proxy
-- **[REFACTORING_FILEEXPLORER.md](./technical/REFACTORING_FILEEXPLORER.md)** - Refactorización
+### 🚀 [Deployment](./deployment/)
+Guías de deployment, dominios y configuración
 
-**Audiencia:** Desarrolladores senior, Arquitectos
+### 🔐 [Autenticación](./auth/)
+Configuración de autenticación y OAuth
 
----
+### 📝 [Changelogs](./changelogs/)
+Registros de cambios y nuevas funcionalidades
 
-### 🔐 [Autenticación y OAuth](./auth/)
-Configuración de autenticación y OAuth para apps externas
+### 🐛 [Debug y Problemas](./debug/)
+Documentación de debugging y soluciones implementadas
 
-**Documentos principales:**
-- **[ControlAuditAuth.md](./auth/ControlAuditAuth.md)** - Auth para ControlAudit
-- **[ControlAuditOAuth.md](./auth/ControlAuditOAuth.md)** - Flujo OAuth
+## 🚀 Para Desarrolladores
 
-**Audiencia:** Desarrolladores, Admins
+### **Integración Súper Simple (10 minutos)**
 
----
+```typescript
+// 1. Usuario se autentica
+const user = getAuth().currentUser;
+const idToken = await user.getIdToken();
 
-## 🚀 Guías de Inicio Rápido
+// 2. Crear carpeta en taskbar
+const response = await fetch('https://controlfile.onrender.com/api/folders/create', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${idToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    id: 'miapp-main-123',
+    name: 'Mi App',
+    source: 'taskbar', // ✅ Aparece en taskbar
+    icon: 'Taskbar',
+    color: 'text-blue-600'
+  })
+});
 
-### Para Desarrolladores que Integran ControlFile
-1. Lee [README_INTEGRACION_RAPIDA.md](./integracion/README_INTEGRACION_RAPIDA.md)
-2. Configura Firebase Auth Central
-3. Copia el código del SDK
-4. ¡Listo para subir/descargar archivos!
-
-### Para Consumir Share Links Públicos
-1. Lee [GUIA_CONSUMIR_SHARE_LINKS.md](./integracion/GUIA_CONSUMIR_SHARE_LINKS.md)
-2. Copia la clase `ControlFileShareClient`
-3. Usa `downloadFile(shareToken)` sin autenticación
-
-### Para Build Móvil (Android)
-1. Lee [MOBILE_SETUP.md](./mobile/MOBILE_SETUP.md)
-2. Configura Android Studio
-3. Sigue [BUILD_APK_GUIDE.md](./mobile/BUILD_APK_GUIDE.md)
-
-### Para Deployment en Producción
-1. Lee [DEPLOYMENT.md](./deployment/DEPLOYMENT.md)
-2. Configura variables de entorno
-3. Configura dominios en [DOMAIN_MANAGEMENT.md](./deployment/DOMAIN_MANAGEMENT.md)
-
----
-
-## 📖 Referencias Rápidas
-
-### API Reference
-Ver [API_REFERENCE.md](../API_REFERENCE.md) para la documentación completa de todos los endpoints.
-
-### Scripts Útiles
-Ver [scripts/](../scripts/) para herramientas de administración:
-- `set-claims.js` - Asignar permisos a usuarios
-- `init-user.js` - Inicializar nuevo usuario
-- `deploy-firestore-indexes.js` - Deploy de índices
-
-### Casos de Uso Específicos
-Ver [gastos/](../gastos/) para ejemplos de integración específica (ControlGastos).
-
----
-
-## 🏗️ Arquitectura del Sistema
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     CONTROLFILE SYSTEM                       │
-└─────────────────────────────────────────────────────────────┘
-
-Frontend (Next.js 14)          Backend (Node.js/Express)
-──────────────────────         ─────────────────────────
-   App Router                    RESTful API
-   React Query                   Firebase Admin SDK
-   Zustand Store                 B2 SDK
-   TailwindCSS                   Express Middleware
-        │                              │
-        └──────────┬───────────────────┘
-                   ↓
-         ┌─────────────────────┐
-         │   Firebase Auth     │  ← Auth Central (SSO)
-         │  (Auth Central)     │
-         └─────────────────────┘
-                   │
-         ┌─────────┴─────────┐
-         ↓                   ↓
-   ┌──────────┐      ┌─────────────┐
-   │ Firestore│      │ Backblaze B2│
-   │  (Data)  │      │  (Storage)  │
-   └──────────┘      └─────────────┘
+// 3. ¡Listo! La carpeta aparece en el taskbar
 ```
 
+### **Resultado Visual**
+```
+┌─────────────────────────────────────────┐
+│ [ControlFile] [ControlAudit] [Mi App]   │
+└─────────────────────────────────────────┘
+```
+
+## 🔐 Seguridad
+
+- ✅ **Firebase Auth** (token válido)
+- ✅ **Aislamiento por usuario** (`userId`)
+- ✅ **CORS** (control de dominios)
+
+## 📊 Estructura de Datos
+
+```typescript
+// Colección: files/{itemId}
+{
+  id: "miapp-main-123",
+  userId: "user123",           // ✅ Seguridad real
+  name: "Mi App",
+  type: "folder",
+  parentId: null,              // ✅ Taskbar = null
+  metadata: {
+    source: "taskbar",         // ✅ Solo esto importa
+    isMainFolder: true,
+    icon: "Taskbar",
+    color: "text-blue-600"
+  }
+}
+```
+
+## 🎨 Personalización
+
+### **Colores Disponibles**
+- `text-blue-600` (recomendado)
+- `text-purple-600`
+- `text-green-600`
+- `text-red-600`
+- `text-yellow-600`
+- `text-indigo-600`
+- `text-pink-600`
+- `text-gray-600`
+
+### **Iconos Disponibles**
+- `Taskbar` (para taskbar)
+- `Folder` (para carpetas)
+- `Document` (para documentos)
+- `Image` (para imágenes)
+- `Video` (para videos)
+- `Audio` (para audio)
+
+## 🔄 Flujo Completo
+
+### **1. Inicialización**
+```typescript
+class MiAppIntegration {
+  async initializeUser() {
+    const user = getAuth().currentUser;
+    if (!user) throw new Error('Usuario no autenticado');
+    
+    const idToken = await user.getIdToken();
+    const mainFolder = await this.createMainFolder(idToken);
+    return mainFolder;
+  }
+}
+```
+
+### **2. Subir Archivos**
+```typescript
+async uploadFile(file: File, folderId: string) {
+  const user = getAuth().currentUser;
+  const idToken = await user.getIdToken();
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('parentId', folderId);
+  
+  const response = await fetch('https://controlfile.onrender.com/api/upload', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${idToken}` },
+    body: formData
+  });
+  
+  return await response.json();
+}
+```
+
+## 🎯 Casos de Uso
+
+### **ControlAudit**
+- Carpeta "ControlAudit" en taskbar
+- Subcarpetas: "2025", "2024", "Templates"
+- Archivos de auditoría por año
+
+### **ControlDoc**
+- Carpeta "ControlDoc" en taskbar
+- Subcarpetas: "Contratos", "Facturas", "Recibos"
+- Documentos organizados por tipo
+
+### **ControlGastos**
+- Carpeta "ControlGastos" en taskbar
+- Subcarpetas: "Enero", "Febrero", "Marzo"
+- Comprobantes por mes
+
+## 🚀 Beneficios
+
+### **Para Desarrolladores**
+- ✅ **Implementación**: 10 minutos
+- ✅ **Código**: 5 líneas
+- ✅ **Mantenimiento**: Cero
+- ✅ **Confusión**: Cero
+
+### **Para Usuarios**
+- ✅ **Un solo lugar** para todos los archivos
+- ✅ **Navegación fluida** entre apps
+- ✅ **Gestión unificada** de contenido
+
+## 📝 Documentación Técnica
+
+- 📖 [Guía de Carpetas en Taskbar](./integracion/GUIA_CARPETAS_TASKBAR.md)
+- 📋 [Resumen Ejecutivo](./integracion/RESUMEN_CARPETAS_TASKBAR.md)
+- 🗑️ [Eliminación de appCode](./integracion/ELIMINACION_APPCODE.md)
+- 🎉 [Sistema Final Simplificado](./integracion/SISTEMA_FINAL_SIMPLIFICADO.md)
+
+## 🎉 Conclusión
+
+**ControlFile** es el sistema más simple para integración de apps externas:
+
+1. ✅ **Solo Firebase Auth** (sin claims)
+2. ✅ **Solo `userId`** (sin appCode)
+3. ✅ **Solo `source`** (sin confusión)
+4. ✅ **Solo 10 minutos** para integrar
+
+**¡Tu app puede tener acceso directo desde ControlFile en minutos!** 🚀
+
 ---
 
-## 🎯 Recursos por Rol
-
-### 👨‍💻 Desarrollador Frontend
-- [Integración Rápida](./integracion/README_INTEGRACION_RAPIDA.md)
-- [Share Links](./integracion/GUIA_CONSUMIR_SHARE_LINKS.md)
-- [Features](./features/)
-- [API Reference](../API_REFERENCE.md)
-
-### 👨‍💻 Desarrollador Backend
-- [Guía Backend](./integracion/GUIA_BACKEND.md)
-- [API Integration](./technical/API_INTEGRATION.md)
-- [Technical Docs](./technical/)
-
-### 📱 Desarrollador Móvil
-- [Mobile Setup](./mobile/MOBILE_SETUP.md)
-- [Build APK](./mobile/BUILD_APK_GUIDE.md)
-- [Debug Guide](./mobile/DEBUG_MOBILE_BUILD.md)
-
-### 🔧 DevOps / Admins
-- [Deployment](./deployment/DEPLOYMENT.md)
-- [Domain Management](./deployment/DOMAIN_MANAGEMENT.md)
-- [Checklist Admin](./integracion/CHECKLIST_ADMIN_INTEGRACION.md)
-
-### 🏗️ Arquitecto / Tech Lead
-- [Technical](./technical/)
-- [Integration Guide](./integracion/GUIA_INTEGRACION_APPS_EXTERNAS.md)
-- [Auth](./auth/)
-
----
-
-## 📊 Estado del Proyecto
-
-| Componente | Estado | Versión |
-|------------|--------|---------|
-| Frontend (Next.js) | ✅ Producción | 14.x |
-| Backend (Node.js) | ✅ Producción | 18.x |
-| Mobile (Android) | ✅ Producción | Capacitor 6 |
-| iOS | 🚧 En desarrollo | - |
-| API | ✅ Estable | v1 |
-| Documentación | ✅ Completa | - |
-
----
-
-## 🆘 Soporte
-
-### Problemas Comunes
-- **Build errors:** Ver [BUILD_FIXES.md](./technical/BUILD_FIXES.md)
-- **CORS issues:** Ver [CORS_SOLUTION.md](./deployment/CORS_SOLUTION.md)
-- **Auth problems:** Ver [Auth](./auth/)
-- **Mobile build:** Ver [DEBUG_MOBILE_BUILD.md](./mobile/DEBUG_MOBILE_BUILD.md)
-
-### Contacto
-- **Issues:** GitHub Issues
-- **Docs:** Este repositorio
-- **Scripts:** `/scripts` folder
-
----
-
-**Última actualización:** Octubre 2025
-
-**Volver a:** [🏠 README Principal](../README.md)
-
+**¿Preguntas?** Contacta: soporte@controldoc.app
