@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { deleteObject } from '@/lib/b2';
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     try {
       await deleteObject(fileData.bucketKey);
     } catch (error) {
-      console.error('Error deleting from B2:', error);
+      logError(error, 'deleting from B2');
       // Continue with Firestore deletion even if B2 fails
     }
 
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
       message: 'Archivo eliminado exitosamente' 
     });
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logError(error, 'deleting file');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

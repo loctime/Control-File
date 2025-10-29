@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { DocumentSnapshot } from 'firebase-admin/firestore';
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
       newName 
     });
   } catch (error) {
-    console.error('Error renaming file:', error);
+    logError(error, 'renaming file');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

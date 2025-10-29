@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import Stripe from 'stripe';
 import { requireAdminAuth } from '@/lib/firebase-admin';
 import { findPlanById, getPlanPrice } from '@/lib/plans';
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Error creando checkout session:', error);
+    logError(error, 'creando checkout session');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
       const auth = requireAdminAuth();
       await auth.verifyIdToken(token);
     } catch (error) {
-      console.error('Error verifying token:', error);
+      logError(error, 'verifying token (audio test-simple)');
       return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
     }
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error('Error in simple audio test:', error);
+    logError(error, 'simple audio test');
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }

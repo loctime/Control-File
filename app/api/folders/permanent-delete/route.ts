@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { deleteObject } from '@/lib/b2';
 
@@ -6,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 async function deleteFolderRecursive(adminDb: FirebaseFirestore.Firestore, userId: string, folderId: string) {
-  console.log('[folders/permanent-delete] Recursivo en', { folderId });
+  logger.debug('[folders/permanent-delete] Recursivo en', { folderId });
   // 1) Borrar archivos dentro de la carpeta
   const filesSnap = await adminDb
     .collection('files')
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const adminDb = requireAdminDb();
-    console.log('[folders/permanent-delete] Solicitud recibida', { userId, folderId });
+    logger.info('[folders/permanent-delete] Solicitud recibida', { userId, folderId });
     const folderRef = adminDb.collection('files').doc(folderId);
     const folderDoc = await folderRef.get();
     if (!folderDoc.exists) {
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, deletedFolderId: folderId });
   } catch (error) {
-    console.error('Error eliminando carpeta permanentemente:', error);
+    logError(error, 'eliminando carpeta permanentemente');
     const message = (error as any)?.message || 'Error interno del servidor';
     return NextResponse.json({ error: message }, { status: 500 });
   }

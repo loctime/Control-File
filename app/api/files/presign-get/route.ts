@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { createPresignedGetUrl } from '@/lib/b2';
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       mimeType: fileData.mime
     });
   } catch (error) {
-    console.error('Error generating presigned URL:', error);
+    logError(error, 'generating presigned URL');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export async function POST(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function POST(
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error downloading shared file:', error);
+    logError(error, 'downloading shared file');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 
 // Backend URL from environment
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
       const auth = requireAdminAuth();
       decodedToken = await auth.verifyIdToken(token);
     } catch (error) {
-      console.error('Error verifying token:', error);
+      logError(error, 'verifying token (audio master)');
       return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
     }
 
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(backendData);
 
   } catch (error) {
-    console.error('Error in audio mastering proxy:', error);
+    logError(error, 'audio mastering proxy');
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       const auth = requireAdminAuth();
       decodedToken = await auth.verifyIdToken(token);
     } catch (error) {
-      console.error('Error verifying token:', error);
+      logError(error, 'verifying token (audio info)');
       return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
     }
 
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(backendData);
 
   } catch (error) {
-    console.error('Error in audio info proxy:', error);
+    logError(error, 'audio info proxy');
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }

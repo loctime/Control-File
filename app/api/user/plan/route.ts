@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { findPlanById } from '@/lib/plans';
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, planId: plan.planId, planQuotaBytes: plan.quotaBytes, planInterval: interval || 'monthly' });
   } catch (error) {
-    console.error('Error updating plan:', error);
+    logError(error, 'updating plan');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

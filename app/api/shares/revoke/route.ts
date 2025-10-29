@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 
 // Evitar pre-renderizado durante el build
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       message: 'Compartir revocado exitosamente' 
     });
   } catch (error) {
-    console.error('Error revoking share:', error);
+    logError(error, 'revoking share');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

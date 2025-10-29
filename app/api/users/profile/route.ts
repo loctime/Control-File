@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, logError } from '@/lib/logger-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in GET /users/profile:', error);
+    logError(error, 'GET /users/profile');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
@@ -47,7 +48,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in PUT /users/profile:', error);
+    logError(error, 'PUT /users/profile');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

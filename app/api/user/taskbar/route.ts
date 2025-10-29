@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in GET /user/taskbar:', error);
+    logError(error, 'GET /user/taskbar');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in POST /user/taskbar:', error);
+    logError(error, 'POST /user/taskbar');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

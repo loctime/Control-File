@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export async function GET(
   request: NextRequest,
@@ -48,7 +49,7 @@ export async function GET(
       headers: backendResponse.headers,
     });
   } catch (error) {
-    console.error('Error getting shared image:', error);
+    logError(error, 'getting shared image');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

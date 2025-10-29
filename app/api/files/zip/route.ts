@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     return new NextResponse(upstream.body, { status: 200, headers });
   } catch (error) {
-    console.error('Error proxying zip:', error);
+    logError(error, 'proxying zip');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

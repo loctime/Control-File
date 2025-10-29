@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function GET(
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in GET /folders/by-slug:', error);
+    logError(error, 'GET /folders/by-slug');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

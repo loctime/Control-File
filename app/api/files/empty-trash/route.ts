@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { deleteObject } from '@/lib/b2';
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (e) {
           // Continuar aunque falle B2 para algún archivo
-          console.warn('B2 delete falló para', bucketKey, e);
+          logger.warn('B2 delete falló para', { bucketKey, error: e instanceof Error ? e.message : String(e) });
         }
       })
     );
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
       unauthorized,
     });
   } catch (error) {
-    console.error('Error vaciando papelera:', error);
+    logError(error, 'vaciar papelera');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

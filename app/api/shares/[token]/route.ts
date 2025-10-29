@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error getting share info:', error);
+    logError(error, 'getting share info');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

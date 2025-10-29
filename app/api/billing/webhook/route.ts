@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, logError } from '@/lib/logger-client';
 import Stripe from 'stripe';
 import { requireAdminDb } from '@/lib/firebase-admin';
 import { findPlanById } from '@/lib/plans';
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message);
+    logger.warn('Webhook signature verification failed', { message: err.message });
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       }
     }
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    logError(error, 'processing webhook');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

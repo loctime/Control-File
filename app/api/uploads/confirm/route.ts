@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       message: 'Archivo subido exitosamente' 
     });
   } catch (error) {
-    console.error('Error confirming upload:', error);
+    logError(error, 'confirming upload');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth } from '@/lib/firebase-admin';
 
 // Backend URL from environment
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       const auth = requireAdminAuth();
       await auth.verifyIdToken(token);
     } catch (error) {
-      console.error('Error verifying token:', error);
+      logError(error, 'verifying token (audio test-ffmpeg)');
       return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
     }
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(backendData);
 
   } catch (error) {
-    console.error('Error in FFmpeg test proxy:', error);
+    logError(error, 'FFmpeg test proxy');
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }

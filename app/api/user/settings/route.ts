@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       billingInterval: (data as any)?.billingInterval || null,
     });
   } catch (error) {
-    console.error('Error getting user settings:', error);
+    logError(error, 'getting user settings');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error saving user settings:', error);
+    logError(error, 'saving user settings');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

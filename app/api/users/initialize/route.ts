@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in POST /users/initialize:', error);
+    logError(error, 'POST /users/initialize');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/logger-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in GET /folders/root:', error);
+    logError(error, 'GET /folders/root');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
