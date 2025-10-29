@@ -1,6 +1,6 @@
 # 🔥 **Guía de Integración - ControlFile**
 
-## 🎯 **¿Cómo integrar tu app con ControlFile?**
+## 🎯 **¿Cómo. integrar tu app con ControlFile?**
 
 **ControlFile ofrece múltiples formas de integración dependiendo de tu caso de uso:**
 
