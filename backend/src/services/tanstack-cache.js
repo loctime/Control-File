@@ -1,24 +1,20 @@
 // backend/src/services/tanstack-cache.js
-const { QueryClient } = require('@tanstack/react-query');
+// Implementación de cache simple para el backend sin dependencias externas
 
 class TanStackCache {
   constructor() {
-    this.queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          staleTime: 5 * 60 * 1000, // 5 minutos
-          gcTime: 10 * 60 * 1000,   // 10 minutos
-          retry: 2,
-          refetchOnWindowFocus: false,
-        },
-      },
-    });
-    
     this.cache = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
       totalRequests: 0,
+    };
+    
+    // Configuración de cache
+    this.config = {
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      gcTime: 10 * 60 * 1000,   // 10 minutos
+      maxSize: 1000, // Máximo 1000 entradas en cache
     };
   }
 
@@ -28,17 +24,23 @@ class TanStackCache {
     this.stats.totalRequests++;
 
     try {
-      const result = await this.queryClient.fetchQuery({
-        queryKey: ['files', userId, folderId],
-        queryFn: async () => {
-          // Simular fetch de base de datos
-          console.log(`🔍 Fetching files from DB for user ${userId}, folder ${folderId}`);
-          return await this.fetchFilesFromDB(userId, folderId);
-        },
-      });
+      // Verificar si existe en cache y no está expirado
+      const cached = this.cache.get(cacheKey);
+      if (cached && this.isValidCacheEntry(cached)) {
+        this.stats.hits++;
+        console.log(`✅ Cache HIT for ${cacheKey}`);
+        return cached.data;
+      }
 
-      this.stats.hits++;
-      console.log(`✅ Cache HIT for ${cacheKey}`);
+      // Si no está en cache o está expirado, obtener de DB
+      console.log(`🔍 Fetching files from DB for user ${userId}, folder ${folderId}`);
+      const result = await this.fetchFilesFromDB(userId, folderId);
+      
+      // Guardar en cache
+      this.setCacheEntry(cacheKey, result);
+      
+      this.stats.misses++;
+      console.log(`❌ Cache MISS for ${cacheKey} - data fetched from DB`);
       return result;
     } catch (error) {
       this.stats.misses++;
@@ -53,16 +55,23 @@ class TanStackCache {
     this.stats.totalRequests++;
 
     try {
-      const result = await this.queryClient.fetchQuery({
-        queryKey: ['folders', userId],
-        queryFn: async () => {
-          console.log(`🔍 Fetching folders from DB for user ${userId}`);
-          return await this.fetchFoldersFromDB(userId);
-        },
-      });
+      // Verificar si existe en cache y no está expirado
+      const cached = this.cache.get(cacheKey);
+      if (cached && this.isValidCacheEntry(cached)) {
+        this.stats.hits++;
+        console.log(`✅ Cache HIT for ${cacheKey}`);
+        return cached.data;
+      }
 
-      this.stats.hits++;
-      console.log(`✅ Cache HIT for ${cacheKey}`);
+      // Si no está en cache o está expirado, obtener de DB
+      console.log(`🔍 Fetching folders from DB for user ${userId}`);
+      const result = await this.fetchFoldersFromDB(userId);
+      
+      // Guardar en cache
+      this.setCacheEntry(cacheKey, result);
+      
+      this.stats.misses++;
+      console.log(`❌ Cache MISS for ${cacheKey} - data fetched from DB`);
       return result;
     } catch (error) {
       this.stats.misses++;
@@ -75,19 +84,19 @@ class TanStackCache {
   async prefetchRelatedData(userId, folderId) {
     try {
       // Prefetch de carpetas si no están en cache
-      await this.queryClient.prefetchQuery({
-        queryKey: ['folders', userId],
-        queryFn: () => this.fetchFoldersFromDB(userId),
-        staleTime: 5 * 60 * 1000,
-      });
+      const foldersKey = `folders-${userId}`;
+      if (!this.cache.has(foldersKey) || !this.isValidCacheEntry(this.cache.get(foldersKey))) {
+        const folders = await this.fetchFoldersFromDB(userId);
+        this.setCacheEntry(foldersKey, folders);
+      }
 
       // Prefetch de archivos de carpetas padre
       if (folderId) {
-        await this.queryClient.prefetchQuery({
-          queryKey: ['files', userId, null],
-          queryFn: () => this.fetchFilesFromDB(userId, null),
-          staleTime: 5 * 60 * 1000,
-        });
+        const rootFilesKey = `files-${userId}-null`;
+        if (!this.cache.has(rootFilesKey) || !this.isValidCacheEntry(this.cache.get(rootFilesKey))) {
+          const rootFiles = await this.fetchFilesFromDB(userId, null);
+          this.setCacheEntry(rootFilesKey, rootFiles);
+        }
       }
 
       console.log(`🚀 Prefetched related data for user ${userId}`);
@@ -98,20 +107,19 @@ class TanStackCache {
 
   // Invalidar cache específico
   invalidateFiles(userId, folderId) {
-    this.queryClient.invalidateQueries({
-      queryKey: ['files', userId, folderId],
-    });
+    const cacheKey = `files-${userId}-${folderId}`;
+    this.cache.delete(cacheKey);
     console.log(`🗑️ Invalidated cache for files-${userId}-${folderId}`);
   }
 
   // Invalidar todo el cache de un usuario
   invalidateUser(userId) {
-    this.queryClient.invalidateQueries({
-      queryKey: ['files', userId],
-    });
-    this.queryClient.invalidateQueries({
-      queryKey: ['folders', userId],
-    });
+    // Eliminar todas las entradas que pertenecen al usuario
+    for (const [key] of this.cache.entries()) {
+      if (key.includes(`-${userId}-`) || key.endsWith(`-${userId}`)) {
+        this.cache.delete(key);
+      }
+    }
     console.log(`🗑️ Invalidated all cache for user ${userId}`);
   }
 
@@ -124,8 +132,39 @@ class TanStackCache {
     return {
       ...this.stats,
       hitRate: `${hitRate}%`,
-      cacheSize: this.queryClient.getQueryCache().getAll().length,
+      cacheSize: this.cache.size,
     };
+  }
+
+  // Métodos auxiliares para el cache
+  isValidCacheEntry(cached) {
+    if (!cached || !cached.timestamp) return false;
+    const now = Date.now();
+    return (now - cached.timestamp) < this.config.staleTime;
+  }
+
+  setCacheEntry(key, data) {
+    // Limpiar cache si excede el tamaño máximo
+    if (this.cache.size >= this.config.maxSize) {
+      this.cleanupCache();
+    }
+
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+    });
+  }
+
+  cleanupCache() {
+    // Eliminar entradas más antiguas si el cache está lleno
+    const entries = Array.from(this.cache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    // Eliminar el 20% más antiguo
+    const toDelete = Math.floor(entries.length * 0.2);
+    for (let i = 0; i < toDelete; i++) {
+      this.cache.delete(entries[i][0]);
+    }
   }
 
   // Fetch real de base de datos usando Firestore
