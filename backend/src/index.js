@@ -16,6 +16,8 @@ const usersRoutes = require('./routes/users');
 const audioRoutes = require('./routes/audio');
 const storesRoutes = require('./routes/stores/sheets');
 const { getCacheStats, clearCache } = require('./middleware/cache');
+const { logger } = require('./utils/logger');
+const requestLogger = require('./middleware/request-logger');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,7 +50,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://auditoria.controldoc.app'
     ];
 
-console.log('🌐 CORS allowed origins:', allowedOrigins);
+logger.info('CORS allowed origins', { allowedOrigins });
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -56,10 +58,10 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
-      console.log('✅ CORS allowed origin:', origin);
+      logger.debug('CORS allowed origin', { origin });
       callback(null, true);
     } else {
-      console.log('🚫 CORS blocked origin:', origin);
+      logger.warn('CORS blocked origin', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -79,6 +81,7 @@ app.options('*', cors(corsOptions));
 app.use(helmet());
 app.use(compression());
 app.use(limiter);
+app.use(requestLogger);
 
 // Body parsing middleware with logging
 app.use(express.json({ limit: '10mb' }));
@@ -87,11 +90,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Debug middleware for all requests
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/uploads')) {
-    console.log('🔍 Global middleware - Path:', req.path);
-    console.log('🔍 Global middleware - Method:', req.method);
-    console.log('🔍 Global middleware - Origin:', req.headers.origin);
-    console.log('🔍 Global middleware - Content-Type:', req.headers['content-type']);
-    console.log('🔍 Global middleware - Body:', req.body);
+    logger.debug('Uploads debug', {
+      path: req.path,
+      method: req.method,
+      origin: req.headers.origin,
+      contentType: req.headers['content-type'],
+    });
   }
   next();
 });
@@ -101,8 +105,9 @@ app.use('/api/health', healthRoutes);
 
 // Test route without auth
 app.post('/api/test-upload', (req, res) => {
-  console.log('🧪 Test upload endpoint - Headers:', req.headers);
-  console.log('🧪 Test upload endpoint - Body:', req.body);
+  logger.info('Test upload endpoint', {
+    headers: req.headers,
+  });
   res.json({ 
     success: true, 
     body: req.body, 
@@ -112,9 +117,10 @@ app.post('/api/test-upload', (req, res) => {
 
 // Protected routes with auth
 app.use('/api/uploads', authMiddleware, (req, res, next) => {
-  console.log('🔍 Debug middleware - Method:', req.method);
-  console.log('🔍 Debug middleware - Content-Type:', req.headers['content-type']);
-  console.log('🔍 Debug middleware - Body after auth:', req.body);
+  logger.debug('Uploads after auth', {
+    method: req.method,
+    contentType: req.headers['content-type'],
+  });
   next();
 }, uploadRoutes);
 
@@ -135,7 +141,7 @@ app.post('/api/cache/clear', authMiddleware, clearCache);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error('Unhandled error', { error: err, path: req.path });
   
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ 
