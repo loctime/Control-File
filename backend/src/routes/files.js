@@ -5,6 +5,7 @@ const b2Service = require('../services/b2');
 const multer = require('multer');
 const archiver = require('archiver');
 const { Readable } = require('stream');
+const { logger } = require('../utils/logger');
 // Función simple para verificar visibilidad de items
 const assertItemVisibleForApp = (itemData) => {
   // Por ahora, todos los items son visibles
@@ -28,7 +29,7 @@ router.get('/list', cacheFiles, async (req, res) => {
 
     // Si tenemos datos en cache, usarlos
     if (req.cachedFiles && req.cacheHit) {
-      console.log('🚀 Using cached files data');
+      logger.debug('Using cached files data', { userId: uid, parentId });
       return res.json({
         success: true,
         data: req.cachedFiles,
@@ -73,7 +74,7 @@ router.get('/list', cacheFiles, async (req, res) => {
       });
 
     } catch (filesError) {
-      console.warn('Error consultando archivos:', filesError.message);
+      logger.warn('Error consulting files', { error: filesError.message, userId: uid });
     }
 
     try {
@@ -105,7 +106,7 @@ router.get('/list', cacheFiles, async (req, res) => {
       });
 
     } catch (foldersError) {
-      console.warn('Error consultando carpetas de files:', foldersError.message);
+      logger.warn('Error consulting folders', { error: foldersError.message, userId: uid });
     }
 
     // Solo leer de files collection (enfoque unificado)
@@ -127,7 +128,7 @@ router.get('/list', cacheFiles, async (req, res) => {
 
     return res.json({ items: limitedItems, nextPage });
   } catch (error) {
-    console.error('Error listando archivos y carpetas:', error);
+    logger.error('Error listing files and folders', { error: error.message, userId: uid });
     return res.status(500).json({ 
       error: 'Error interno del servidor', 
       details: process.env.NODE_ENV === 'development' ? error.message : undefined 
@@ -170,14 +171,14 @@ router.post('/presign-get', async (req, res) => {
     // Fallback: si no hay clave de B2 pero existe una URL absoluta (ej. controlAudit), usarla
     if (!key) {
       if (typeof fileData.url === 'string' && /^https?:\/\//i.test(fileData.url)) {
-        console.warn('presign-get: usando URL directa por falta de bucketKey', { fileId, urlHost: (() => { try { return new URL(fileData.url).host; } catch (_) { return 'invalid'; } })() });
+        logger.warn('Using direct URL due to missing bucketKey', { fileId, urlHost: (() => { try { return new URL(fileData.url).host; } catch (_) { return 'invalid'; } })() });
         return res.json({
           downloadUrl: fileData.url,
           fileName: fileData.name,
           fileSize: fileData.size,
         });
       }
-      console.warn('presign-get: archivo sin bucketKey/key', { fileId, hasBucketKey: !!fileData.bucketKey });
+      logger.warn('File without bucketKey/key', { fileId, hasBucketKey: !!fileData.bucketKey });
       return res.status(400).json({ error: 'Archivo sin clave de almacenamiento (bucketKey)' });
     }
 
@@ -190,9 +191,11 @@ router.post('/presign-get', async (req, res) => {
       fileSize: fileData.size
     });
   } catch (error) {
-    console.error('Error generating download URL:', {
+    logger.error('Error generating download URL', {
       error: error?.message || error,
       stack: error?.stack,
+      fileId: req.body.fileId,
+      userId: req.user?.uid,
     });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
@@ -241,7 +244,7 @@ router.post('/delete', invalidateCache('delete'), async (req, res) => {
       message: 'Archivo eliminado exitosamente'
     });
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logger.error('Error deleting file', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -288,7 +291,7 @@ router.post('/rename', invalidateCache('update'), async (req, res) => {
       message: 'Archivo renombrado exitosamente'
     });
   } catch (error) {
-    console.error('Error renaming file:', error);
+    logger.error('Error renaming file', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -324,7 +327,7 @@ router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => 
     try {
       await b2Service.deleteObject(fileData.bucketKey);
     } catch (error) {
-      console.warn('Error deleting from B2 (file might not exist):', error);
+      logger.warn('Error deleting from B2 (file might not exist)', { error: error.message, fileId, bucketKey: fileData.bucketKey });
     }
 
     // Delete from Firestore
@@ -335,7 +338,7 @@ router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => 
       message: 'Archivo eliminado permanentemente'
     });
   } catch (error) {
-    console.error('Error permanently deleting file:', error);
+    logger.error('Error permanently deleting file', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -394,7 +397,7 @@ router.post('/restore', invalidateCache('create'), async (req, res) => {
       message: 'Archivo restaurado exitosamente'
     });
   } catch (error) {
-    console.error('Error restoring file:', error);
+    logger.error('Error restoring file', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -442,7 +445,7 @@ router.post('/zip', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     archive.on('error', (err) => {
-      console.error('ZIP error:', err);
+      logger.error('ZIP error', { error: err.message, userId: req.user?.uid });
       try { res.status(500).end(); } catch (_) {}
     });
 
@@ -475,13 +478,13 @@ router.post('/zip', async (req, res) => {
         const nodeStream = typeof Readable.fromWeb === 'function' ? Readable.fromWeb(response.body) : Readable.from(response.body);
         archive.append(nodeStream, { name: entryName });
       } catch (e) {
-        console.warn('Error añadiendo archivo al ZIP:', meta.id, e);
+        logger.warn('Error adding file to ZIP', { fileId: meta.id, error: e.message, userId: req.user?.uid });
       }
     }
 
     await archive.finalize();
   } catch (error) {
-    console.error('Error creando ZIP:', error);
+    logger.error('Error creating ZIP', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -543,7 +546,7 @@ router.post('/replace', multer({ storage: multer.memoryStorage() }).single('file
 
     res.json({ success: true, message: 'Archivo reemplazado', size: newSize, mime: req.file.mimetype });
   } catch (error) {
-    console.error('Error replacing file:', error);
+    logger.error('Error replacing file', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

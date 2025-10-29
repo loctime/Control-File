@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
+const { logger } = require('../utils/logger');
 
 // Import auth middleware
 const authMiddleware = require('../middleware/auth');
@@ -65,7 +66,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       fileName: fileData.name,
     });
   } catch (error) {
-    console.error('Error creating share:', error);
+    logger.error('Error creating share', { error: error.message, fileId: req.body.fileId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -103,7 +104,7 @@ router.get('/:token', async (req, res) => {
       downloadCount: shareData.downloadCount,
     });
   } catch (error) {
-    console.error('Error getting share info:', error);
+    logger.error('Error getting share info', { error: error.message, token: req.params.token });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -150,7 +151,7 @@ router.post('/:token/download', async (req, res) => {
     // Virus scan si es archivo compartido sospechoso y no ha sido escaneado
     const cloudmersive = require('../services/cloudmersive');
     if (cloudmersive.enabled && !shareData.virusScanned && cloudmersive.isSuspiciousFile(fileData.name, fileData.size, fileData.mime)) {
-      console.log('🛡️ Scanning shared file for viruses...');
+      logger.info('Scanning shared file for viruses', { fileName: fileData.name, token: req.params.token });
       try {
         const fileBuffer = await b2Service.getObjectBuffer(fileData.bucketKey);
         const virusScanResult = await cloudmersive.scanVirus(fileBuffer);
@@ -170,10 +171,10 @@ router.post('/:token/download', async (req, res) => {
         
         // Marcar como escaneado
         await shareRef.update({ virusScanned: true });
-        console.log('✅ Shared file virus scan passed');
+        logger.info('Shared file virus scan passed', { fileName: fileData.name, token: req.params.token });
         
       } catch (error) {
-        console.error('⚠️ Virus scan failed:', error);
+        logger.error('Virus scan failed', { error: error.message, fileName: fileData.name, token: req.params.token });
         // Continuar sin escaneo si falla
       }
     }
@@ -192,7 +193,7 @@ router.post('/:token/download', async (req, res) => {
       fileSize: fileData.size,
     });
   } catch (error) {
-    console.error('Error downloading shared file:', error);
+    logger.error('Error downloading shared file', { error: error.message, token: req.params.token });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -247,7 +248,7 @@ router.get('/:token/image', async (req, res) => {
     // Redirect to the actual file URL
     res.redirect(downloadUrl);
   } catch (error) {
-    console.error('Error getting shared image:', error);
+    logger.error('Error getting shared image', { error: error.message, token: req.params.token });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -286,7 +287,7 @@ router.post('/revoke', authMiddleware, async (req, res) => {
       message: 'Enlace revocado exitosamente',
     });
   } catch (error) {
-    console.error('Error revoking share:', error);
+    logger.error('Error revoking share', { error: error.message, shareId: req.body.shareId, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -320,7 +321,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     res.json({ shares });
   } catch (error) {
-    console.error('Error listing shares:', error);
+    logger.error('Error listing shares', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -347,7 +348,7 @@ router.post('/:token/increment-counter', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     // Si falla, no es crítico - el share ya se sirvió desde el Worker
-    console.error('Error incrementing counter:', error);
+    logger.warn('Error incrementing counter', { error: error.message, token: req.params.token });
     // Responder success de todos modos para no hacer retry innecesarios
     res.json({ success: true, warning: 'Counter not updated' });
   }

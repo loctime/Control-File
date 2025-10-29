@@ -3,6 +3,7 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
+const { logger } = require('../utils/logger');
 
 // Create folder endpoint
 router.post('/create', invalidateCache('create'), async (req, res) => {
@@ -105,7 +106,7 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating folder:', error);
+    logger.error('Error creating folder', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -183,7 +184,7 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting folder by slug:', error);
+    logger.error('Error getting folder by slug', { error: error.message, username: req.params.username, path: req.params.path });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -287,7 +288,7 @@ router.get('/root', async (req, res) => {
 
     return res.json({ folderId, folder: { id: folderId, ...folderData } });
   } catch (error) {
-    console.error('Error en GET /api/folders/root:', error);
+    logger.error('Error in GET /api/folders/root', { error: error.message, userId: req.user?.uid });
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

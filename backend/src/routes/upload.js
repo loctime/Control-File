@@ -4,11 +4,11 @@ const admin = require('firebase-admin');
 const b2Service = require('../services/b2');
 const multer = require('multer'); // Added multer for file uploads
 const { resolveParentAndAncestors } = require('../services/metadata');
+const { logger } = require('../utils/logger');
 
 // Test endpoint for debugging (no auth required)
 router.post('/test-no-auth', async (req, res) => {
-  console.log('🧪 Test endpoint (no auth) - Headers:', req.headers);
-  console.log('🧪 Test endpoint (no auth) - Body:', req.body);
+  logger.debug('Test endpoint (no auth)', { headers: req.headers, body: req.body });
   res.json({ 
     success: true, 
     body: req.body, 
@@ -18,9 +18,7 @@ router.post('/test-no-auth', async (req, res) => {
 
 // Test endpoint for debugging
 router.post('/test', async (req, res) => {
-  console.log('🧪 Test endpoint - Headers:', req.headers);
-  console.log('🧪 Test endpoint - Body:', req.body);
-  console.log('🧪 Test endpoint - User:', req.user);
+  logger.debug('Test endpoint', { headers: req.headers, body: req.body, user: req.user });
   res.json({ 
     success: true, 
     body: req.body, 
@@ -32,10 +30,12 @@ router.post('/test', async (req, res) => {
 // Generate presigned URL for upload
 router.post('/presign', async (req, res) => {
   try {
-    console.log('📤 Presign request headers:', req.headers);
-    console.log('📤 Presign request body:', req.body);
-    console.log('📤 Presign request user:', req.user);
-    console.log('📤 Content-Type:', req.headers['content-type']);
+    logger.debug('Presign request', { 
+      headers: req.headers, 
+      body: req.body, 
+      user: req.user,
+      contentType: req.headers['content-type']
+    });
     
     const {
       name: nameDirect,
@@ -51,10 +51,10 @@ router.post('/presign', async (req, res) => {
     const mime = mimeDirect || mimeType;
     const { uid } = req.user;
 
-    console.log('📤 Parsed data (normalized):', { name, size, mime, parentId, uid });
+    logger.debug('Parsed upload data', { name, size, mime, parentId, uid });
 
     if (!name || !size || !mime) {
-      console.log('❌ Missing required fields:', { name: !!name, size: !!size, mime: !!mime });
+      logger.warn('Missing required fields', { name: !!name, size: !!size, mime: !!mime });
       return res.status(400).json({ error: 'Faltan parámetros requeridos', message: 'name/fileName, size/fileSize y mime/mimeType son obligatorios' });
     }
 
@@ -65,19 +65,19 @@ router.post('/presign', async (req, res) => {
     }
 
     // Get user quota information
-    console.log('📊 Getting user quota for UID:', uid);
+    logger.debug('Getting user quota', { uid });
     const userRef = admin.firestore().collection('users').doc(uid);
     const userDoc = await userRef.get();
-
+    
     if (!userDoc.exists) {
-      console.log('❌ User not found in Firestore:', uid);
+      logger.warn('User not found in Firestore', { uid });
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     const userData = userDoc.data();
     const { planQuotaBytes, usedBytes, pendingBytes } = userData;
     
-    console.log('📊 User quota data:', { planQuotaBytes, usedBytes, pendingBytes, requestedSize: size });
+    logger.debug('User quota data', { planQuotaBytes, usedBytes, pendingBytes, requestedSize: size });
 
     // Check if user has enough quota
     const totalUsed = usedBytes + pendingBytes + size;
@@ -93,12 +93,12 @@ router.post('/presign', async (req, res) => {
     }
 
     // Resolve parent and ancestors
-    console.log('📁 Resolving parent folder:', { parentId, uid });
+    logger.debug('Resolving parent folder', { parentId, uid });
     const resolved = await resolveParentAndAncestors(uid, parentId);
     const parentPath = resolved.path || '';
     const effectiveParentId = resolved.parentId || parentId || null;
     const ancestors = resolved.ancestors || [];
-    console.log('📁 Resolved parent info:', { parentPath, effectiveParentId, ancestors });
+    logger.debug('Resolved parent info', { parentPath, effectiveParentId, ancestors });
 
     // Generate file key
     const fileKey = generateFileKey(uid, parentPath, name);
@@ -160,7 +160,7 @@ router.post('/presign', async (req, res) => {
 
     res.json(uploadSessionData);
   } catch (error) {
-    console.error('Error in presign upload:', error);
+    logger.error('Error in presign upload', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -240,7 +240,7 @@ router.post('/confirm', async (req, res) => {
       message: 'Archivo subido exitosamente'
     });
   } catch (error) {
-    console.error('Error confirming upload:', error);
+    logger.error('Error confirming upload', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -248,9 +248,12 @@ router.post('/confirm', async (req, res) => {
 // Proxy upload endpoint - recibe archivo y lo sube a B2
 router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single('file'), async (req, res) => {
   try {
-    console.log('📤 Proxy upload request received');
-    console.log('📤 File info:', req.file);
-    console.log('📤 Session ID:', req.body.sessionId);
+    logger.info('Proxy upload request received', { 
+      fileName: req.file?.originalname, 
+      fileSize: req.file?.size, 
+      sessionId: req.body.sessionId,
+      userId: req.user?.uid
+    });
     
     if (!req.file) {
       return res.status(400).json({ error: 'No se recibió archivo' });
@@ -281,7 +284,7 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     let virusScanResult = null;
 
     if (cloudmersive.enabled && cloudmersive.isSuspiciousFile(sessionData.name, req.file.size, req.file.mimetype)) {
-      console.log('🛡️ Scanning suspicious file for viruses...');
+      logger.info('Scanning suspicious file for viruses', { fileName: sessionData.name });
       try {
         virusScanResult = await cloudmersive.scanVirus(req.file.buffer);
         if (!virusScanResult.clean) {
@@ -290,9 +293,9 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
             code: 'VIRUS_DETECTED'
           });
         }
-        console.log('✅ Virus scan passed');
+        logger.info('Virus scan passed', { fileName: sessionData.name });
       } catch (error) {
-        console.error('⚠️ Virus scan failed:', error);
+        logger.error('Virus scan failed', { error: error.message, fileName: sessionData.name });
         // Continuar sin escaneo si falla (graceful degradation)
       }
     }
@@ -302,7 +305,7 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     let mimeToUpload = req.file.mimetype;
 
     if (cloudmersive.enabled && cloudmersive.needsAutoConversion(sessionData.name, req.file.size, req.file.mimetype)) {
-      console.log('🔄 Auto-conversion needed (not implemented)');
+      logger.debug('Auto-conversion needed (not implemented)', { fileName: sessionData.name });
     }
 
     // Subir archivo a B2 usando el backend
@@ -312,7 +315,11 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
       mimeToUpload
     );
 
-    console.log('📤 File uploaded to B2 successfully:', uploadResult);
+    logger.info('File uploaded to B2 successfully', { 
+      fileName: sessionData.name, 
+      fileId: uploadResult.fileId,
+      userId: req.user?.uid 
+    });
 
     // Actualizar estado de la sesión
     await sessionRef.update({
@@ -329,7 +336,7 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     });
 
   } catch (error) {
-    console.error('Error in proxy upload:', error);
+    logger.error('Error in proxy upload', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

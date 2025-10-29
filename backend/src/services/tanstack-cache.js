@@ -1,6 +1,8 @@
 // backend/src/services/tanstack-cache.js
 // Implementación de cache simple para el backend sin dependencias externas
 
+const { logger } = require('../utils/logger');
+
 class TanStackCache {
   constructor() {
     this.cache = new Map();
@@ -28,23 +30,23 @@ class TanStackCache {
       const cached = this.cache.get(cacheKey);
       if (cached && this.isValidCacheEntry(cached)) {
         this.stats.hits++;
-        console.log(`✅ Cache HIT for ${cacheKey}`);
+        logger.debug(`Cache HIT for ${cacheKey}`);
         return cached.data;
       }
 
       // Si no está en cache o está expirado, obtener de DB
-      console.log(`🔍 Fetching files from DB for user ${userId}, folder ${folderId}`);
+      logger.debug(`Fetching files from DB for user ${userId}, folder ${folderId}`);
       const result = await this.fetchFilesFromDB(userId, folderId);
       
       // Guardar en cache
       this.setCacheEntry(cacheKey, result);
       
       this.stats.misses++;
-      console.log(`❌ Cache MISS for ${cacheKey} - data fetched from DB`);
+      logger.debug(`Cache MISS for ${cacheKey} - data fetched from DB`);
       return result;
     } catch (error) {
       this.stats.misses++;
-      console.log(`❌ Cache MISS for ${cacheKey}:`, error.message);
+      logger.warn(`Cache MISS for ${cacheKey}:`, { error: error.message });
       throw error;
     }
   }
@@ -59,23 +61,23 @@ class TanStackCache {
       const cached = this.cache.get(cacheKey);
       if (cached && this.isValidCacheEntry(cached)) {
         this.stats.hits++;
-        console.log(`✅ Cache HIT for ${cacheKey}`);
+        logger.debug(`Cache HIT for ${cacheKey}`);
         return cached.data;
       }
 
       // Si no está en cache o está expirado, obtener de DB
-      console.log(`🔍 Fetching folders from DB for user ${userId}`);
+      logger.debug(`Fetching folders from DB for user ${userId}`);
       const result = await this.fetchFoldersFromDB(userId);
       
       // Guardar en cache
       this.setCacheEntry(cacheKey, result);
       
       this.stats.misses++;
-      console.log(`❌ Cache MISS for ${cacheKey} - data fetched from DB`);
+      logger.debug(`Cache MISS for ${cacheKey} - data fetched from DB`);
       return result;
     } catch (error) {
       this.stats.misses++;
-      console.log(`❌ Cache MISS for ${cacheKey}:`, error.message);
+      logger.warn(`Cache MISS for ${cacheKey}:`, { error: error.message });
       throw error;
     }
   }
@@ -99,9 +101,9 @@ class TanStackCache {
         }
       }
 
-      console.log(`🚀 Prefetched related data for user ${userId}`);
+      logger.debug(`Prefetched related data for user ${userId}`);
     } catch (error) {
-      console.log(`⚠️ Prefetch error:`, error.message);
+      logger.warn(`Prefetch error:`, { error: error.message });
     }
   }
 
@@ -109,7 +111,7 @@ class TanStackCache {
   invalidateFiles(userId, folderId) {
     const cacheKey = `files-${userId}-${folderId}`;
     this.cache.delete(cacheKey);
-    console.log(`🗑️ Invalidated cache for files-${userId}-${folderId}`);
+    logger.debug(`Invalidated cache for files-${userId}-${folderId}`);
   }
 
   // Invalidar todo el cache de un usuario
@@ -120,7 +122,7 @@ class TanStackCache {
         this.cache.delete(key);
       }
     }
-    console.log(`🗑️ Invalidated all cache for user ${userId}`);
+    logger.debug(`Invalidated all cache for user ${userId}`);
   }
 
   // Obtener estadísticas del cache
@@ -234,16 +236,17 @@ class TanStackCache {
         return bTime - aTime;
       });
 
-      console.log(`📊 Fetched ${items.length} items from DB for user ${userId}, folder ${folderId}`);
+      logger.debug(`Fetched ${items.length} items from DB for user ${userId}, folder ${folderId}`);
       return items;
     } catch (error) {
-      console.error('Error fetching files from DB:', error);
+      logger.error('Error fetching files from DB', { error: error.message, userId, folderId });
       
       // Si es error de índice, mostrar enlace para crear índice
       if (error.code === 9 && error.details && error.details.includes('index')) {
-        console.log('🔗 ENLACE PARA CREAR ÍNDICE:');
-        console.log('🔗 ' + error.details);
-        console.log('🔗 Copia este enlace y ábrelo en el navegador para crear el índice automáticamente');
+        logger.info('ENLACE PARA CREAR ÍNDICE:', { 
+          details: error.details,
+          message: 'Copia este enlace y ábrelo en el navegador para crear el índice automáticamente'
+        });
       }
       
       throw error;
@@ -276,16 +279,17 @@ class TanStackCache {
         });
       });
 
-      console.log(`📁 Fetched ${folders.length} folders from DB for user ${userId}`);
+      logger.debug(`Fetched ${folders.length} folders from DB for user ${userId}`);
       return folders;
     } catch (error) {
-      console.error('Error fetching folders from DB:', error);
+      logger.error('Error fetching folders from DB', { error: error.message, userId });
       
       // Si es error de índice, mostrar enlace para crear índice
       if (error.code === 9 && error.details && error.details.includes('index')) {
-        console.log('🔗 ENLACE PARA CREAR ÍNDICE:');
-        console.log('🔗 ' + error.details);
-        console.log('🔗 Copia este enlace y ábrelo en el navegador para crear el índice automáticamente');
+        logger.info('ENLACE PARA CREAR ÍNDICE:', { 
+          details: error.details,
+          message: 'Copia este enlace y ábrelo en el navegador para crear el índice automáticamente'
+        });
       }
       
       throw error;
