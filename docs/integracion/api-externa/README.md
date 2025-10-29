@@ -43,7 +43,7 @@ const response = await fetch(`${BACKEND_URL}/api/folders/create`, {
     id: `miapp-main-${Date.now()}`,
     name: 'Mi App',
     parentId: null,
-    source: 'taskbar', // ✅ Aparece en taskbar
+    source: 'taskbar', // ✅ Aaparece en taskbar
     icon: 'Taskbar',
     color: 'text-blue-600',
     metadata: {
