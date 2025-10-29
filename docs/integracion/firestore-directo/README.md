@@ -72,3 +72,6 @@ await setDoc(doc(db, 'files', folderData.id), folderData);
 ---
 
 # 🎉 **¡Integración Simple y Directa!**
+
+
+

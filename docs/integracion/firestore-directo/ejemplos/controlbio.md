@@ -252,3 +252,6 @@ const results = await searchAnalysisFiles('genético');
 ---
 
 # 🎉 **¡ControlBio integrado con ControlFile!**
+
+
+

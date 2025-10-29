@@ -355,3 +355,6 @@ await deleteFile(fileId);
 ---
 
 # 🔌 **¡App Externa integrada con ControlFile!**
+
+
+

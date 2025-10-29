@@ -41,6 +41,46 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
   - Form fields: `fileId` (text), `file` (blob)
   - Respuesta: `{ success: true, message, size, mime }`
 
+## Avatares y Fotos de Perfil
+
+Para apps que comparten Firestore con ControlFile:
+
+### 🔄 Flujo Completo:
+1. **Subir avatar** → `/api/uploads/presign` + upload + `/api/uploads/confirm`
+2. **Guardar fileId** → En documento de usuario en Firestore
+3. **Obtener URL** → `/api/files/presign-get` con `fileId`
+
+### Ejemplo:
+```typescript
+// 1. Subir avatar
+const presign = await fetch('/api/uploads/presign', {
+  method: 'POST',
+  body: JSON.stringify({ name: 'avatar.jpg', size, mime: 'image/jpeg', parentId: null })
+});
+
+// 2. Upload a B2
+await fetch(presignedUrl, { method: 'POST', body: formData });
+
+// 3. Confirmar y obtener fileId
+const confirm = await fetch('/api/uploads/confirm', {
+  method: 'POST',
+  body: JSON.stringify({ uploadSessionId })
+});
+const { fileId } = await confirm.json();
+
+// 4. Guardar en Firestore
+await updateDoc(doc(db, 'users', userId), { avatarFileId: fileId });
+
+// 5. Obtener URL para mostrar
+const urlResp = await fetch('/api/files/presign-get', {
+  method: 'POST',
+  body: JSON.stringify({ fileId })
+});
+const { downloadUrl } = await urlResp.json();
+```
+
+📚 **Documentación completa:** [Guía de Avatares](../docs/integracion/AVATARES_PERFILES.md)
+
 ## Uploads
 - POST `/api/uploads/presign` (auth)
   - Body: `{ name|fileName, size|fileSize, mime|mimeType, parentId?: string | null }`
