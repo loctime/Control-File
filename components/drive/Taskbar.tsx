@@ -8,6 +8,7 @@ import { useNavigation } from '@/hooks/useNavigation';
 import { useQueryInvalidation } from '@/hooks/useQueryInvalidation';
 import { useRouter } from 'next/navigation';
 import { useFiles } from '@/hooks/useFiles';
+import { logger, logError } from '@/lib/logger-client';
 import { Button } from '@/components/ui/button';
 import { 
   Home, 
@@ -43,8 +44,8 @@ export function Taskbar() {
     const userId = user?.uid;
     if (!userId) return [];
     
-    console.log('🔍 Taskbar - Total items en store:', items.length);
-    console.log('🔍 Taskbar - Items:', items.map(item => ({ id: item.id, name: item.name, source: item.metadata?.source })));
+    logger.debug('Taskbar - Total items en store', { count: items.length });
+    logger.debug('Taskbar - Items', { items: items.map(item => ({ id: item.id, name: item.name, source: item.metadata?.source })) });
     
     // Solo mostrar carpetas principales con source: 'taskbar'
     const taskbarFolders = items.filter(item => 
@@ -55,8 +56,8 @@ export function Taskbar() {
       item.metadata?.source === 'taskbar' // Solo carpetas del taskbar
     );
     
-    console.log('🔍 Taskbar - Carpetas encontradas:', taskbarFolders.length);
-    console.log('🔍 Taskbar - Carpetas:', taskbarFolders.map(f => ({ id: f.id, name: f.name, source: f.metadata?.source })));
+    logger.debug('Taskbar - Carpetas encontradas', { count: taskbarFolders.length });
+    logger.debug('Taskbar - Carpetas', { folders: taskbarFolders.map(f => ({ id: f.id, name: f.name, source: f.metadata?.source })) });
     
     return taskbarFolders;
   }, [items, user]);
@@ -159,7 +160,7 @@ export function Taskbar() {
     if (newFolderName.trim() && !isCreating) {
       setIsCreating(true);
       // Crear carpeta específica para el taskbar
-      console.log('📁 Creando carpeta desde taskbar:', newFolderName);
+      logger.info('Creando carpeta desde taskbar', { folderName: newFolderName });
       
       try {
         const folderId = await createMainFolder(newFolderName.trim(), 'Taskbar', 'text-blue-600', 'taskbar');
@@ -174,7 +175,7 @@ export function Taskbar() {
         setIsAddingFolder(false);
         closeTrashView();
       } catch (error) {
-        console.error('Error creando carpeta:', error);
+        logError(error, 'creating folder from taskbar', { folderName: newFolderName });
         addToast({
           title: 'Error',
           message: 'No se pudo crear la carpeta',
@@ -204,7 +205,7 @@ export function Taskbar() {
       await logOut();
       router.push('/auth');
     } catch (error) {
-      console.error('Error logging out:', error);
+      logError(error, 'logging out from taskbar');
     }
   };
 

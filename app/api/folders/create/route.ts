@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
+import { logger, logError } from '@/lib/logger-client';
 
 // Evitar pre-renderizado durante el build
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,7 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📁 API create folder endpoint called');
+    logger.info('API create folder endpoint called');
     
     // Verify authentication
     const authHeader = request.headers.get('authorization');
@@ -29,14 +30,14 @@ export async function POST(request: NextRequest) {
     }
 
     // DEBUG: Log completo del request
-    console.log('🔍 DEBUG - Request body completo:', JSON.stringify(requestBody, null, 2));
-    console.log('🔍 DEBUG - metadata extraído:', metadata);
-    console.log('🔍 DEBUG - source extraído:', source);
-    console.log('🔍 DEBUG - source del requestBody:', requestBody.source);
+    logger.debug('Request body completo', { requestBody });
+    logger.debug('metadata extraído', { metadata });
+    logger.debug('source extraído', { source });
+    logger.debug('source del requestBody', { source: requestBody.source });
 
     // ARREGLADO: Usar source de metadata si existe, sino del nivel raíz, sino 'navbar'
     const finalSource = metadata?.source || source || 'navbar';
-    console.log('📁 Creating folder:', { name, parentId, userId, finalSource, metadataSource: metadata?.source, rootSource: source });
+    logger.info('Creating folder', { name, parentId, userId, finalSource, metadataSource: metadata?.source, rootSource: source });
 
     // Get Firestore instance
     const adminDb = requireAdminDb();
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     // Save to Firestore
     await adminDb.collection('files').doc(id).set(folderData);
 
-    console.log('✅ Folder created successfully:', id);
+    logger.info('Folder created successfully', { folderId: id, name, userId });
 
     return NextResponse.json({ 
       success: true, 
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       folder: folderData
     });
   } catch (error) {
-    console.error('❌ Error creating folder:', error);
+    logError(error, 'creating folder', { userId: request.headers.get('authorization') ? 'authenticated' : 'anonymous' });
     const message = error instanceof Error ? error.message : 'Error interno del servidor';
     return NextResponse.json(
       { error: message },
