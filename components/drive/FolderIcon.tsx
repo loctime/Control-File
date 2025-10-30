@@ -76,15 +76,7 @@ export function FolderIcon({ folder, onClick, isSelected, itemIndex, onShiftRang
     }
   };
 
-  // Determinar el ancho del contenedor
-  const getContainerWidth = () => {
-    switch (iconSize) {
-      case 'extra-large': return '160px';
-      case 'large': return '140px';
-      case 'small': return '100px';
-      default: return '120px'; // medium
-    }
-  };
+  // Ancho del contenedor gestionado por grid con minmax; sin fijar ancho aquí
 
   return (
     <div
@@ -97,10 +89,6 @@ export function FolderIcon({ folder, onClick, isSelected, itemIndex, onShiftRang
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
-      style={{ 
-        minWidth: getContainerWidth(), 
-        maxWidth: getContainerWidth() 
-      }}
       data-item-id={folder.id}
     >
       <div className={`${getContainerSize()} mb-2 flex items-center justify-center`}>

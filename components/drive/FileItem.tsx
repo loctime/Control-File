@@ -217,14 +217,7 @@ export const FileItem = memo(function FileItem({ file, isSelected, itemIndex, on
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
-      style={{ 
-        minWidth: iconSize === 'extra-large' ? '220px' : 
-                  iconSize === 'large' ? '180px' : 
-                  iconSize === 'small' ? '120px' : '160px',
-        maxWidth: iconSize === 'extra-large' ? '220px' : 
-                  iconSize === 'large' ? '180px' : 
-                  iconSize === 'small' ? '120px' : '160px'
-      }}
+      style={{}}
       data-item-id={file.id}
     >
       <div className={`${iconSize === 'extra-large' ? 'w-32 h-32' : 
