@@ -75,19 +75,9 @@ export const useDriveStore = create<DriveState>()(
       // Actions
       setItems: (items) => set({ items }),
       setSelectedItems: (items) => 
-        set((state) => {
-          // Filtrar elementos que no existen
-          const validItems = items.filter(itemId => {
-            const item = state.items.find(i => i.id === itemId);
-            return item !== undefined;
-          });
-          return { selectedItems: validItems };
-        }),
+        set(() => ({ selectedItems: items })),
       toggleItemSelection: (itemId, multi = false) =>
         set((state) => {
-          const item = state.items.find(i => i.id === itemId);
-          if (!item) return state;
-          
           if (multi) {
             const isSelected = state.selectedItems.includes(itemId);
             return {
