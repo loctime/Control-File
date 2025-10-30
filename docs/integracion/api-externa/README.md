@@ -32,7 +32,7 @@ const BACKEND_URL = 'https://controlfile.onrender.com';
 // 2. Obtener token de autenticación
 const token = await getAuth().currentUser?.getIdToken();
 
-// 3. Crear carpeta en taskbar
+// 3. Crear carpeta en taskbar.
 const response = await fetch(`${BACKEND_URL}/api/folders/create`, {
   method: 'POST',
   headers: {
