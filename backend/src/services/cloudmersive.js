@@ -1,10 +1,23 @@
-const Cloudmersive = require('cloudmersive-virus-api-client');
-const CloudmersiveOCR = require('cloudmersive-ocr-api-client');
-const CloudmersiveConvert = require('cloudmersive-convert-api-client');
-
 class CloudmersiveService {
   constructor() {
     this.apiKey = process.env.CLOUDMERSIVE_API_KEY;
+    
+    // Verificar si los módulos están instalados
+    let Cloudmersive, CloudmersiveOCR, CloudmersiveConvert;
+    
+    try {
+      Cloudmersive = require('cloudmersive-virus-api-client');
+      CloudmersiveOCR = require('cloudmersive-ocr-api-client');
+      CloudmersiveConvert = require('cloudmersive-convert-api-client');
+    } catch (error) {
+      console.warn('⚠️ Módulos de Cloudmersive no instalados. Cloudmersive features will be disabled.');
+      this.enabled = false;
+      this.apiKey = null;
+      this.virusApi = null;
+      this.ocrApi = null;
+      this.convertApi = null;
+      return;
+    }
     
     if (!this.apiKey) {
       console.warn('⚠️ CLOUDMERSIVE_API_KEY not configured. Cloudmersive features will be disabled.');
@@ -14,19 +27,24 @@ class CloudmersiveService {
     
     this.enabled = true;
     
-    // Virus API
-    this.virusApi = new Cloudmersive.ScanApi();
-    this.virusApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
-    
-    // OCR API
-    this.ocrApi = new CloudmersiveOCR.ImageOcrApi();
-    this.ocrApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
-    
-    // Convert API
-    this.convertApi = new CloudmersiveConvert.ConvertDocumentApi();
-    this.convertApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
-    
-    console.log('✅ Cloudmersive service initialized');
+    try {
+      // Virus API
+      this.virusApi = new Cloudmersive.ScanApi();
+      this.virusApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
+      
+      // OCR API
+      this.ocrApi = new CloudmersiveOCR.ImageOcrApi();
+      this.ocrApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
+      
+      // Convert API
+      this.convertApi = new CloudmersiveConvert.ConvertDocumentApi();
+      this.convertApi.apiClient.authentications['Apikey'].apiKey = this.apiKey;
+      
+      console.log('✅ Cloudmersive service initialized');
+    } catch (error) {
+      console.warn('⚠️ Error inicializando Cloudmersive:', error.message);
+      this.enabled = false;
+    }
   }
 
   // Virus Scan
@@ -115,5 +133,6 @@ class CloudmersiveService {
   }
 }
 
+// Exportar instancia singleton
 module.exports = new CloudmersiveService();
 
