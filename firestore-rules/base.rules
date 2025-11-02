@@ -12,13 +12,13 @@ function controlStoreUserRole() {
     : null;
 }
 
-// Roles desde documento - CONTROLD (para otras apps)
+// Roles desde documento - CONTROLREMITO (para otras apps)
 function userDocExists() {
-  return isAuth() && exists(/databases/$(db)/documents/apps/controld/users/$(uid()));
+  return isAuth() && exists(/databases/$(db)/documents/apps/controlRemito/users/$(uid()));
 }
 function userRole() {
   return isAuth() && userDocExists()
-    ? get(/databases/$(db)/documents/apps/controld/users/$(uid())).data.role
+    ? get(/databases/$(db)/documents/apps/controlRemito/users/$(uid())).data.role
     : null;
 }
 
@@ -26,7 +26,7 @@ function userRole() {
 function isControlStoreMaxDev() { return controlStoreUserRole() == 'maxdev'; }
 function isControlStoreAdmin()  { return controlStoreUserRole() == 'admin' || controlStoreUserRole() == 'maxdev'; }
 
-// Helpers para CONTROLD y otras apps
+// Helpers para CONTROLREMITO y otras apps
 function isMaxDev() { return userRole() == 'maxdev'; }
 function isAdmin()  { return userRole() == 'admin' || userRole() == 'maxdev'; }
 function isFactory(){ return userRole() == 'factory'; }

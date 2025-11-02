@@ -1,6 +1,6 @@
-// ========= CONTROLD (remitos) =========
+// ========= CONTROLREMITO (remitos) =========
 
-match /apps/controld {
+match /apps/controlRemito {
   match /users/{userId} {
     allow read: if isAuth();
     allow create, update: if isAuth();

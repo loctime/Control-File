@@ -11,7 +11,7 @@ const files = [
   'controlFile.rules',
   'controlbio.rules',
   'controlciclo.rules',
-  'controldoc.rules',
+  'controlRemito.rules',
   'controlgastos.rules',
   'controllaudit.rules',
   'controlstore.rules'

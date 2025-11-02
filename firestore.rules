@@ -19,13 +19,13 @@ service cloud.firestore {
         : null;
     }
     
-    // Roles desde documento - CONTROLD (para otras apps)
+    // Roles desde documento - CONTROLREMITO (para otras apps)
     function userDocExists() {
-      return isAuth() && exists(/databases/$(db)/documents/apps/controld/users/$(uid()));
+      return isAuth() && exists(/databases/$(db)/documents/apps/controlRemito/users/$(uid()));
     }
     function userRole() {
       return isAuth() && userDocExists()
-        ? get(/databases/$(db)/documents/apps/controld/users/$(uid())).data.role
+        ? get(/databases/$(db)/documents/apps/controlRemito/users/$(uid())).data.role
         : null;
     }
     
@@ -33,7 +33,7 @@ service cloud.firestore {
     function isControlStoreMaxDev() { return controlStoreUserRole() == 'maxdev'; }
     function isControlStoreAdmin()  { return controlStoreUserRole() == 'admin' || controlStoreUserRole() == 'maxdev'; }
     
-    // Helpers para CONTROLD y otras apps
+    // Helpers para CONTROLREMITO y otras apps
     function isMaxDev() { return userRole() == 'maxdev'; }
     function isAdmin()  { return userRole() == 'admin' || userRole() == 'maxdev'; }
     function isFactory(){ return userRole() == 'factory'; }
@@ -283,11 +283,11 @@ service cloud.firestore {
     
     
 
-    /* ========= CONTROLDOC ========= */
+    /* ========= CONTROLREMITO ========= */
     
-    // ========= CONTROLD (remitos) =========
+    // ========= CONTROLREMITO (remitos) =========
     
-    match /apps/controld {
+    match /apps/controlRemito {
       match /users/{userId} {
         allow read: if isAuth();
         allow create, update: if isAuth();
@@ -342,29 +342,81 @@ service cloud.firestore {
     
     // ========= CONTROLGASTOS =========
     
-    match /apps/controlgastos/users/{userId}/{collection=**}/{docId} {
+    // Estructura organizada: apps/controlgastos/users/{userId}/...
+    match /apps/controlgastos/users/{userId}/expenses/{expenseId} {
       allow read, write: if isAuth() && userId == uid();
+      allow create: if isAuth() && userId == uid();
+      allow update, delete: if isAuth() && userId == uid();
     }
     
+    match /apps/controlgastos/users/{userId}/payments/{paymentId} {
+      allow read, write: if isAuth() && userId == uid();
+      allow create: if isAuth() && userId == uid();
+      allow update, delete: if isAuth() && userId == uid();
+    }
+    
+    match /apps/controlgastos/users/{userId}/receipts/{receiptId} {
+      allow read, write: if isAuth() && userId == uid();
+      allow create: if isAuth() && userId == uid();
+      allow update, delete: if isAuth() && userId == uid();
+    }
+    
+    match /apps/controlgastos/users/{userId}/recurring_items/{itemId} {
+      allow read: if isAuth() && userId == uid();
+      allow create: if isAuth() 
+                    && userId == uid()
+                    && request.resource.data.userId == userId;
+      allow update: if isAuth() 
+                    && userId == uid()
+                    && resource.data.userId == userId;
+      allow delete: if isAuth() 
+                    && userId == uid()
+                    && resource.data.userId == userId;
+    }
+    
+    match /apps/controlgastos/users/{userId}/recurring_items_instances/{instanceId} {
+      allow read: if isAuth() && userId == uid();
+      allow create: if isAuth() 
+                    && userId == uid()
+                    && request.resource.data.userId == userId;
+      allow update: if isAuth() 
+                    && userId == uid()
+                    && resource.data.userId == userId;
+      allow delete: if isAuth() 
+                    && userId == uid()
+                    && resource.data.userId == userId;
+    }
+    
+    match /apps/controlgastos/users/{userId}/settings/{settingId} {
+      allow read, write: if isAuth() && userId == uid();
+      allow create: if isAuth() && userId == uid();
+      allow update, delete: if isAuth() && userId == uid();
+    }
+    
+    // Colecciones globales de ControlGastos
     match /apps/controlgastos/categories/{categoryId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAuth();
     }
     
-    match /expenses/{id} {
+    // Reglas legacy para ControlGastos (temporal - compatibilidad hacia atrás)
+    match /expenses/{expenseId} {
+      allow read, write: if isAuth() && resource.data.userId == uid();
       allow create: if isAuth() && request.resource.data.userId == uid();
-      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+      allow update, delete: if isAuth() && resource.data.userId == uid();
     }
     
-    match /payments/{id} {
+    match /payments/{paymentId} {
+      allow read, write: if isAuth() && resource.data.userId == uid();
       allow create: if isAuth() && request.resource.data.userId == uid();
-      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+      allow update, delete: if isAuth() && resource.data.userId == uid();
     }
     
-    match /invoices/{id} {
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuth() && resource.data.userId == uid();
       allow create: if isAuth() && request.resource.data.userId == uid();
-      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+      allow update, delete: if isAuth() && resource.data.userId == uid();
     }
-    
     
 
     /* ========= CONTROLLAUDIT ========= */
