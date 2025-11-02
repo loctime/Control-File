@@ -1,0 +1,6 @@
+// ========= CONTROLCICLO =========
+
+match /apps/controlciclo/users/{userId}/{document=**} {
+  allow read, write: if isAuth() && userId == uid();
+}
+

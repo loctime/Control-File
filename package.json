@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "build:rules": "node firestore-rules/build.js",
     "reconcile": "node scripts/reconcile.js",
     "add-domain": "node scripts/add-domain.js",
     "test-domain": "node scripts/test-domain.js",

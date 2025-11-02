@@ -1,41 +1,626 @@
 rules_version = '2';
+
 service cloud.firestore {
-  match /databases/{database}/documents {
-    // Users can only access their own data
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+  match /databases/{db}/documents {
+
+    /* ========= BASE ========= */
+    
+    // ========= HELPERS BASE =========
+    function isAuth() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    
+    // Roles desde documento - CONTROL-STORE
+    function controlStoreUserDocExists() {
+      return isAuth() && exists(/databases/$(db)/documents/apps/control-store/users/$(uid()));
+    }
+    function controlStoreUserRole() {
+      return isAuth() && controlStoreUserDocExists()
+        ? get(/databases/$(db)/documents/apps/control-store/users/$(uid())).data.role
+        : null;
     }
     
-    // Files - owner can access, or public read for Cloudflare Worker
+    // Roles desde documento - CONTROLD (para otras apps)
+    function userDocExists() {
+      return isAuth() && exists(/databases/$(db)/documents/apps/controld/users/$(uid()));
+    }
+    function userRole() {
+      return isAuth() && userDocExists()
+        ? get(/databases/$(db)/documents/apps/controld/users/$(uid())).data.role
+        : null;
+    }
+    
+    // Helpers para CONTROL-STORE
+    function isControlStoreMaxDev() { return controlStoreUserRole() == 'maxdev'; }
+    function isControlStoreAdmin()  { return controlStoreUserRole() == 'admin' || controlStoreUserRole() == 'maxdev'; }
+    
+    // Helpers para CONTROLD y otras apps
+    function isMaxDev() { return userRole() == 'maxdev'; }
+    function isAdmin()  { return userRole() == 'admin' || userRole() == 'maxdev'; }
+    function isFactory(){ return userRole() == 'factory'; }
+    function isBranch() { return userRole() == 'branch'; }
+    function isDelivery(){return userRole() == 'delivery'; }
+    
+    // Operación y campos
+    function isCreate() { return !exists(resource.path); }
+    function isUpdate() { return exists(resource.path); }
+    
+    // Dueño por campo (e.g., userId/ownerId)
+    function ownerIs(field) {
+      return isAuth() && (
+        (isCreate() && request.resource.data[field] == uid()) ||
+        (isUpdate() && resource.data[field] == uid() && request.resource.data[field] == uid())
+      );
+    }
+    
+    // Inmutabilidad
+    function unchanged(field) {
+      return isUpdate() ? request.resource.data[field] == resource.data[field] : true;
+    }
+    
+    // Tipos y validadores comunes
+    function strBetween(field, min, max) {
+      return request.resource.data[field] is string
+          && request.resource.data[field].size() >= min
+          && request.resource.data[field].size() <= max;
+    }
+    function nonEmptyString(field) {
+      return request.resource.data[field] is string && request.resource.data[field].size() >= 1;
+    }
+    function isBool(field) { return request.resource.data[field] is bool; }
+    function isInt(field) {
+      return request.resource.data[field] is number
+          && (request.resource.data[field] % 1) == 0;
+    }
+    function isTs(field) { return request.resource.data[field] is timestamp; }
+    function isStringOrNull(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is string || request.resource.data[field] == null;
+    }
+    
+    // Lectura pública por flag booleano del doc
+    function publicRead(flagField) {
+      return resource.data[flagField] == true;
+    }
+    
+    
+
+    /* ========= CONTROLFILE ========= */
+    
+    // ========= CONTROLFILE =========
+    
+    // Archivos
     match /files/{fileId} {
-      // Permitir lectura pública (necesario para Cloudflare Worker)
-      // Seguro porque: solo se puede acceder con ID exacto del archivo
-      allow read: if true;
-      // Solo el dueño puede escribir/eliminar
-      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
     }
     
-    // Folders - only owner can access
+    // Carpetas
     match /folders/{folderId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
     }
     
-    // Upload sessions - only owner can access
+    // Sesiones de upload
     match /uploadSessions/{sessionId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow create: if isAuth() && request.resource.data.uid == uid();
+      allow read, update, delete: if isAuth() && resource.data.uid == uid();
     }
     
-    // Shares - public read (necesario para Cloudflare Worker), owner can write
+    // Compartir archivos
     match /shares/{shareId} {
-      // Permitir lectura pública sin autenticación
-      // Seguro porque: solo se puede acceder con token exacto del share
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read: if resource.data.isPublic == true || (isAuth() && resource.data.userId == uid());
+      allow update, delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    // Papelera
+    match /trash/{trashId} {
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    // Usuarios
+    match /users/{userId} {
+      allow create: if isAuth() && userId == uid();
+      allow read, update, delete: if isAuth() && userId == uid();
+    }
+    
+    
+
+    /* ========= CONTROLBIO ========= */
+    
+    // ========= CONTROLBIO (link-in-bio) =========
+    
+    match /apps/controlbio/users/{userId} {
       allow read: if true;
-      // Solo el dueño puede escribir/eliminar
-      allow write: if request.auth != null && request.auth.uid == resource.data.uid;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+    
+      allow create: if isAuth()
+        && userId == uid()
+        && request.resource.data.uid == uid()
+        && request.resource.data.email == request.auth.token.email
+        && strBetween("username", 3, 20)
+        && strBetween("displayName", 1, 50);
+    
+      allow update: if isAuth()
+        && userId == uid()
+        && unchanged("uid")
+        && unchanged("email")
+        && strBetween("username", 3, 20)
+        && strBetween("displayName", 1, 50);
+    
+      allow delete: if isAuth() && userId == uid();
+    }
+    
+    match /apps/controlbio/links/{linkId} {
+      allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+    
+      allow create: if ownerIs("userId")
+        && strBetween("title", 1, 100)
+        && nonEmptyString("url")
+        && isInt("order")
+        && isBool("isActive")
+        && isStringOrNull("sectionId")
+        && isTs("createdAt")
+        && isTs("updatedAt");
+    
+      // Actualización: Permite actualizaciones parciales
+      allow update: if isAuth()
+        && resource.data.userId == uid()
+        && (!("userId" in request.resource.data) || request.resource.data.userId == resource.data.userId)
+        && (!("title" in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100))
+        && (!("url" in request.resource.data) || (request.resource.data.url is string && request.resource.data.url.size() >= 1))
+        && (!("order" in request.resource.data) || (request.resource.data.order is number && (request.resource.data.order % 1) == 0))
+        && (!("isActive" in request.resource.data) || request.resource.data.isActive is bool)
+        && (!("sectionId" in request.resource.data) || request.resource.data.sectionId is string || request.resource.data.sectionId == null)
+        && (!("createdAt" in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+        && (!("updatedAt" in request.resource.data) || request.resource.data.updatedAt is timestamp);
+    
+      allow delete: if ownerIs("userId");
+    }
+    
+    match /apps/controlbio/sections/{sectionId} {
+      allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+    
+      allow create: if ownerIs("userId")
+        && strBetween("title", 1, 50)
+        && isInt("order")
+        && isBool("isActive")
+        && isTs("createdAt")
+        && isTs("updatedAt");
+    
+      allow update: if ownerIs("userId")
+        && unchanged("userId")
+        && strBetween("title", 1, 50)
+        && isInt("order")
+        && isBool("isActive")
+        && unchanged("createdAt")
+        && isTs("updatedAt");
+    
+      allow delete: if ownerIs("userId");
+    }
+    
+    match /apps/controlbio/carousels/{carouselId} {
+      allow read: if publicRead("isPublic") || (isAuth() && resource.data.userId == uid());
+    
+      allow create: if ownerIs("userId")
+        && strBetween("name", 1, 100)
+        && request.resource.data.type in ['horizontal','grid','masonry','card']
+        && request.resource.data.imageFileIds is list
+        && isInt("order")
+        && isBool("isActive")
+        && isBool("isPublic")
+        && isTs("createdAt")
+        && isTs("updatedAt");
+    
+      allow update: if ownerIs("userId")
+        && unchanged("userId")
+        && strBetween("name", 1, 100)
+        && request.resource.data.type in ['horizontal','grid','masonry','card']
+        && request.resource.data.imageFileIds is list
+        && isInt("order")
+        && isBool("isActive")
+        && isBool("isPublic")
+        && unchanged("createdAt")
+        && isTs("updatedAt");
+    
+      allow delete: if ownerIs("userId");
+    }
+    
+    // Galerías de controlbio
+    match /apps/controlbio/galleries/{galleryId} {
+      allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+    
+      allow create: if ownerIs("userId")
+        && strBetween("name", 1, 100)
+        && request.resource.data.layout in ['grid','masonry','carousel']
+        && request.resource.data.imageFileIds is list
+        && isInt("order")
+        && isBool("isActive")
+        && isTs("createdAt")
+        && isTs("updatedAt");
+    
+      allow update: if ownerIs("userId")
+        && unchanged("userId")
+        && strBetween("name", 1, 100)
+        && request.resource.data.layout in ['grid','masonry','carousel']
+        && request.resource.data.imageFileIds is list
+        && isInt("order")
+        && isBool("isActive")
+        && unchanged("createdAt")
+        && isTs("updatedAt");
+    
+      allow delete: if ownerIs("userId");
+    }
+    
+    // Layouts de galería de controlbio
+    match /apps/controlbio/galleryLayouts/{layoutId} {
+      allow read: if publicRead("isPublic") || (isAuth() && resource.data.userId == uid());
+    
+      allow create: if ownerIs("userId")
+        && request.resource.data.userId == uid()
+        && request.resource.data.items is list
+        && request.resource.data.settings is map
+        && isBool("isPublic");
+    
+      allow update: if isAuth()
+        && resource.data.userId == uid()
+        && (!("userId" in request.resource.data) || request.resource.data.userId == resource.data.userId)
+        && (!("items" in request.resource.data) || request.resource.data.items is list)
+        && (!("settings" in request.resource.data) || request.resource.data.settings is map)
+        && (!("isPublic" in request.resource.data) || request.resource.data.isPublic is bool);
+    
+      allow delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    
+
+    /* ========= CONTROLCICLO ========= */
+    
+    // ========= CONTROLCICLO =========
+    
+    match /apps/controlciclo/users/{userId}/{document=**} {
+      allow read, write: if isAuth() && userId == uid();
+    }
+    
+    
+
+    /* ========= CONTROLDOC ========= */
+    
+    // ========= CONTROLD (remitos) =========
+    
+    match /apps/controld {
+      match /users/{userId} {
+        allow read: if isAuth();
+        allow create, update: if isAuth();
+        allow delete: if isAdmin();
+      }
+    
+      match /branches/{branchId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+      }
+    
+      match /products/{productId} {
+        allow read: if isAuth();
+        allow create: if isAdmin() || isFactory();
+        allow update, delete: if isAdmin();
+      }
+    
+      match /orders/{orderId} {
+        allow read, create, update: if isAuth();
+        allow delete: if isAdmin();
+      }
+    
+      match /deliveryNotes/{noteId} {
+        allow read, create, update: if isAuth();
+        allow delete: if isAdmin();
+      }
+    
+      match /templates/{templateId} {
+        allow read, create, update, delete: if isAuth();
+      }
+    
+      match /remit-metadata/{metadataId} {
+        allow read, create, update: if isAuth();
+        allow delete: if isAdmin();
+      }
+    
+      match /replacementQueues/{queueId} {
+        allow read, create, update: if isAuth();
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // Auditoría global
+    match /audit/{auditId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    
+    
+
+    /* ========= CONTROLGASTOS ========= */
+    
+    // ========= CONTROLGASTOS =========
+    
+    match /apps/controlgastos/users/{userId}/{collection=**}/{docId} {
+      allow read, write: if isAuth() && userId == uid();
+    }
+    
+    match /apps/controlgastos/categories/{categoryId} {
+      allow read, write: if isAuth();
+    }
+    
+    match /expenses/{id} {
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    match /payments/{id} {
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    match /invoices/{id} {
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      allow read, update, delete: if isAuth() && resource.data.userId == uid();
+    }
+    
+    
+
+    /* ========= CONTROLLAUDIT ========= */
+    
+    // ========= CONTROLAUDIT (Higiene y Seguridad) =========
+    
+    // Usuarios
+    match /usuarios/{userId} {
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax';
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'max' &&
+        get(/databases/$(db)/documents/usuarios/$(userId)).data.clienteAdminId == request.auth.uid;
+      allow write: if isAuth() && request.auth.uid == userId;
+    }
+    
+    // Empresas
+    match /empresas/{empresaId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.propietarioId == request.auth.uid ||
+         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.propietarioId);
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.propietarioId == request.auth.uid ||
+         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.propietarioId);
+    }
+    
+    // Sucursales
+    match /sucursales/{sucursalId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+         (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+         (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId));
+    }
+    
+    // Auditorías
+    match /auditorias/{auditoriaId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.empresa == request.auth.uid ||
+         exists(/databases/$(db)/documents/empresas/$(resource.data.empresa)) &&
+         (get(/databases/$(db)/documents/empresas/$(resource.data.empresa)).data.propietarioId == request.auth.uid ||
+          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresa)).data.propietarioId));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (request.resource.data.empresa != null && 
+          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)) &&
+          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)).data.propietarioId)));
+    }
+    
+    // Reportes (Auditorías antiguas)
+    match /reportes/{reporteId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.usuarioId == request.auth.uid ||
+         request.auth.uid in resource.data.compartidoCon);
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.usuarioId == request.auth.uid ||
+         request.auth.uid in resource.data.compartidoCon);
+    }
+    
+    // Formularios
+    match /formularios/{formularioId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.clienteAdminId == request.auth.uid ||
+         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.clienteAdminId);
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         resource.data.clienteAdminId == request.auth.uid ||
+         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.clienteAdminId);
+    }
+    
+    // Logs
+    match /logs/{logId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax';
+      allow write: if isAuth();
+    }
+    
+    // Empleados
+    match /empleados/{empleadoId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (request.resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
+    }
+    
+    // Accidentes
+    match /accidentes/{accidenteId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (request.resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
+    }
+    
+    // Incidentes
+    match /incidentes/{incidenteId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (request.resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
+    }
+    
+    // Capacitaciones
+    match /capacitaciones/{capacitacionId} {
+      allow read: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
+      allow write: if isAuth() && 
+        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
+        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
+         (request.resource.data.empresaId != null && 
+          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
+          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
+           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
+    }
+    
+    
+
+    /* ========= CONTROLSTORE ========= */
+    
+    // ========= CONTROL-STORE =========
+    
+    // Helper para obtener ownerId de una tienda
+    function storeOwnerId(storeId) {
+      return get(/databases/$(db)/documents/apps/control-store/stores/$(storeId)).data.ownerId;
+    }
+    
+    // Usuario de control-store
+    match /apps/control-store/users/{userId} {
+      allow create: if isAuth() 
+        && userId == uid()
+        && request.resource.data.email != null
+        && request.resource.data.displayName != null;
+    
+      allow read: if isAuth() && (userId == uid() || isControlStoreAdmin());
+      allow update: if isAuth() && userId == uid();
+      allow delete: if isAuth() && userId == uid();
+    }
+    
+    // Tiendas
+    match /apps/control-store/stores/{storeId} {
+      allow read: if true;
+    
+      allow create: if isAuth() 
+        && request.resource.data.ownerId == uid()
+        && request.resource.data.ownerEmail != null
+        && request.resource.data.slug != null
+        && request.resource.data.name != null;
+    
+      allow update: if isAuth() && (
+        (resource.data.ownerId == uid() && request.resource.data.ownerId == resource.data.ownerId) ||
+        (isControlStoreAdmin() || isControlStoreMaxDev()) ||
+        (request.resource.data.ownerId == uid() && request.resource.data.ownerEmail != null)
+      );
+    
+      allow delete: if isAuth() && (
+        resource.data.ownerId == uid() ||
+        (isControlStoreAdmin() || isControlStoreMaxDev())
+      );
+    
+      // Productos de cada tienda
+      match /products/{productId} {
+        allow read: if true;
+        allow create: if isAuth() && storeOwnerId(storeId) == uid();
+        allow update, delete: if isAuth() && storeOwnerId(storeId) == uid();
+      }
+    
+      // Categorías de cada tienda
+      match /categories/{categoryId} {
+        allow read: if true;
+        allow create: if isAuth() && storeOwnerId(storeId) == uid();
+        allow update, delete: if isAuth() && storeOwnerId(storeId) == uid();
+      }
+    }
+    
+    // Invitaciones
+    match /apps/control-store/invitations/{invitationId} {
+      allow read: if true;
+      allow create: if isAuth();
+      allow update: if isAuth() && !resource.data.used;
+      allow delete: if false;
+    }
+    
+    // Transferencias de tiendas
+    match /apps/control-store/transfers/{transferId} {
+      allow read: if true;
+      allow create: if isAuth() && (isControlStoreAdmin() || isControlStoreMaxDev());
+      allow update: if isAuth() && !resource.data.used;
+      allow delete: if isAuth() && (isControlStoreAdmin() || isControlStoreMaxDev());
+    }
+    
+    
+
+    /* ========= DENY POR DEFECTO ========= */
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

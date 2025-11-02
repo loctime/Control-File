@@ -1,0 +1,71 @@
+// ========= CONTROL-STORE =========
+
+// Helper para obtener ownerId de una tienda
+function storeOwnerId(storeId) {
+  return get(/databases/$(db)/documents/apps/control-store/stores/$(storeId)).data.ownerId;
+}
+
+// Usuario de control-store
+match /apps/control-store/users/{userId} {
+  allow create: if isAuth() 
+    && userId == uid()
+    && request.resource.data.email != null
+    && request.resource.data.displayName != null;
+  
+  allow read: if isAuth() && (userId == uid() || isControlStoreAdmin());
+  allow update: if isAuth() && userId == uid();
+  allow delete: if isAuth() && userId == uid();
+}
+
+// Tiendas
+match /apps/control-store/stores/{storeId} {
+  allow read: if true;
+  
+  allow create: if isAuth() 
+    && request.resource.data.ownerId == uid()
+    && request.resource.data.ownerEmail != null
+    && request.resource.data.slug != null
+    && request.resource.data.name != null;
+  
+  allow update: if isAuth() && (
+    (resource.data.ownerId == uid() && request.resource.data.ownerId == resource.data.ownerId) ||
+    (isControlStoreAdmin() || isControlStoreMaxDev()) ||
+    (request.resource.data.ownerId == uid() && request.resource.data.ownerEmail != null)
+  );
+  
+  allow delete: if isAuth() && (
+    resource.data.ownerId == uid() ||
+    (isControlStoreAdmin() || isControlStoreMaxDev())
+  );
+  
+  // Productos de cada tienda
+  match /products/{productId} {
+    allow read: if true;
+    allow create: if isAuth() && storeOwnerId(storeId) == uid();
+    allow update, delete: if isAuth() && storeOwnerId(storeId) == uid();
+  }
+  
+  // Categorías de cada tienda
+  match /categories/{categoryId} {
+    allow read: if true;
+    allow create: if isAuth() && storeOwnerId(storeId) == uid();
+    allow update, delete: if isAuth() && storeOwnerId(storeId) == uid();
+  }
+}
+
+// Invitaciones
+match /apps/control-store/invitations/{invitationId} {
+  allow read: if true;
+  allow create: if isAuth();
+  allow update: if isAuth() && !resource.data.used;
+  allow delete: if false;
+}
+
+// Transferencias de tiendas
+match /apps/control-store/transfers/{transferId} {
+  allow read: if true;
+  allow create: if isAuth() && (isControlStoreAdmin() || isControlStoreMaxDev());
+  allow update: if isAuth() && !resource.data.used;
+  allow delete: if isAuth() && (isControlStoreAdmin() || isControlStoreMaxDev());
+}
+

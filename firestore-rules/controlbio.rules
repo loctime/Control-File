@@ -1,0 +1,143 @@
+// ========= CONTROLBIO (link-in-bio) =========
+
+match /apps/controlbio/users/{userId} {
+  allow read: if true;
+  
+  allow create: if isAuth()
+    && userId == uid()
+    && request.resource.data.uid == uid()
+    && request.resource.data.email == request.auth.token.email
+    && strBetween("username", 3, 20)
+    && strBetween("displayName", 1, 50);
+  
+  allow update: if isAuth()
+    && userId == uid()
+    && unchanged("uid")
+    && unchanged("email")
+    && strBetween("username", 3, 20)
+    && strBetween("displayName", 1, 50);
+  
+  allow delete: if isAuth() && userId == uid();
+}
+
+match /apps/controlbio/links/{linkId} {
+  allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+  
+  allow create: if ownerIs("userId")
+    && strBetween("title", 1, 100)
+    && nonEmptyString("url")
+    && isInt("order")
+    && isBool("isActive")
+    && isStringOrNull("sectionId")
+    && isTs("createdAt")
+    && isTs("updatedAt");
+  
+  // Actualización: Permite actualizaciones parciales
+  allow update: if isAuth()
+    && resource.data.userId == uid()
+    && (!("userId" in request.resource.data) || request.resource.data.userId == resource.data.userId)
+    && (!("title" in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100))
+    && (!("url" in request.resource.data) || (request.resource.data.url is string && request.resource.data.url.size() >= 1))
+    && (!("order" in request.resource.data) || (request.resource.data.order is number && (request.resource.data.order % 1) == 0))
+    && (!("isActive" in request.resource.data) || request.resource.data.isActive is bool)
+    && (!("sectionId" in request.resource.data) || request.resource.data.sectionId is string || request.resource.data.sectionId == null)
+    && (!("createdAt" in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+    && (!("updatedAt" in request.resource.data) || request.resource.data.updatedAt is timestamp);
+  
+  allow delete: if ownerIs("userId");
+}
+
+match /apps/controlbio/sections/{sectionId} {
+  allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+  
+  allow create: if ownerIs("userId")
+    && strBetween("title", 1, 50)
+    && isInt("order")
+    && isBool("isActive")
+    && isTs("createdAt")
+    && isTs("updatedAt");
+  
+  allow update: if ownerIs("userId")
+    && unchanged("userId")
+    && strBetween("title", 1, 50)
+    && isInt("order")
+    && isBool("isActive")
+    && unchanged("createdAt")
+    && isTs("updatedAt");
+  
+  allow delete: if ownerIs("userId");
+}
+
+match /apps/controlbio/carousels/{carouselId} {
+  allow read: if publicRead("isPublic") || (isAuth() && resource.data.userId == uid());
+  
+  allow create: if ownerIs("userId")
+    && strBetween("name", 1, 100)
+    && request.resource.data.type in ['horizontal','grid','masonry','card']
+    && request.resource.data.imageFileIds is list
+    && isInt("order")
+    && isBool("isActive")
+    && isBool("isPublic")
+    && isTs("createdAt")
+    && isTs("updatedAt");
+  
+  allow update: if ownerIs("userId")
+    && unchanged("userId")
+    && strBetween("name", 1, 100)
+    && request.resource.data.type in ['horizontal','grid','masonry','card']
+    && request.resource.data.imageFileIds is list
+    && isInt("order")
+    && isBool("isActive")
+    && isBool("isPublic")
+    && unchanged("createdAt")
+    && isTs("updatedAt");
+  
+  allow delete: if ownerIs("userId");
+}
+
+// Galerías de controlbio
+match /apps/controlbio/galleries/{galleryId} {
+  allow read: if publicRead("isActive") || (isAuth() && resource.data.userId == uid());
+  
+  allow create: if ownerIs("userId")
+    && strBetween("name", 1, 100)
+    && request.resource.data.layout in ['grid','masonry','carousel']
+    && request.resource.data.imageFileIds is list
+    && isInt("order")
+    && isBool("isActive")
+    && isTs("createdAt")
+    && isTs("updatedAt");
+  
+  allow update: if ownerIs("userId")
+    && unchanged("userId")
+    && strBetween("name", 1, 100)
+    && request.resource.data.layout in ['grid','masonry','carousel']
+    && request.resource.data.imageFileIds is list
+    && isInt("order")
+    && isBool("isActive")
+    && unchanged("createdAt")
+    && isTs("updatedAt");
+  
+  allow delete: if ownerIs("userId");
+}
+
+// Layouts de galería de controlbio
+match /apps/controlbio/galleryLayouts/{layoutId} {
+  allow read: if publicRead("isPublic") || (isAuth() && resource.data.userId == uid());
+  
+  allow create: if ownerIs("userId")
+    && request.resource.data.userId == uid()
+    && request.resource.data.items is list
+    && request.resource.data.settings is map
+    && isBool("isPublic");
+  
+  allow update: if isAuth()
+    && resource.data.userId == uid()
+    && (!("userId" in request.resource.data) || request.resource.data.userId == resource.data.userId)
+    && (!("items" in request.resource.data) || request.resource.data.items is list)
+    && (!("settings" in request.resource.data) || request.resource.data.settings is map)
+    && (!("isPublic" in request.resource.data) || request.resource.data.isPublic is bool);
+  
+  allow delete: if isAuth() && resource.data.userId == uid();
+}
+
