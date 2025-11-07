@@ -14,6 +14,10 @@
 - **[Integración con APIs](./api-externa/)** - Con APIs de ControlFile
 - **Ventajas:** Validaciones del backend, pero más complejo
 
+### 🔄 **App con Firestore Separado**
+- **[App con Firestore Separado](./app-firestore-separado/)** - Sincronizar archivos entre ControlFile y tu propio Firestore
+- **Ventajas:** Archivos en ambos sistemas, mantienes tu propia base de datos
+
 ### 📊 **Funcionalidades Específicas**
 - **[Google Sheets Integration](./google-sheets/)** - Gestión de productos con Google Sheets
 - **[Share Links](./share-links/)** - Enlaces públicos para compartir archivos
@@ -34,6 +38,11 @@
 - Tu app NO comparte Firestore con ControlFile
 - Necesitas validaciones complejas del backend
 - Quieres que ControlFile maneje la lógica de negocio
+
+### 🔄 **Usa App con Firestore Separado si:**
+- Tu app tiene su propio Firestore pero quiere usar ControlFile
+- Necesitas mantener archivos sincronizados en ambos sistemas
+- Quieres usar el backend de ControlFile pero mantener tu propia base de datos
 
 ### 📊 **Usa Funcionalidades Específicas si:**
 - Necesitas **Google Sheets** para gestión de productos
