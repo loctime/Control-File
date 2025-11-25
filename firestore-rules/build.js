@@ -14,7 +14,8 @@ const files = [
   'controlRemito.rules',
   'controlgastos.rules',
   'controllaudit.rules',
-  'controlstore.rules'
+  'controlstore.rules',
+  'horarios.rules'
 ];
 
 // Encabezado del archivo

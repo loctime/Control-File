@@ -720,6 +720,144 @@ service cloud.firestore {
     
     
 
+    /* ========= HORARIOS ========= */
+    
+    // ========= HORARIOS SCHEDULER =========
+    
+    // Helpers específicos para HORARIOS
+    function horariosUserDocExists() {
+      return isAuth() && exists(/databases/$(db)/documents/apps/horarios/users/$(uid()));
+    }
+    function horariosUserRole() {
+      return isAuth() && horariosUserDocExists()
+        ? get(/databases/$(db)/documents/apps/horarios/users/$(uid())).data.role
+        : null;
+    }
+    function isHorariosMaxDev() { return horariosUserRole() == 'maxdev'; }
+    function isHorariosAdmin()  { return horariosUserRole() == 'admin' || horariosUserRole() == 'maxdev'; }
+    function isHorariosUser()   { return horariosUserRole() == 'user' || isHorariosAdmin(); }
+    
+    // Colección: apps/horarios/users
+    match /apps/horarios/users/{userId} {
+      allow read: if isAuth() && (uid() == userId || isHorariosUser());
+      allow create: if isAuth() && uid() == userId
+        && nonEmptyString('uid')
+        && request.resource.data.uid == uid()
+        && isStringOrNull('email')
+        && isStringOrNull('displayName')
+        && isStringOrNull('photoURL')
+        && (isStringOrNull('role') || request.resource.data.role == 'user' || request.resource.data.role == 'admin' || request.resource.data.role == 'maxdev')
+        && isTs('createdAt')
+        && isTs('updatedAt');
+      // Usuario puede actualizar sus propios datos (pero no cambiar su role si ya existe)
+      allow update: if isAuth() && uid() == userId
+        && unchanged('uid')
+        && (unchanged('role') || (!('role' in resource.data) && request.resource.data.role == 'user'))
+        && isStringOrNull('email')
+        && isStringOrNull('displayName')
+        && isStringOrNull('photoURL')
+        && unchanged('createdAt')
+        && isTs('updatedAt');
+      // Admin puede actualizar cualquier usuario (incluyendo roles)
+      allow update: if isAuth() && isHorariosAdmin()
+        && unchanged('uid')
+        && isStringOrNull('email')
+        && isStringOrNull('displayName')
+        && isStringOrNull('photoURL')
+        && (isStringOrNull('role') || request.resource.data.role == 'user' || request.resource.data.role == 'admin' || request.resource.data.role == 'maxdev')
+        && unchanged('createdAt')
+        && isTs('updatedAt');
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    // Colección: apps/horarios/employees
+    match /apps/horarios/employees/{empleadoId} {
+      allow read: if isAuth() && isHorariosUser();
+      allow create: if isAuth() && isHorariosUser()
+        && nonEmptyString('name')
+        && isStringOrNull('email')
+        && isStringOrNull('phone')
+        && isTs('createdAt')
+        && isTs('updatedAt');
+      allow update: if isAuth() && isHorariosUser()
+        && nonEmptyString('name')
+        && isStringOrNull('email')
+        && isStringOrNull('phone')
+        && unchanged('createdAt')
+        && isTs('updatedAt');
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    // Colección: apps/horarios/shifts
+    match /apps/horarios/shifts/{turnoId} {
+      allow read: if isAuth() && isHorariosUser();
+      allow create: if isAuth() && isHorariosUser()
+        && nonEmptyString('name')
+        && isStringOrNull('startTime')
+        && isStringOrNull('endTime')
+        && nonEmptyString('color')
+        && isTs('createdAt')
+        && isTs('updatedAt');
+      allow update: if isAuth() && isHorariosUser()
+        && nonEmptyString('name')
+        && isStringOrNull('startTime')
+        && isStringOrNull('endTime')
+        && nonEmptyString('color')
+        && unchanged('createdAt')
+        && isTs('updatedAt');
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    // Colección: apps/horarios/schedules
+    match /apps/horarios/schedules/{horarioId} {
+      allow read: if isAuth() && isHorariosUser();
+      allow create: if isAuth() && isHorariosUser()
+        && nonEmptyString('nombre')
+        && nonEmptyString('weekStart')
+        && nonEmptyString('semanaInicio')
+        && nonEmptyString('semanaFin')
+        && request.resource.data.assignments is map
+        && isTs('createdAt')
+        && isTs('updatedAt')
+        && (isStringOrNull('createdBy') || request.resource.data.createdBy == uid())
+        && isStringOrNull('createdByName')
+        && isStringOrNull('modifiedBy')
+        && isStringOrNull('modifiedByName');
+      allow update: if isAuth() && isHorariosUser()
+        && nonEmptyString('nombre')
+        && nonEmptyString('weekStart')
+        && nonEmptyString('semanaInicio')
+        && nonEmptyString('semanaFin')
+        && request.resource.data.assignments is map
+        && unchanged('createdAt')
+        && unchanged('createdBy')
+        && unchanged('createdByName')
+        && isTs('updatedAt')
+        && (isStringOrNull('modifiedBy') || request.resource.data.modifiedBy == uid())
+        && isStringOrNull('modifiedByName');
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    // Colección: apps/horarios/historial
+    match /apps/horarios/historial/{historialId} {
+      allow read: if isAuth() && isHorariosUser();
+      allow create: if isAuth() && isHorariosUser()
+        && nonEmptyString('horarioId')
+        && nonEmptyString('nombre')
+        && nonEmptyString('semanaInicio')
+        && nonEmptyString('semanaFin')
+        && request.resource.data.assignments is map
+        && (request.resource.data.accion == 'creado' || request.resource.data.accion == 'modificado')
+        && isTs('createdAt')
+        && (isStringOrNull('createdBy') || request.resource.data.createdBy == uid())
+        && isStringOrNull('createdByName')
+        && (isBool('versionAnterior') || !('versionAnterior' in request.resource.data));
+      allow update: if false; // Historial es inmutable
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    
+
     /* ========= DENY POR DEFECTO ========= */
 
     match /{document=**} {
