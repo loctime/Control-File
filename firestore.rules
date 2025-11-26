@@ -63,6 +63,16 @@ service cloud.firestore {
       return isUpdate() ? request.resource.data[field] == resource.data[field] : true;
     }
     
+    // Inmutabilidad flexible - permite null/undefined
+    function unchangedOrNull(field) {
+      return isUpdate() 
+        ? (request.resource.data[field] == resource.data[field] 
+           || (!(field in resource.data) && !(field in request.resource.data))
+           || (resource.data[field] == null && request.resource.data[field] == null)
+           || (resource.data[field] == null && !(field in request.resource.data)))
+        : true;
+    }
+    
     // Tipos y validadores comunes
     function strBetween(field, min, max) {
       return request.resource.data[field] is string
@@ -829,9 +839,13 @@ service cloud.firestore {
         && nonEmptyString('semanaInicio')
         && nonEmptyString('semanaFin')
         && request.resource.data.assignments is map
-        && unchanged('createdAt')
-        && unchanged('createdBy')
-        && unchanged('createdByName')
+        && (
+          unchanged('createdAt') || 
+          !('createdAt' in resource.data) ||
+          (resource.data.createdAt == null && request.resource.data.createdAt == null)
+        )
+        && unchangedOrNull('createdBy')
+        && unchangedOrNull('createdByName')
         && isTs('updatedAt')
         && (isStringOrNull('modifiedBy') || request.resource.data.modifiedBy == uid())
         && isStringOrNull('modifiedByName');
@@ -853,6 +867,16 @@ service cloud.firestore {
         && isStringOrNull('createdByName')
         && (isBool('versionAnterior') || !('versionAnterior' in request.resource.data));
       allow update: if false; // Historial es inmutable
+      allow delete: if isAuth() && isHorariosAdmin();
+    }
+    
+    // Colección: apps/horarios/config
+    match /apps/horarios/config/{configId} {
+      // Permitir lectura a cualquier usuario autenticado
+      allow read: if isAuth();
+      // Permitir crear/actualizar a cualquier usuario autenticado
+      // Reglas completamente permisivas
+      allow create, update: if isAuth();
       allow delete: if isAuth() && isHorariosAdmin();
     }
     
