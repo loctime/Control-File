@@ -1,0 +1,13 @@
+// ==============================================
+// MAPPING – Schemas de mapeo de Excel / datos
+// ⚠️ Este archivo se concatena con otras reglas.
+// ⚠️ NO definir rules_version ni service cloud.firestore aquí.
+// ==============================================
+
+
+
+  match /apps/mapping/schema/{docId} {
+    allow read, write: if true;
+  }
+
+

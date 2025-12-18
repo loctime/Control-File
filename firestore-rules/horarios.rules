@@ -1,130 +1,371 @@
-// ========= HORARIOS SCHEDULER =========
 
-// Helper para verificar que el usuario tiene documento en apps/horarios/users
-function horariosUserDocExists() {
-  return isAuth() && exists(/databases/$(db)/documents/apps/horarios/users/$(uid()));
-}
 
-// Colección: apps/horarios/users
-match /apps/horarios/users/{userId} {
-  allow read: if isAuth() && uid() == userId;
-  allow create: if isAuth() && uid() == userId
-    && nonEmptyString('uid')
-    && request.resource.data.uid == uid()
-    && isStringOrNull('email')
-    && isStringOrNull('displayName')
-    && isStringOrNull('photoURL')
-    && isStringOrNull('role')
-    && isTs('createdAt')
-    && isTs('updatedAt');
-  allow update: if isAuth() && uid() == userId
-    && unchanged('uid')
-    && isStringOrNull('email')
-    && isStringOrNull('displayName')
-    && isStringOrNull('photoURL')
-    && isStringOrNull('role')
-    && unchanged('createdAt');
-  allow delete: if false; // No permitir eliminar usuarios
-}
+    // =========================================================
+    // =================== HELPERS GLOBALES ====================
+    // =========================================================
 
-// Colección: apps/horarios/employees
-match /apps/horarios/employees/{empleadoId} {
-  allow read: if isAuth() && resource.data.userId == uid();
-  allow create: if isAuth()
-    && nonEmptyString('name')
-    && nonEmptyString('userId')
-    && request.resource.data.userId == uid()
-        && isStringOrNull('email')
-        && isStringOrNull('phone')
-        && isTs('createdAt')
-    && isTs('updatedAt');
-  allow update: if isAuth()
-    && resource.data.userId == uid()
-    && (!('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId)
-    && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() >= 1))
-    && (!('email' in request.resource.data) || request.resource.data.email is string || request.resource.data.email == null)
-    && (!('phone' in request.resource.data) || request.resource.data.phone is string || request.resource.data.phone == null)
-    && unchanged('createdAt');
-  allow delete: if isAuth() && resource.data.userId == uid();
-}
+   
 
-// Colección: apps/horarios/shifts
-match /apps/horarios/shifts/{turnoId} {
-  allow read: if isAuth() && resource.data.userId == uid();
-  allow create: if isAuth()
-    && nonEmptyString('name')
-    && nonEmptyString('userId')
-    && request.resource.data.userId == uid()
-    && isStringOrNull('startTime')
-    && isStringOrNull('endTime')
-    && isStringOrNull('startTime2')
-    && isStringOrNull('endTime2')
-    && nonEmptyString('color')
-    && isTs('createdAt')
-    && isTs('updatedAt');
-  allow update: if isAuth()
-    && resource.data.userId == uid()
-    && (!('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId)
-    && (!('name' in request.resource.data) || nonEmptyString('name'))
-    && (!('startTime' in request.resource.data) || isStringOrNull('startTime'))
-    && (!('endTime' in request.resource.data) || isStringOrNull('endTime'))
-    && (!('startTime2' in request.resource.data) || isStringOrNull('startTime2'))
-    && (!('endTime2' in request.resource.data) || isStringOrNull('endTime2'))
-    && (!('color' in request.resource.data) || nonEmptyString('color'))
-    && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp)
-    && unchanged('createdAt');
-  allow delete: if isAuth() && resource.data.userId == uid();
-}
+    function userPath(userId) {
+      return /databases/$(database)/documents/apps/horarios/users/$(userId);
+    }
 
-// Colección: apps/horarios/schedules
-match /apps/horarios/schedules/{horarioId} {
-  allow read: if isAuth();
-  allow create: if isAuth()
-    && nonEmptyString('nombre')
-    && nonEmptyString('weekStart')
-    && nonEmptyString('semanaInicio')
-    && nonEmptyString('semanaFin')
-    && request.resource.data.assignments is map
-    && isTs('createdAt')
-    && isTs('updatedAt')
-    && (isStringOrNull('createdBy') || request.resource.data.createdBy == uid())
-    && isStringOrNull('createdByName')
-    && isStringOrNull('modifiedBy')
-    && isStringOrNull('modifiedByName');
-  allow update: if isAuth()
-    && nonEmptyString('nombre')
-    && nonEmptyString('weekStart')
-    && nonEmptyString('semanaInicio')
-    && nonEmptyString('semanaFin')
-    && request.resource.data.assignments is map
-    && (isStringOrNull('modifiedBy') || request.resource.data.modifiedBy == uid())
-    && isStringOrNull('modifiedByName');
-  allow delete: if isAuth();
-}
+    function myUserPath() {
+      return userPath(uid());
+    }
 
-// Colección: apps/horarios/historial
-match /apps/horarios/historial/{historialId} {
-  allow read: if isAuth();
-  allow create: if isAuth()
-    && nonEmptyString('horarioId')
-    && nonEmptyString('nombre')
-    && nonEmptyString('semanaInicio')
-    && nonEmptyString('semanaFin')
-    && request.resource.data.assignments is map
-    && (request.resource.data.accion == 'creado' || request.resource.data.accion == 'modificado')
-    && isTs('createdAt')
-    && (isStringOrNull('createdBy') || request.resource.data.createdBy == uid())
-    && isStringOrNull('createdByName')
-    && (isBool('versionAnterior') || !('versionAnterior' in request.resource.data));
-  allow update: if false; // Historial es inmutable
-  allow delete: if isAuth();
-}
+    function hasMyUser() {
+      return isAuth() && exists(myUserPath());
+    }
 
-// Colección: apps/horarios/config
-match /apps/horarios/config/{configId} {
-  // Permitir lectura a cualquier usuario autenticado
-  allow read: if isAuth();
-  // Permitir crear/actualizar a cualquier usuario autenticado
-  allow create, update: if isAuth();
-  allow delete: if false; // No permitir eliminar configuración
-}
+    function myRoleIs(role) {
+      return hasMyUser() && get(myUserPath()).data.role == role;
+    }
+
+  
+
+    function myOwnerId() {
+      return hasMyUser() && ('ownerId' in get(myUserPath()).data)
+        ? get(myUserPath()).data.ownerId
+        : '';
+    }
+
+    function invitedActingFor(ownerId) {
+      return isInvited() && myOwnerId() == ownerId;
+    }
+
+    function canActFor(ownerId) {
+      return isAuth() && (
+        uid() == ownerId
+        || isAdmin()
+        || isManager()
+        || isFactory()
+        || invitedActingFor(ownerId)
+      );
+    }
+
+    function protectFieldUnchanged(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == resource.data[field];
+    }
+
+    function protectUserId(resourceUserId) {
+      return !('userId' in request.resource.data)
+        || request.resource.data.userId == resourceUserId;
+    }
+
+    function protectCreatedBy() {
+      return !('createdBy' in request.resource.data)
+        || request.resource.data.createdBy == resource.data.createdBy;
+    }
+
+    function isParticipantArray(arr) {
+      return (arr is list) && arr.hasAny([uid()]);
+    }
+
+    // =========================================================
+    // ======================= USERS ===========================
+    // =========================================================
+    match /apps/horarios/users/{userId} {
+      allow read: if isAuth() && (
+        userId == uid()
+        || isAdmin()
+        || isManager()
+        || isFactory()
+      );
+
+      allow create: if isAuth() && userId == uid();
+
+      allow update: if isAuth() && (
+        (userId == uid()
+          && protectFieldUnchanged('role')
+          && protectFieldUnchanged('uid'))
+        || (isAdmin() && protectFieldUnchanged('uid'))
+      );
+
+      allow delete: if isAuth() && (userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================= GROUPS ==========================
+    // =========================================================
+    match /apps/horarios/groups/{groupId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && isAdmin();
+
+      allow update: if isAuth() && (
+        isAdmin()
+        || (isManager()
+          && ('managerId' in resource.data)
+          && resource.data.managerId == uid()
+          && protectFieldUnchanged('managerId'))
+      );
+
+      allow delete: if isAuth() && isAdmin();
+    }
+
+    // =========================================================
+    // ====================== EMPLOYEES ========================
+    // =========================================================
+    match /apps/horarios/employees/{empleadoId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && request.resource.data.userId == uid();
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================= SHIFTS ==========================
+    // =========================================================
+    match /apps/horarios/shifts/{turnoId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && request.resource.data.userId == uid();
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ====================== SCHEDULES ========================
+    // =========================================================
+    match /apps/horarios/schedules/{horarioId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && request.resource.data.createdBy == uid();
+
+      allow update: if isAuth()
+        && (resource.data.createdBy == uid() || isAdmin())
+        && protectCreatedBy();
+
+      allow delete: if isAuth()
+        && (resource.data.createdBy == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ====================== HISTORIAL ========================
+    // =========================================================
+    match /apps/horarios/historial/{historialId} {
+      allow read: if isAuth() && resource.data.createdBy == uid();
+      allow create: if isAuth() && request.resource.data.createdBy == uid();
+      allow update: if false;
+      allow delete: if isAuth() && (resource.data.createdBy == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================== CONFIG =========================
+    // =========================================================
+    match /apps/horarios/config/{configId} {
+      allow read: if true;
+      allow create, update: if isAuth() && configId == uid();
+      allow delete: if false;
+    }
+
+    // =========================================================
+    // ===================== INVITACIONES ======================
+    // =========================================================
+    match /apps/horarios/invitaciones/{invitacionId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && request.resource.data.ownerId == uid();
+
+      allow update, delete: if isAuth()
+        && (resource.data.ownerId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================= PEDIDOS =========================
+    // =========================================================
+    match /apps/horarios/pedidos/{pedidoId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && request.resource.data.userId == uid()
+        && !isInvited();
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================= PRODUCTS ========================
+    // =========================================================
+    match /apps/horarios/products/{productoId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && (request.resource.data.userId == uid()
+            || invitedActingFor(request.resource.data.userId));
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // =================== STOCK MOVIMIENTOS ===================
+    // =========================================================
+    match /apps/horarios/stock_movimientos/{movimientoId} {
+      allow read: if isAuth() && canActFor(resource.data.userId);
+
+      allow create: if isAuth()
+        && (request.resource.data.userId == uid()
+            || invitedActingFor(request.resource.data.userId));
+
+      allow update: if false;
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ====================== STOCK ACTUAL =====================
+    // =========================================================
+    match /apps/horarios/stock_actual/{stockId} {
+      allow read: if isAuth() && canActFor(resource.data.userId);
+
+      allow create: if isAuth()
+        && (request.resource.data.userId == uid()
+            || invitedActingFor(request.resource.data.userId));
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ======================== REMITOS ========================
+    // =========================================================
+    match /apps/horarios/remitos/{remitoId} {
+      allow read: if isAuth()
+        && (canActFor(resource.data.userId) || isFactory());
+
+      allow create: if isAuth()
+        && (request.resource.data.userId == uid()
+            || invitedActingFor(request.resource.data.userId)
+            || isFactory()
+            || isAdmin());
+
+      allow update: if isAuth()
+        && (canActFor(resource.data.userId) || isFactory())
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin() || isFactory());
+    }
+
+    // =========================================================
+    // ======================= RECEPCIONES =====================
+    // =========================================================
+    match /apps/horarios/recepciones/{recepcionId} {
+      allow read: if isAuth() && canActFor(resource.data.userId);
+
+      allow create: if isAuth()
+        && request.resource.data.userId == uid();
+
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ==================== ENLACES PUBLICOS ===================
+    // =========================================================
+    match /apps/horarios/enlaces_publicos/{enlaceId} {
+      allow read: if true;
+
+      allow create: if isAuth()
+        && (request.resource.data.userId == uid()
+            || invitedActingFor(request.resource.data.userId)
+            || isAdmin());
+
+      allow update: if isAuth()
+        && (canActFor(resource.data.userId) || isFactory())
+        && protectUserId(resource.data.userId);
+
+      allow delete: if isAuth()
+        && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ===================== CONVERSACIONES ====================
+    // =========================================================
+    match /apps/horarios/conversaciones/{conversacionId} {
+      function canAccessConversation() {
+        return resource.data != null
+          && ('participantes' in resource.data)
+          && isParticipantArray(resource.data.participantes);
+      }
+
+      allow read: if isAuth() && canAccessConversation();
+
+      allow create: if isAuth()
+        && ('participantes' in request.resource.data)
+        && isParticipantArray(request.resource.data.participantes);
+
+      allow update, delete: if isAuth() && canAccessConversation();
+    }
+
+    // =========================================================
+    // ======================== MENSAJES =======================
+    // =========================================================
+    match /apps/horarios/mensajes/{mensajeId} {
+      function canAccessConvId(convId) {
+        return exists(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId))
+          && ('participantes' in get(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId)).data)
+          && isParticipantArray(
+               get(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId)).data.participantes
+             );
+      }
+
+      allow read: if isAuth()
+        && canAccessConvId(resource.data.conversacionId);
+
+      allow create: if isAuth()
+        && request.resource.data.remitenteId == uid()
+        && canAccessConvId(request.resource.data.conversacionId);
+
+      allow update: if isAuth()
+        && canAccessConvId(resource.data.conversacionId)
+        && protectFieldUnchanged('remitenteId')
+        && protectFieldUnchanged('contenido')
+        && protectFieldUnchanged('conversacionId');
+
+      allow delete: if isAuth()
+        && (resource.data.remitenteId == uid() || isAdmin());
+    }
+
+    // =========================================================
+    // ===================== DEFAULT DENY ======================
+    // =========================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+ 

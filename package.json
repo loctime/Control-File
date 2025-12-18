@@ -16,6 +16,9 @@
     "set-claims": "node scripts/set-claims.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "rules:build": "node firestore-rules/build.js",
+    "rules:deploy": "firebase deploy --only firestore:rules",
+    "rules": "pnpm run rules:build && pnpm run rules:deploy",
     "test:e2e": "playwright test"
   },
   "dependencies": {
