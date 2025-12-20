@@ -1,13 +1,33 @@
-// ==============================================
-// MAPPING – Schemas de mapeo de Excel / datos
-// ⚠️ Este archivo se concatena con otras reglas.
-// ⚠️ NO definir rules_version ni service cloud.firestore aquí.
-// ==============================================
+// =============================================================
+// 🚨 ARCHIVO PARCIAL DE REGLAS – SE CONCATENA AUTOMÁTICAMENTE 🚨
+//
+// ⚠️ NO ES UN ARCHIVO DE REGLAS COMPLETO
+//
+// PROHIBIDO DEFINIR AQUÍ:
+// ❌ rules_version
+// ❌ service cloud.firestore
+// ❌ match /databases/{database}/documents
+//
+// 👉 Este archivo SOLO puede contener:
+//    match /ruta/{id} { ... }
+//
+// ❗ Si agregás un `match /databases/...`
+//    Firestore IGNORA estas reglas sin error visible.
+// =============================================================
 
 
 
   match /apps/mapping/schema/{docId} {
     allow read, write: if true;
+  }
+
+  match /schemaTemplates/{schemaId} {
+    allow read: if true;
+    allow write: if true; // Los templates del sistema se guardan automáticamente
+  }
+
+  match /mappings/{mappingId} {
+    allow read, write: if true; // Permitir leer y escribir mapeos
   }
 
 
