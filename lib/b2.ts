@@ -254,6 +254,31 @@ export async function listObjects(prefix: string, maxKeys: number = 1000) {
   };
 }
 
+// Upload file directly from server to B2
+export async function uploadFileDirectly(
+  key: string,
+  buffer: Buffer | Uint8Array,
+  contentType?: string
+): Promise<{ etag: string; versionId?: string }> {
+  return withRetry(async () => {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    });
+
+    const response = await s3Client.send(command);
+    
+    logger.info('B2 file uploaded directly', { key, contentType });
+    
+    return {
+      etag: response.ETag?.replace(/"/g, '') || '',
+      versionId: response.VersionId,
+    };
+  }, 'uploadFileDirectly');
+}
+
 // Get download authorization for Cloudflare Worker
 export async function getDownloadAuthorization(
   keyPrefix: string,
