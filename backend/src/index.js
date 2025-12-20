@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const authMiddleware = require('./middleware/auth');
 const uploadRoutes = require('./routes/upload');
+const externalUploadRoutes = require('./routes/external-upload');
 const filesRoutes = require('./routes/files');
 const sharesRoutes = require('./routes/shares');
 const healthRoutes = require('./routes/health');
@@ -100,7 +101,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check route (no auth required)
+// Health check route (no auth required) - disponible en /health y /api/health
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'controlfile',
+    storage: 'backblaze',
+    auth: 'firebase',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
+});
 app.use('/api/health', healthRoutes);
 
 // Test route without auth
@@ -114,6 +127,10 @@ app.post('/api/test-upload', (req, res) => {
     headers: req.headers 
   });
 });
+
+// External upload endpoint - POST /upload (sin /api) para aplicaciones externas
+// Este es el endpoint único y oficial para subida de archivos desde apps externas
+app.post('/upload', authMiddleware, externalUploadRoutes);
 
 // Protected routes with auth
 app.use('/api/uploads', authMiddleware, (req, res, next) => {
