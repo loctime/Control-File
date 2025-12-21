@@ -36,7 +36,7 @@ router.post('/', upload.single('file'), async (req, res) => {
   
   try {
     // Log inicial de la request
-    logger.info('📤 External upload request received', {
+    logger.info('[ControlFile] Upload request received', {
       origin: req.headers.origin,
       userAgent: req.headers['user-agent'],
       contentType: req.headers['content-type'],
@@ -82,7 +82,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     const { uid, email } = req.user;
     
-    logger.info('✅ Token validated', {
+    logger.info('[ControlFile] Token verified', {
       uid,
       email,
       sourceApp,
@@ -96,7 +96,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     const mimeType = req.file.mimetype;
     const fileExtension = path.extname(originalFileName).toLowerCase();
     
-    logger.info('📄 File received', {
+    logger.info(`[ControlFile] File received: ${originalFileName}`, {
       fileName: originalFileName,
       fileSize,
       mimeType,
