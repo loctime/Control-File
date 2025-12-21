@@ -19,6 +19,7 @@ const files = [
   'controlgastos.rules',
   'controllaudit.rules',
   'controlstore.rules',
+  'audit.rules',
 
   // Horarios / Scheduler
   'horarios.rules',

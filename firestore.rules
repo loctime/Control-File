@@ -740,6 +740,13 @@ service cloud.firestore {
     
     
 
+    /* ========= AUDIT ========= */
+
+      // 🔓 DEV TOTAL – cualquier usuario autenticado
+        match /{document=**} {
+          allow read, write: if request.auth != null;
+        }
+
     /* ========= HORARIOS ========= */
 
     
