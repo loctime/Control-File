@@ -27,13 +27,45 @@ export async function POST(request: NextRequest) {
     const size = (typeof raw.size === 'number' ? raw.size : undefined) ?? raw.fileSize;
     const mime = raw.mime || raw.mimeType;
     const parentId = raw.parentId ?? null;
+    const app = raw.app;
 
     if (!name || !size || !mime) {
       return NextResponse.json({ error: 'Faltan parámetros requeridos', message: 'name/fileName, size/fileSize y mime/mimeType son obligatorios' }, { status: 400 });
     }
 
-    // Check user quota
+    // Regla G: parentId nunca puede ser null para archivos
+    if (!parentId) {
+      return NextResponse.json(
+        { error: 'parentId is required for files. Files must belong to a folder.' },
+        { status: 400 }
+      );
+    }
+
+    // Get Firestore instance
     const adminDb = requireAdminDb();
+
+    // Obtener appId del parent si no se proporciona explícitamente
+    let appId: string | null = null;
+    if (app && app.id) {
+      const { normalizeAppId } = await import('@/lib/utils/app-ownership');
+      appId = normalizeAppId(app.id);
+    } else {
+      // Obtener appId del parent folder
+      const parentDoc = await adminDb.collection('files').doc(parentId).get();
+      if (!parentDoc.exists) {
+        return NextResponse.json({ error: 'Parent folder not found' }, { status: 404 });
+      }
+      const parentData = parentDoc.data()!;
+      if (!parentData.appId) {
+        return NextResponse.json(
+          { error: 'Parent folder does not have appId. Legacy folders cannot be used as parents.' },
+          { status: 400 }
+        );
+      }
+      appId = parentData.appId;
+    }
+
+    // Check user quota
     const userRef = adminDb.collection('users').doc(userId);
     const userDoc = await userRef.get();
 
@@ -72,6 +104,7 @@ export async function POST(request: NextRequest) {
       fileSize: size,
       mimeType: mime,
       parentId,
+      appId, // Guardar appId en la sesión
       bucketKey: fileKey,
       status: 'pending',
       createdAt: new Date(),

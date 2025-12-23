@@ -34,6 +34,10 @@ export const uploadPresignSchema = z.object({
   size: fileSizeSchema,
   mime: mimeTypeSchema,
   parentId: z.string().nullable().optional(),
+  app: z.object({
+    id: z.string().min(1, 'app.id requerido'),
+    name: z.string().optional(),
+  }).optional(),
 });
 
 export const uploadConfirmSchema = z.object({
@@ -80,6 +84,13 @@ export const folderCreateSchema = z.object({
   icon: z.string().optional(),
   color: z.string().optional(),
   source: z.string().optional(),
+  app: z.object({
+    id: z.string().min(1, 'app.id requerido'),
+    name: z.string().optional(),
+  }),
+  metadata: z.object({
+    source: z.string().optional(),
+  }).optional(),
 });
 
 export const folderDeleteSchema = z.object({

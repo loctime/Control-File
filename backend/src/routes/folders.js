@@ -5,6 +5,30 @@ const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 const { logger } = require('../utils/logger');
 
+/**
+ * Whitelist de valores permitidos para metadata.source
+ */
+const ALLOWED_SOURCES = ['navbar', 'taskbar'];
+
+/**
+ * Valida y normaliza el valor de source usando whitelist defensiva
+ * Si el valor no está en la whitelist, retorna 'navbar' como default seguro
+ */
+function validateAndNormalizeSource(source) {
+  if (!source || typeof source !== 'string') {
+    return 'navbar';
+  }
+  
+  const normalizedSource = source.trim().toLowerCase();
+  
+  if (ALLOWED_SOURCES.includes(normalizedSource)) {
+    return normalizedSource;
+  }
+  
+  // Si no está en la whitelist, retornar default seguro
+  return 'navbar';
+}
+
 // Create folder endpoint
 router.post('/create', invalidateCache('create'), async (req, res) => {
   try {
@@ -93,7 +117,7 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
           canDownload: true
         },
         customFields: customFields || {},
-        source: source || 'navbar'
+        source: validateAndNormalizeSource(source)
       }
     });
 

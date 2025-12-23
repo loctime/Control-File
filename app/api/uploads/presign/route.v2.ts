@@ -18,17 +18,49 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       size: number;
       mime: string;
       parentId?: string | null;
+      app?: { id: string; name?: string };
     }>(request, uploadPresignSchema);
     if (!validation.success) {
       return validation.response;
     }
 
-    const { name, size, mime, parentId } = validation.data;
+    const { name, size, mime, parentId, app } = validation.data;
+
+    // Regla G: parentId nunca puede ser null para archivos
+    if (!parentId) {
+      return createErrorResponse(
+        'parentId is required for files. Files must belong to a folder.',
+        400,
+        'PARENT_ID_REQUIRED'
+      );
+    }
 
     logUpload(userId, name, size, 'started');
 
     // Check user quota
     const adminDb = requireAdminDb();
+
+    // Obtener appId del parent si no se proporciona explícitamente
+    let appId: string | null = null;
+    if (app && app.id) {
+      const { normalizeAppId } = await import('@/lib/utils/app-ownership');
+      appId = normalizeAppId(app.id);
+    } else {
+      // Obtener appId del parent folder
+      const parentDoc = await adminDb.collection('files').doc(parentId).get();
+      if (!parentDoc.exists) {
+        return createErrorResponse('Parent folder not found', 404, 'PARENT_NOT_FOUND');
+      }
+      const parentData = parentDoc.data()!;
+      if (!parentData.appId) {
+        return createErrorResponse(
+          'Parent folder does not have appId. Legacy folders cannot be used as parents.',
+          400,
+          'LEGACY_PARENT_NOT_ALLOWED'
+        );
+      }
+      appId = parentData.appId;
+    }
     const userRef = adminDb.collection('users').doc(userId);
     const userDoc = await userRef.get();
 
@@ -85,6 +117,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
         fileSize: size,
         mimeType: mime,
         parentId: parentId || null,
+        appId, // Guardar appId en la sesión
         bucketKey: fileKey,
         status: 'pending',
         createdAt: new Date(),

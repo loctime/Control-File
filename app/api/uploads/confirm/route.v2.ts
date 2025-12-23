@@ -55,6 +55,43 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       return createErrorResponse('Sesión de subida expirada', 400, 'SESSION_EXPIRED');
     }
 
+    // Regla G: Validar que parentId pertenezca a la misma appId
+    const appId = sessionData.appId;
+    if (!appId) {
+      logger.error('Upload session missing appId', { uploadSessionId, userId });
+      return createErrorResponse(
+        'Upload session does not have appId. Please re-upload the file.',
+        400,
+        'MISSING_APP_ID'
+      );
+    }
+
+    // Validar que el parent pertenece a la misma app
+    if (sessionData.parentId) {
+      const { validateParentAppId } = await import('@/lib/utils/app-ownership');
+      try {
+        await validateParentAppId(adminDb, userId, sessionData.parentId, appId);
+      } catch (error: any) {
+        // Logging detallado para debugging de cruces inválidos de app
+        logger.error('Invalid app cross-over attempt detected', {
+          userId,
+          appId,
+          parentId: sessionData.parentId,
+          endpoint: '/api/uploads/confirm',
+          error: error.message,
+          uploadSessionId,
+          fileName: sessionData.fileName,
+          timestamp: new Date().toISOString()
+        });
+        
+        return createErrorResponse(
+          error.message || 'Parent folder validation failed',
+          400,
+          'PARENT_VALIDATION_FAILED'
+        );
+      }
+    }
+
     // Create file document using transaction for consistency
     const fileRef = adminDb.collection('files').doc();
     const fileId = fileRef.id;
@@ -69,6 +106,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
         size: sessionData.fileSize,
         mime: sessionData.mimeType,
         parentId: sessionData.parentId,
+        appId, // Regla G: appId obligatorio para archivos
         bucketKey: sessionData.bucketKey,
         type: 'file',
         createdAt: new Date(),

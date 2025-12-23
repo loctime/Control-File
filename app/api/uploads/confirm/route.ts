@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { logError } from '@/lib/logger-client';
+import { logError, logger } from '@/lib/logger-client';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -52,6 +52,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sesión de subida expirada' }, { status: 400 });
     }
 
+    // Regla G: Validar que parentId pertenezca a la misma appId
+    const appId = sessionData.appId;
+    if (!appId) {
+      return NextResponse.json(
+        { error: 'Upload session does not have appId. Please re-upload the file.' },
+        { status: 400 }
+      );
+    }
+
+    // Validar que el parent pertenece a la misma app
+    if (sessionData.parentId) {
+      const { validateParentAppId } = await import('@/lib/utils/app-ownership');
+      try {
+        await validateParentAppId(adminDb, userId, sessionData.parentId, appId);
+      } catch (error: any) {
+        // Logging detallado para debugging de cruces inválidos de app
+        logger.error('Invalid app cross-over attempt detected', {
+          userId,
+          appId,
+          parentId: sessionData.parentId,
+          endpoint: '/api/uploads/confirm',
+          error: error.message,
+          uploadSessionId,
+          fileName: sessionData.fileName,
+          timestamp: new Date().toISOString()
+        });
+        
+        return NextResponse.json(
+          { error: error.message || 'Parent folder validation failed' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create file document
     const fileRef = adminDb.collection('files').doc();
     const fileId = fileRef.id;
@@ -63,6 +97,7 @@ export async function POST(request: NextRequest) {
       size: sessionData.fileSize,
       mime: sessionData.mimeType,
       parentId: sessionData.parentId,
+      appId, // Regla G: appId obligatorio para archivos
       bucketKey: sessionData.bucketKey,
       type: 'file',
       createdAt: new Date(),

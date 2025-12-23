@@ -3,6 +3,7 @@ import { requireAdminDb } from '@/lib/firebase-admin';
 import { withAuth, validateRequest, createErrorResponse, createSuccessResponse } from '@/lib/middleware/api-auth';
 import { folderCreateSchema } from '@/lib/schemas/api-schemas';
 import { logger } from '@/lib/logger';
+import { validateAndNormalizeSource } from '@/lib/utils/app-ownership';
 
 // Evitar pre-renderizado durante el build
 export const dynamic = 'force-dynamic';
@@ -88,7 +89,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
         isPublic: false,
         viewCount: 0,
         lastAccessedAt: new Date(),
-        source: source || 'navbar',
+        source: validateAndNormalizeSource(source),
         permissions: {
           canEdit: true,
           canDelete: true,

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { logger, logError } from '@/lib/logger-client';
+import { 
+  normalizeAppId, 
+  getOrCreateAppRootFolder, 
+  validateParentAppId,
+  validateAndNormalizeSource
+} from '@/lib/utils/app-ownership';
 
 // Evitar pre-renderizado durante el build
 export const dynamic = 'force-dynamic';
@@ -23,31 +29,92 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const requestBody = await request.json();
-    const { id, name, parentId, icon, color, source, metadata } = requestBody;
+    const { id, name, parentId, icon, color, source, metadata, app } = requestBody;
+
+    // Validación A: app.id es obligatorio
+    if (!app || !app.id || typeof app.id !== 'string' || !app.id.trim()) {
+      return NextResponse.json(
+        { error: 'Missing app.id. Every folder or file must belong to an application.' },
+        { status: 400 }
+      );
+    }
 
     if (!id || !name) {
       return NextResponse.json({ error: 'ID y nombre son requeridos' }, { status: 400 });
     }
 
-    // DEBUG: Log completo del request
-    logger.debug('Request body completo', { requestBody });
-    logger.debug('metadata extraído', { metadata });
-    logger.debug('source extraído', { source });
-    logger.debug('source del requestBody', { source: requestBody.source });
+    // Normalización B: app.id se normaliza como slug
+    const normalizedAppId = normalizeAppId(app.id);
+    const appName = app.name || app.id;
 
-    // ARREGLADO: Usar source de metadata si existe, sino del nivel raíz, sino 'navbar'
-    const finalSource = metadata?.source || source || 'navbar';
-    logger.info('Creating folder', { name, parentId, userId, finalSource, metadataSource: metadata?.source, rootSource: source });
+    logger.info('Creating folder', { 
+      name, 
+      parentId, 
+      userId, 
+      appId: normalizedAppId,
+      appName 
+    });
 
     // Get Firestore instance
     const adminDb = requireAdminDb();
 
-    // Check if folder already exists in the same parent
+    // Regla D: Si parentId es null, resolver carpeta raíz de la app
+    let effectiveParentId: string | null = parentId || null;
+    let effectivePath: string[] = [];
+    
+    if (effectiveParentId === null) {
+      // Crear/obtener carpeta raíz de la app
+      effectiveParentId = await getOrCreateAppRootFolder(
+        adminDb,
+        userId,
+        normalizedAppId,
+        appName
+      );
+      
+      // La carpeta solicitada se crea dentro de la raíz
+      const rootDoc = await adminDb.collection('files').doc(effectiveParentId).get();
+      if (rootDoc.exists) {
+        const rootData = rootDoc.data()!;
+        effectivePath = [...(rootData.path || []), effectiveParentId];
+      }
+    } else {
+      // Regla E: Validar que parentId pertenezca a la misma appId
+      try {
+        await validateParentAppId(adminDb, userId, effectiveParentId, normalizedAppId);
+      } catch (error: any) {
+        // Logging detallado para debugging de cruces inválidos de app
+        logger.error('Invalid app cross-over attempt detected', {
+          userId,
+          appId: normalizedAppId,
+          parentId: effectiveParentId,
+          endpoint: '/api/folders/create',
+          error: error.message,
+          requestName: name,
+          requestParentId: parentId,
+          timestamp: new Date().toISOString()
+        });
+        
+        return NextResponse.json(
+          { error: error.message || 'Parent folder validation failed' },
+          { status: 400 }
+        );
+      }
+      
+      // Calcular path desde el parent
+      const parentDoc = await adminDb.collection('files').doc(effectiveParentId).get();
+      if (parentDoc.exists) {
+        const parentData = parentDoc.data()!;
+        effectivePath = [...(parentData.path || []), effectiveParentId];
+      }
+    }
+
+    // Check if folder already exists in the same parent (con appId)
     const existingFolderQuery = adminDb.collection('files')
       .where('userId', '==', userId)
-      .where('parentId', '==', parentId || null)
+      .where('parentId', '==', effectiveParentId)
       .where('name', '==', name)
-      .where('type', '==', 'folder');
+      .where('type', '==', 'folder')
+      .where('appId', '==', normalizedAppId);
 
     const existingFolders = await existingFolderQuery.get();
     
@@ -58,39 +125,33 @@ export async function POST(request: NextRequest) {
     // Create slug from name
     const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
 
-    // Calculate path
-    let path: string[] = [];
-    if (parentId) {
-      const parentDoc = await adminDb.collection('files').doc(parentId).get();
-      if (parentDoc.exists) {
-        const parentData = parentDoc.data();
-        path = [...(parentData?.path || []), parentId];
-      }
-    }
+    // Regla F: metadata.source solo define UI - Validación con whitelist defensiva
+    const finalSource = validateAndNormalizeSource(metadata?.source || source);
 
-    // Create folder document
+    // Create folder document con appId
     const folderData = {
       id,
       userId,
       name,
       slug,
-      parentId: parentId || null,
-      path,
+      parentId: effectiveParentId,
+      path: effectivePath,
       type: 'folder',
+      appId: normalizedAppId, // Regla 4: Ownership explícito por aplicación
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
       metadata: {
         icon: icon || 'Folder',
         color: color || 'text-purple-600',
-        isMainFolder: !parentId,
+        isMainFolder: effectiveParentId === null,
         isDefault: false,
         description: '',
         tags: [],
         isPublic: false,
         viewCount: 0,
         lastAccessedAt: new Date(),
-        source: finalSource,
+        source: finalSource, // Solo UI, no ownership
         permissions: {
           canEdit: true,
           canDelete: true,
@@ -104,7 +165,13 @@ export async function POST(request: NextRequest) {
     // Save to Firestore
     await adminDb.collection('files').doc(id).set(folderData);
 
-    logger.info('Folder created successfully', { folderId: id, name, userId });
+    logger.info('Folder created successfully', { 
+      folderId: id, 
+      name, 
+      userId, 
+      appId: normalizedAppId,
+      parentId: effectiveParentId 
+    });
 
     return NextResponse.json({ 
       success: true, 
