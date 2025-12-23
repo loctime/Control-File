@@ -1,4 +1,89 @@
-  // 🔓 DEV TOTAL – cualquier usuario autenticado
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
+// ================================
+// ControlAudit – reglas DEV claras
+// ================================
+
+// ========= HELPERS APPID =========
+// Valida que appId es string y es 'auditoria'
+function hasValidAppId() {
+  return request.resource.data.appId is string
+    && request.resource.data.appId == 'auditoria';
+}
+
+// Detecta si el documento existente es legacy (sin appId)
+function isLegacyDoc() {
+  return !('appId' in resource.data);
+}
+
+// Valida que appId coincide entre resource y request.resource
+function sameAppId() {
+  return resource.data.appId == request.resource.data.appId;
+}
+
+// 🔐 Perfil de usuario (SIEMPRE primero)
+match /apps/auditoria/users/{userId} {
+  allow read, write: if request.auth != null
+    && request.auth.uid == userId;
+}
+
+// 🔓 Datos de la app (empresas, auditorías, formularios, etc)
+match /apps/auditoria/{document=**} {
+  // READ: Solo requiere autenticación
+  allow read: if request.auth != null;
+  
+  // CREATE: Exige appId válido
+  allow create: if request.auth != null
+    && hasValidAppId();
+  
+  // UPDATE: Permite legacy o exige appId válido y coincidente
+  allow update: if request.auth != null
+    && (isLegacyDoc() || (hasValidAppId() && sameAppId()));
+  
+  // DELETE: Solo requiere autenticación
+  allow delete: if request.auth != null;
+}
+
+// 📊 Colecciones en raíz (empresas, sucursales, auditorías, etc)
+match /empresas/{empresaId} {
+  allow read, write: if request.auth != null;
+}
+
+match /sucursales/{sucursalId} {
+  allow read, write: if request.auth != null;
+}
+
+match /auditorias/{auditoriaId} {
+  allow read, write: if request.auth != null;
+}
+
+match /formularios/{formularioId} {
+  allow read, write: if request.auth != null;
+}
+
+match /empleados/{empleadoId} {
+  allow read, write: if request.auth != null;
+}
+
+match /accidentes/{accidenteId} {
+  allow read, write: if request.auth != null;
+}
+
+match /incidentes/{incidenteId} {
+  allow read, write: if request.auth != null;
+}
+
+match /capacitaciones/{capacitacionId} {
+  allow read, write: if request.auth != null;
+}
+
+match /reportes/{reporteId} {
+  allow read, write: if request.auth != null;
+}
+
+match /logs/{logId} {
+  allow read, write: if request.auth != null;
+}
+
+// ❌ Todo lo demás cerrado
+match /{document=**} {
+  allow read, write: if false;
+}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { logger, logError } from '@/lib/logger-client';
 import { normalizeAppId } from '@/lib/utils/app-ownership';
-import { FieldValue, Transaction } from 'firebase-admin/firestore';
+import { FieldValue, Transaction, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 // Evitar pre-renderizado durante el build
 export const dynamic = 'force-dynamic';
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     // Usar transacción para garantizar atomicidad
     await adminDb.runTransaction(async (transaction: Transaction) => {
       // 1. Quitar isMainFolder de todas las carpetas principales existentes
-      existingMainFoldersQuery.forEach((doc) => {
+      existingMainFoldersQuery.forEach((doc: QueryDocumentSnapshot) => {
         if (doc.id !== folderId) {
           transaction.update(doc.ref, {
             'metadata.isMainFolder': false,
