@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         icon: icon || 'Folder',
         color: color || 'text-purple-600',
-        isMainFolder: effectiveParentId === null,
+        isMainFolder: false, // Nunca setear automáticamente. Usar /api/folders/set-main
         isDefault: false,
         description: '',
         tags: [],

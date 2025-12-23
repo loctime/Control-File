@@ -242,22 +242,30 @@ export function FileContentArea({
     event.target.value = '';
   };
 
-  const handleSetMainFolder = () => {
+  const handleSetMainFolder = async () => {
     if (!currentFolderId) return;
     
-    setMainFolder(currentFolderId);
-    
-    // Obtener el nombre de la carpeta actual
-    const currentFolder = subfolders.find(folder => folder.id === currentFolderId) || 
-                         files.find(file => file.id === currentFolderId);
-    
-    const folderName = currentFolder?.name || 'Carpeta';
-    
-    addToast({
-      type: 'success',
-      title: 'Carpeta principal establecida',
-      message: `"${folderName}" es ahora tu carpeta principal`,
-    });
+    try {
+      await setMainFolder(currentFolderId);
+      
+      // Obtener el nombre de la carpeta actual
+      const currentFolder = subfolders.find(folder => folder.id === currentFolderId) || 
+                           files.find(file => file.id === currentFolderId);
+      
+      const folderName = currentFolder?.name || 'Carpeta';
+      
+      addToast({
+        type: 'success',
+        title: 'Carpeta principal establecida',
+        message: `"${folderName}" es ahora tu carpeta principal`,
+      });
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'No se pudo establecer la carpeta principal',
+      });
+    }
   };
 
   // Botón Atrás: navegar al parentId si existe

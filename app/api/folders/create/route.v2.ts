@@ -82,7 +82,7 @@ export const POST = withAuth(async (request: NextRequest, { userId }) => {
       metadata: {
         icon: icon || 'Folder',
         color: color || 'text-purple-600',
-        isMainFolder: !parentId,
+        isMainFolder: false, // Nunca setear automáticamente. Usar /api/folders/set-main
         isDefault: false,
         description: '',
         tags: [],

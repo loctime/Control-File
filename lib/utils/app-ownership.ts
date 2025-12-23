@@ -103,7 +103,7 @@ export async function getOrCreateAppRootFolder(
     metadata: {
       icon: 'Folder',
       color: 'text-purple-600',
-      isMainFolder: true,
+      isMainFolder: false, // Carpeta raíz de app NO es carpeta principal del usuario
       isDefault: true,
       description: '',
       tags: [],

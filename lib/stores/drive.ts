@@ -37,7 +37,7 @@ interface DriveState {
   createSubfolder: (name: string, parentId: string) => void;
   getMainFolders: () => any[];
   getSubfolders: (parentId: string) => any[];
-  setMainFolder: (folderId: string) => void;
+  setMainFolder: (folderId: string) => Promise<void>;
   getMainFolder: () => string | null;
   
   // Trash operations (simplified)
@@ -342,48 +342,97 @@ export const useDriveStore = create<DriveState>()(
         );
       },
 
-      setMainFolder: (folderId) =>
-        set((state) => {
-          // Primero, quitar el estado de carpeta principal de todas las carpetas
-          const updatedItems = state.items.map(item => {
-            if (item.type === 'folder' && item.metadata?.isMainFolder) {
-              return {
-                ...item,
-                metadata: {
-                  ...item.metadata,
-                  isMainFolder: false
-                }
-              };
-            }
-            return item;
+      setMainFolder: async (folderId) => {
+        const state = get();
+        
+        // Encontrar la carpeta en el store
+        const folder = state.items.find(item => item.id === folderId && item.type === 'folder');
+        
+        if (!folder) {
+          console.error('❌ Carpeta no encontrada:', folderId);
+          throw new Error('Carpeta no encontrada');
+        }
+
+        // Validar que tiene appId
+        if (!folder.appId) {
+          console.error('❌ La carpeta no tiene appId:', folderId);
+          throw new Error('La carpeta no tiene appId. No se puede establecer como principal.');
+        }
+
+        console.log('📁 Estableciendo carpeta principal:', folderId, 'appId:', folder.appId);
+
+        try {
+          // Llamar al endpoint backend - el backend decide, no el store
+          await apiCall('/folders/set-main', {
+            method: 'POST',
+            body: JSON.stringify({
+              folderId,
+              app: {
+                id: folder.appId,
+                name: folder.appId // El backend normaliza el id
+              }
+            }),
           });
 
-          // Luego, marcar la carpeta seleccionada como principal
-          const finalItems = updatedItems.map(item => {
-            if (item.id === folderId && item.type === 'folder') {
-              return {
-                ...item,
-                metadata: {
-                  ...item.metadata,
-                  isMainFolder: true
-                }
-              };
+          console.log('✅ Carpeta principal establecida en backend:', folderId);
+
+          // Actualizar store local después de confirmación del backend
+          set((state) => {
+            // Primero, quitar el estado de carpeta principal de todas las carpetas de la misma app
+            const updatedItems = state.items.map(item => {
+              if (
+                item.type === 'folder' && 
+                item.metadata?.isMainFolder &&
+                item.appId === folder.appId
+              ) {
+                return {
+                  ...item,
+                  metadata: {
+                    ...item.metadata,
+                    isMainFolder: false
+                  }
+                };
+              }
+              return item;
+            });
+
+            // Luego, marcar la carpeta seleccionada como principal
+            const finalItems = updatedItems.map(item => {
+              if (item.id === folderId && item.type === 'folder') {
+                return {
+                  ...item,
+                  metadata: {
+                    ...item.metadata,
+                    isMainFolder: true
+                  }
+                };
+              }
+              return item;
+            });
+
+            // Obtener la carpeta que se está marcando como principal
+            const mainFolder = finalItems.find(item => item.id === folderId);
+
+            // Invalidar queries de React Query para sincronizar
+            if (typeof window !== 'undefined' && (window as any).__queryClient) {
+              const queryClient = (window as any).__queryClient;
+              queryClient.invalidateQueries({ queryKey: ['files'] });
+              queryClient.invalidateQueries({ queryKey: ['all-folders'] });
+              console.log('♻️ Queries invalidadas después de establecer carpeta principal');
             }
-            return item;
+
+            return {
+              items: finalItems,
+              // Automáticamente abrir la carpeta principal
+              currentFolderId: folderId,
+              breadcrumb: mainFolder ? [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path, slug: mainFolder.slug }] : []
+            };
           });
-
-          // Obtener la carpeta que se está marcando como principal
-          const mainFolder = finalItems.find(item => item.id === folderId);
-
-          console.log('📁 Estableciendo carpeta principal:', folderId);
-          
-          return {
-            items: finalItems,
-            // Automáticamente abrir la carpeta principal
-            currentFolderId: folderId,
-            breadcrumb: mainFolder ? [{ id: mainFolder.id, name: mainFolder.name, path: mainFolder.path, slug: mainFolder.slug }] : []
-          };
-        }),
+        } catch (error) {
+          console.error('❌ Error estableciendo carpeta principal:', error);
+          throw error;
+        }
+      },
 
       getMainFolder: () => {
         const state = get();
