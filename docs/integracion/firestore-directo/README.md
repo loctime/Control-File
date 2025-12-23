@@ -15,6 +15,7 @@ Integración directa con Firestore para apps que comparten el mismo proyecto de 
 ## 📚 Documentación Disponible
 
 - **[Guía Completa](./GUIA_FIRESTORE_DIRECTO.md)** - Todo lo que necesitas saber
+- **[Guía Carpetas B2 + Taskbar](./GUIA_CARPETAS_B2_TASKBAR.md)** - ⭐ Para apps que usan Backblaze B2 y necesitan carpetas en taskbar
 - **[Ejemplos Prácticos](./ejemplos/)** - Código listo para usar
 
 ## 🎯 Funcionalidades
@@ -62,10 +63,17 @@ await setDoc(doc(db, 'files', folderData.id), folderData);
 ## 🎯 **Apps que Usan Esta Integración:**
 
 - **ControlBio** - Análisis de datos
-- **ControlAudit** - Auditorías
+- **ControlAudit** - Auditorías (usa Backblaze B2)
 - **ControlDoc** - Documentos
 - **ControlGastos** - Gastos
 - **ControlStock** - Inventario
+
+## ⚠️ **¿Usas Backblaze B2?**
+
+Si tu app usa Backblaze B2 para almacenar archivos, consulta la **[Guía Carpetas B2 + Taskbar](./GUIA_CARPETAS_B2_TASKBAR.md)** para:
+- ✅ Verificar carpetas antes de crear (evitar duplicados)
+- ✅ Asegurar que aparezcan en el taskbar
+- ✅ Subir archivos a las carpetas correctas
 
 ---
 
