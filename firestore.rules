@@ -490,181 +490,6 @@ service cloud.firestore {
     }
     
 
-    /* ========= CONTROLLAUDIT ========= */
-
-    // ========= CONTROLAUDIT (Higiene y Seguridad) =========
-    
-    // Usuarios
-    match /usuarios/{userId} {
-      allow read: if isAuth() && request.auth.uid == userId;
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax';
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'max' &&
-        get(/databases/$(db)/documents/usuarios/$(userId)).data.clienteAdminId == request.auth.uid;
-      allow write: if isAuth() && request.auth.uid == userId;
-    }
-    
-    // Empresas
-    match /empresas/{empresaId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.propietarioId == request.auth.uid ||
-         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.propietarioId);
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.propietarioId == request.auth.uid ||
-         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.propietarioId);
-    }
-    
-    // Sucursales
-    match /sucursales/{sucursalId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-         (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-         (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId));
-    }
-    
-    // Auditorías
-    match /auditorias/{auditoriaId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.empresa == request.auth.uid ||
-         exists(/databases/$(db)/documents/empresas/$(resource.data.empresa)) &&
-         (get(/databases/$(db)/documents/empresas/$(resource.data.empresa)).data.propietarioId == request.auth.uid ||
-          get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresa)).data.propietarioId));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (request.resource.data.empresa != null && 
-          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)) &&
-          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresa)).data.propietarioId)));
-    }
-    
-    // Reportes (Auditorías antiguas)
-    match /reportes/{reporteId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.usuarioId == request.auth.uid ||
-         request.auth.uid in resource.data.compartidoCon);
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.usuarioId == request.auth.uid ||
-         request.auth.uid in resource.data.compartidoCon);
-    }
-    
-    // Formularios
-    match /formularios/{formularioId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.clienteAdminId == request.auth.uid ||
-         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.clienteAdminId);
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         resource.data.clienteAdminId == request.auth.uid ||
-         get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == resource.data.clienteAdminId);
-    }
-    
-    // Logs
-    match /logs/{logId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax';
-      allow write: if isAuth();
-    }
-    
-    // Empleados
-    match /empleados/{empleadoId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (request.resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
-    }
-    
-    // Accidentes
-    match /accidentes/{accidenteId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (request.resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
-    }
-    
-    // Incidentes
-    match /incidentes/{incidenteId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (request.resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
-    }
-    
-    // Capacitaciones
-    match /capacitaciones/{capacitacionId} {
-      allow read: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(resource.data.empresaId)).data.propietarioId)));
-      allow write: if isAuth() && 
-        exists(/databases/$(db)/documents/usuarios/$(request.auth.uid)) &&
-        (get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.role == 'supermax' ||
-         (request.resource.data.empresaId != null && 
-          exists(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)) &&
-          (get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId == request.auth.uid ||
-           get(/databases/$(db)/documents/usuarios/$(request.auth.uid)).data.clienteAdminId == get(/databases/$(db)/documents/empresas/$(request.resource.data.empresaId)).data.propietarioId)));
-    }
-    
-    
-
     /* ========= CONTROLSTORE ========= */
 
     // ========= CONTROL-STORE =========
@@ -742,94 +567,18 @@ service cloud.firestore {
 
     /* ========= AUDIT ========= */
 
-    // ================================
-    // ControlAudit – reglas DEV claras
-    // ================================
+    /* ========= AUDITORÍA – multi-tenant ========= */
     
-    // ========= HELPERS APPID =========
-    // Valida que appId es string y es 'auditoria'
-    function hasValidAppId() {
-      return request.resource.data.appId is string
-        && request.resource.data.appId == 'auditoria';
-    }
-    
-    // Detecta si el documento existente es legacy (sin appId)
-    function isLegacyDoc() {
-      return !('appId' in resource.data);
-    }
-    
-    // Valida que appId coincide entre resource y request.resource
-    function sameAppId() {
-      return resource.data.appId == request.resource.data.appId;
-    }
-    
-    // 🔐 Perfil de usuario (SIEMPRE primero)
     match /apps/auditoria/users/{userId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == userId;
+      allow get, update: if isAuth() && uid() == userId;
     }
     
-    // 🔓 Datos de la app (empresas, auditorías, formularios, etc)
-    match /apps/auditoria/{document=**} {
-      // READ: Solo requiere autenticación
-      allow read: if request.auth != null;
-    
-      // CREATE: Exige appId válido
-      allow create: if request.auth != null
-        && hasValidAppId();
-    
-      // UPDATE: Permite legacy o exige appId válido y coincidente
-      allow update: if request.auth != null
-        && (isLegacyDoc() || (hasValidAppId() && sameAppId()));
-    
-      // DELETE: Solo requiere autenticación
-      allow delete: if request.auth != null;
+    match /apps/auditoria/users/{userId}/{collection} {
+      allow list, read: if isAuth() && uid() == userId;
     }
     
-    // 📊 Colecciones en raíz (empresas, sucursales, auditorías, etc)
-    match /empresas/{empresaId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /sucursales/{sucursalId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /auditorias/{auditoriaId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /formularios/{formularioId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /empleados/{empleadoId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /accidentes/{accidenteId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /incidentes/{incidenteId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /capacitaciones/{capacitacionId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /reportes/{reporteId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /logs/{logId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // ❌ Todo lo demás cerrado
-    match /{document=**} {
-      allow read, write: if false;
+    match /apps/auditoria/users/{userId}/{collection}/{docId} {
+      allow get, create, update, delete: if isAuth() && uid() == userId;
     }
     
 
@@ -1202,9 +951,7 @@ service cloud.firestore {
         // =========================================================
         // ===================== DEFAULT DENY ======================
         // =========================================================
-        match /{document=**} {
-          allow read, write: if false;
-        }
+    
     
 
     /* ========= MAPPING ========= */
