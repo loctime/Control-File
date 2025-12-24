@@ -6,10 +6,29 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 /**
+ * OPTIONS /api/create-user
+ * Maneja las peticiones CORS preflight
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}
+
+/**
  * POST /api/create-user
  * 
  * Crea un usuario en Firebase Auth desde el backend.
  * Requiere autenticación de admin.
+ * 
+ * IMPORTANTE: Este endpoint debe llamarse desde el mismo dominio del frontend.
+ * NO debe llamarse usando NEXT_PUBLIC_BACKEND_URL.
+ * Usar ruta relativa: /api/create-user
  * 
  * Body:
  * - email: string (requerido)
