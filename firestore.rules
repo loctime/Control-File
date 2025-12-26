@@ -567,18 +567,120 @@ service cloud.firestore {
 
     /* ========= AUDIT ========= */
 
-    /* ========= AUDITORÍA – multi-tenant ========= */
+    // ================================
+    // ControlAudit – reglas DEV claras
+    // ================================
     
+    // ========= HELPERS APPID =========
+    // Valida que appId es string y es 'auditoria'
+    function hasValidAppId() {
+      return request.resource.data.appId is string
+        && request.resource.data.appId == 'auditoria';
+    }
+    
+    // Detecta si el documento existente es legacy (sin appId)
+    function isLegacyDoc() {
+      return !('appId' in resource.data);
+    }
+    
+    // Valida que appId coincide entre resource y request.resource
+    function sameAppId() {
+      return resource.data.appId == request.resource.data.appId;
+    }
+    
+    // Verifica si el usuario autenticado es supermax
+    function isSupermax() {
+      return request.auth != null
+        && exists(/databases/(default)/documents/apps/auditoria/users/$(request.auth.uid))
+        && get(/databases/(default)/documents/apps/auditoria/users/$(request.auth.uid)).data.role == 'supermax';
+    }
+    
+    // 🔐 PERFIL
     match /apps/auditoria/users/{userId} {
-      allow get, update: if isAuth() && uid() == userId;
+      // Permitir leer/actualizar el propio perfil
+      allow get, update: if request.auth != null
+        && request.auth.uid == userId;
+    
+      // Permitir crear: propio perfil O supermax creando para otros
+      allow create: if request.auth != null
+        && (request.auth.uid == userId || isSupermax())
+        && hasValidAppId();
     }
     
+    // 🔐 LISTADO DE SUBCOLECCIONES (ESTA ERA LA PIEZA FALTANTE)
     match /apps/auditoria/users/{userId}/{collection} {
-      allow list, read: if isAuth() && uid() == userId;
+      allow list: if request.auth != null
+        && (request.auth.uid == userId || isSupermax());
     }
     
+    // 🔐 DOCUMENTOS DENTRO DE SUBCOLECCIONES
     match /apps/auditoria/users/{userId}/{collection}/{docId} {
-      allow get, create, update, delete: if isAuth() && uid() == userId;
+      allow read, create, update, delete: if request.auth != null
+        && (request.auth.uid == userId || isSupermax());
+    }
+    
+    // 🔓 Datos generales de la app (excluye explícitamente 'users')
+    match /apps/auditoria/{collection}/{document=**} {
+      // Solo aplicar si NO es 'users' (las rutas de usuarios ya están manejadas arriba)
+      allow read: if request.auth != null
+        && collection != 'users';
+    
+      allow create: if request.auth != null
+        && collection != 'users'
+        && hasValidAppId();
+    
+      allow update: if request.auth != null
+        && collection != 'users'
+        && (isLegacyDoc() || (hasValidAppId() && sameAppId()));
+    
+      allow delete: if request.auth != null
+        && collection != 'users';
+    }
+    
+    // 📊 Colecciones en raíz (empresas, sucursales, auditorías, etc)
+    match /empresas/{empresaId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /sucursales/{sucursalId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /auditorias/{auditoriaId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /formularios/{formularioId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /empleados/{empleadoId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /accidentes/{accidenteId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /incidentes/{incidenteId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /capacitaciones/{capacitacionId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /reportes/{reporteId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /logs/{logId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // ❌ Todo lo demás cerrado
+    match /{document=**} {
+      allow read, write: if false;
     }
     
 
