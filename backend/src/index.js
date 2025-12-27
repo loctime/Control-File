@@ -5,6 +5,7 @@ const githubCallbackRoutes = require('./routes/auth-github-callback');
 const githubReposRoutes = require('./routes/github-repos');
 const cors = require('cors');
 const helmet = require('helmet');
+const adminRoutes = require('./routes/admin');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
@@ -52,7 +53,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://controldoc.app',
       'https://stock.controldoc.app',
       'https://gastos.controldoc.app',
-      'https://auditoria.controldoc.app'
+      'https://auditoria.controldoc.app',
+      'https://repo.controldoc.app'
     ];
 
 logger.info('CORS allowed origins', { allowedOrigins });
@@ -67,7 +69,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       logger.warn('CORS blocked origin', { origin });
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
@@ -155,6 +157,7 @@ app.use('/api/folders', authMiddleware, foldersRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/audio', authMiddleware, audioRoutes);
 app.use('/api/stores', authMiddleware, storesRoutes);
+app.use('/api/admin', authMiddleware, adminRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
