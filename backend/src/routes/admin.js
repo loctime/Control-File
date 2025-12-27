@@ -10,7 +10,7 @@ const { logger } = require('../utils/logger');
  *
  * Requisitos:
  * - Authorization: Bearer <firebase-id-token>
- * - Usuario autenticado debe tener role === "supermax"
+ * - Usuario autenticado debe tener role === "max" o "supermax"
  *   en: apps/auditoria/users/{uid}
  */
 router.post('/create-user', async (req, res) => {
@@ -22,7 +22,7 @@ router.post('/create-user', async (req, res) => {
 
     const token = authHeader.slice(7);
 
-    // 🔐 Verificar token
+    // 🔐 Verificar token Firebase
     let decodedToken;
     try {
       decodedToken = await admin.auth().verifyIdToken(token);
@@ -34,31 +34,34 @@ router.post('/create-user', async (req, res) => {
     const uidRequester = decodedToken.uid;
     const db = admin.firestore();
 
-    // 🔒 Verificar supermax
-    const supermaxRef = db
+    // 🔒 Verificar rol del solicitante
+    const requesterRef = db
       .collection('apps')
       .doc('auditoria')
       .collection('users')
       .doc(uidRequester);
 
-    const supermaxSnap = await supermaxRef.get();
+    const requesterSnap = await requesterRef.get();
 
-    if (!supermaxSnap.exists || supermaxSnap.data()?.role !== 'supermax') {
+    if (!requesterSnap.exists) {
       return res.status(403).json({
-        error: 'No tienes permisos. Se requiere role === supermax',
+        error: 'No tienes perfil en apps/auditoria/users',
+      });
+    }
+
+    const requesterData = requesterSnap.data();
+    const allowedRoles = ['max', 'supermax'];
+
+    if (!allowedRoles.includes(requesterData?.role)) {
+      return res.status(403).json({
+        error: 'No tienes permisos. Se requiere role === max o supermax',
       });
     }
 
     // 📦 Validar body
     const { email, password, nombre, role, appId } = req.body || {};
 
-    if (
-      !email ||
-      !password ||
-      !nombre ||
-      !role ||
-      appId !== 'auditoria'
-    ) {
+    if (!email || !password || !nombre || !role || appId !== 'auditoria') {
       return res.status(400).json({ error: 'Datos inválidos o incompletos' });
     }
 
@@ -73,7 +76,7 @@ router.post('/create-user', async (req, res) => {
       .doc('auditoria')
       .collection('users');
 
-    // 🔍 Verificar si existe en Auth
+    // 🔍 Verificar si existe en Firebase Auth
     let authUser = null;
     try {
       authUser = await admin.auth().getUserByEmail(email);
@@ -112,7 +115,7 @@ router.post('/create-user', async (req, res) => {
 
       status = 'linked';
     } else {
-      // 🆕 Crear usuario Auth
+      // 🆕 Crear usuario en Firebase Auth
       const newUser = await admin.auth().createUser({
         email,
         password,
