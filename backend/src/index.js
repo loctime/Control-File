@@ -1,4 +1,7 @@
 const express = require('express');
+const githubAuthRoutes = require('./routes/auth-github');
+const githubCallbackRoutes = require('./routes/auth-github-callback');
+const githubReposRoutes = require('./routes/github-repos');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -140,6 +143,9 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   });
   next();
 }, uploadRoutes);
+app.use('/api', githubAuthRoutes);
+app.use('/api', githubCallbackRoutes);
+app.use('/api/github', authMiddleware, githubReposRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);
