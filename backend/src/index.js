@@ -1,3 +1,4 @@
+// backend/src/index.js
 const express = require('express');
 const githubAuthRoutes = require('./routes/auth-github');
 const githubCallbackRoutes = require('./routes/auth-github-callback');
