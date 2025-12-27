@@ -6,6 +6,7 @@ const githubReposRoutes = require('./routes/github-repos');
 const cors = require('cors');
 const helmet = require('helmet');
 const githubStatusRoutes = require('./routes/github-status');
+const githubSelectRepoRoutes = require('./routes/github-select-repo');
 
 const adminRoutes = require('./routes/admin');
 const compression = require('compression');
@@ -152,6 +153,7 @@ app.use('/api', githubAuthRoutes);
 app.use('/api', githubCallbackRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
+app.use('/api/github', authMiddleware, githubSelectRepoRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);

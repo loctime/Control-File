@@ -5,82 +5,73 @@ const router = express.Router();
 
 /**
  * GET /api/github/repos
- * Lista repositorios del usuario autenticado
+ * Devuelve repositorios del usuario conectados a GitHub
  */
 router.get('/repos', async (req, res) => {
   try {
-    // authMiddleware ya dejó req.user
-    const userId = req.user?.uid;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-
+    const userId = req.user.uid;
     const db = admin.firestore();
 
-    // 1️⃣ Obtener token GitHub del usuario
-    const tokenDoc = await db
+    // 1. Obtener integración GitHub
+    const integrationSnap = await db
       .collection('githubIntegrations')
       .doc(userId)
       .get();
 
-    if (!tokenDoc.exists) {
-      return res.status(404).json({
-        error: 'GitHub no conectado para este usuario'
+    if (!integrationSnap.exists) {
+      return res.status(400).json({
+        error: 'GitHub no conectado'
       });
     }
 
-    const { accessToken } = tokenDoc.data();
+    const { access_token } = integrationSnap.data();
 
-    if (!accessToken) {
+    if (!access_token) {
       return res.status(400).json({
         error: 'Token GitHub inválido'
       });
     }
 
-    // 2️⃣ Llamar a GitHub API
-    const response = await fetch(
+    // 2. Llamar a GitHub API
+    const ghRes = await fetch(
       'https://api.github.com/user/repos?per_page=100&sort=updated',
       {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${access_token}`,
           Accept: 'application/vnd.github+json',
-          'User-Agent': 'ControlFile'
+          'User-Agent': 'controlfile-backend'
         }
       }
     );
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      return res.status(response.status).json({
+    if (!ghRes.ok) {
+      const err = await ghRes.text();
+      return res.status(500).json({
         error: 'Error consultando GitHub',
-        details: errorBody
+        details: err
       });
     }
 
-    const repos = await response.json();
+    const repos = await ghRes.json();
 
-    // 3️⃣ Normalizar respuesta (solo lo necesario)
-    const normalized = repos.map(repo => ({
-      id: repo.id,
-      name: repo.name,
-      fullName: repo.full_name,
-      private: repo.private,
-      owner: repo.owner.login,
-      defaultBranch: repo.default_branch,
-      updatedAt: repo.updated_at,
-      url: repo.html_url,
-      cloneUrl: repo.clone_url
+    // 3. Normalizar salida
+    const normalized = repos.map(r => ({
+      id: r.id,
+      fullName: r.full_name,
+      owner: r.owner.login,
+      name: r.name,
+      private: r.private,
+      defaultBranch: r.default_branch,
+      updatedAt: r.updated_at
     }));
 
     return res.json({
-      count: normalized.length,
       repos: normalized
     });
   } catch (err) {
-    console.error('Error listando repos GitHub:', err);
+    console.error('GitHub repos error:', err);
     return res.status(500).json({
-      error: 'Error interno listando repos GitHub'
+      error: 'Error obteniendo repositorios GitHub'
     });
   }
 });
