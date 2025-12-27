@@ -7,7 +7,7 @@ router.get('/auth/github/callback', async (req, res) => {
 
     if (error) {
       return res.redirect(
-        `${process.env.FRONTEND_URL}/github-error?reason=${error}`
+        `${process.env.REPO_FRONTEND_URL}/github-error?reason=${error}`
       );
     }
 
@@ -52,7 +52,7 @@ router.get('/auth/github/callback', async (req, res) => {
 
     // 👉 NO guardar acá todavía
     return res.redirect(
-      `${process.env.FRONTEND_URL}/github-connected`
+      `${process.env.REPO_FRONTEND_URL}/github-connected`
     );
   } catch (err) {
     console.error('GitHub OAuth callback error:', err);
