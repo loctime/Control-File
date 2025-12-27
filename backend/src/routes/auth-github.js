@@ -1,14 +1,12 @@
-// backend/src/routes/auth.github.js
+// backend/src/routes/auth-github.js
 const express = require('express');
 const router = express.Router();
-
-const authMiddleware = require('../middleware/auth');
 
 /**
  * GET /api/auth/github
  * Inicia OAuth con GitHub
  */
-router.get('/auth/github', authMiddleware, (req, res) => {
+router.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const redirectUri = process.env.GITHUB_REDIRECT_URI;
 
@@ -18,9 +16,9 @@ router.get('/auth/github', authMiddleware, (req, res) => {
     });
   }
 
-  // Asociamos el OAuth al usuario autenticado
+  // State genérico (anti-CSRF básico)
   const state = Buffer.from(
-    JSON.stringify({ userId: req.user.uid })
+    JSON.stringify({ ts: Date.now() })
   ).toString('base64');
 
   const githubAuthUrl =
