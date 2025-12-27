@@ -1,3 +1,5 @@
+// app/api/admin/create-user/route.ts
+// este archivo es inservible sera eliminado no usar
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdminAuth, requireAdminDb } from "@/lib/firebase-admin"
 import { logError } from "@/lib/logger-client"
