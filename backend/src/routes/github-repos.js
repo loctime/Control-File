@@ -12,10 +12,9 @@ router.get('/repos', async (req, res) => {
     const userId = req.user.uid;
     const db = admin.firestore();
 
-    // 1. Obtener integración GitHub
+    // ✅ Leer desde la nueva ruta: apps/controlrepo/{userId}/githubIntegration
     const integrationSnap = await db
-      .collection('githubIntegrations')
-      .doc(userId)
+      .doc(`apps/controlrepo/${userId}/githubIntegration`)
       .get();
 
     if (!integrationSnap.exists) {

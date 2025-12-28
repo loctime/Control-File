@@ -149,7 +149,7 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   });
   next();
 }, uploadRoutes);
-app.use('/api', githubAuthRoutes);
+app.use('/api', authMiddleware, githubAuthRoutes);
 app.use('/api', githubCallbackRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);

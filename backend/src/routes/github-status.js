@@ -12,9 +12,9 @@ router.get('/status', async (req, res) => {
     const userId = req.user.uid;
 
     const db = admin.firestore();
+    // ✅ Leer desde la nueva ruta: apps/controlrepo/{userId}/githubIntegration
     const doc = await db
-      .collection('githubIntegrations')
-      .doc(userId)
+      .doc(`apps/controlrepo/${userId}/githubIntegration`)
       .get();
 
     return res.json({

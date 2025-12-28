@@ -27,9 +27,9 @@ router.post('/select-repo', async (req, res) => {
 
     const db = admin.firestore();
 
+    // ✅ Actualizar en la nueva ruta: apps/controlrepo/{userId}/githubIntegration
     await db
-      .collection('githubIntegrations')
-      .doc(userId)
+      .doc(`apps/controlrepo/${userId}/githubIntegration`)
       .set(
         {
           selectedRepo: {

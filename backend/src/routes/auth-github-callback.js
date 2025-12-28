@@ -1,4 +1,5 @@
 const express = require('express');
+const admin = require('firebase-admin');
 const router = express.Router();
 
 router.get('/auth/github/callback', async (req, res) => {
@@ -17,11 +18,17 @@ router.get('/auth/github/callback', async (req, res) => {
       });
     }
 
-    // Decodificar state (solo validación básica)
+    // Decodificar state para obtener uid
+    let stateData;
     try {
-      JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+      stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
     } catch {
       return res.status(400).json({ error: 'State inválido' });
+    }
+
+    const { uid } = stateData;
+    if (!uid) {
+      return res.status(400).json({ error: 'UID no encontrado en state' });
     }
 
     // Intercambiar code por access_token
@@ -50,7 +57,21 @@ router.get('/auth/github/callback', async (req, res) => {
       });
     }
 
-    // 👉 NO guardar acá todavía
+    // ✅ Guardar token en la ruta correcta para ControlRepo
+    const db = admin.firestore();
+    await db
+      .doc(`apps/controlrepo/${uid}/githubIntegration`)
+      .set({
+        access_token: tokenData.access_token,
+        provider: 'github',
+        connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Opcional: guardar refresh_token si GitHub lo proporciona
+        ...(tokenData.refresh_token && { refresh_token: tokenData.refresh_token }),
+        ...(tokenData.expires_in && { expiresIn: tokenData.expires_in })
+      }, { merge: true });
+
+    console.log(`[AUTH] GitHub integration guardada para usuario ${uid}`);
+
     return res.redirect(
       `${process.env.REPO_FRONTEND_URL}/github-connected`
     );

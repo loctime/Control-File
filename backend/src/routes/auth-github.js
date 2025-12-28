@@ -5,8 +5,17 @@ const router = express.Router();
 /**
  * GET /api/auth/github
  * Inicia OAuth con GitHub
+ * REQUIERE AUTENTICACIÓN para obtener el uid del usuario
  */
 router.get('/auth/github', (req, res) => {
+  const userId = req.user?.uid;
+  
+  if (!userId) {
+    return res.status(401).json({
+      error: 'Usuario no autenticado'
+    });
+  }
+
   const clientId = process.env.GITHUB_CLIENT_ID;
   const redirectUri = process.env.GITHUB_REDIRECT_URI;
 
@@ -16,9 +25,12 @@ router.get('/auth/github', (req, res) => {
     });
   }
 
-  // State genérico (anti-CSRF básico)
+  // ✅ Incluir uid en el state
   const state = Buffer.from(
-    JSON.stringify({ ts: Date.now() })
+    JSON.stringify({ 
+      ts: Date.now(),
+      uid: userId  // ✅ Agregar uid al state
+    })
   ).toString('base64');
 
   const githubAuthUrl =
