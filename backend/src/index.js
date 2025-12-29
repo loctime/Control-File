@@ -150,8 +150,13 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   next();
 }, uploadRoutes);
 // GitHub OAuth
-app.use('/api/auth/github', authMiddleware, githubAuthRoutes); // inicio OAuth (requiere login)
-app.use('/api/auth/github', githubCallbackRoutes);   // callback OAuth (SIN auth) - ruta: /callback
+// ===== ControlRepo - GitHub OAuth =====
+
+// 1️⃣ Callback OAuth → NUNCA pasa por auth
+app.use('/api/auth/github/callback', githubCallbackRoutes);
+
+// 2️⃣ Inicio OAuth → SÍ requiere auth
+app.use('/api/auth/github', authMiddleware, githubAuthRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
 app.use('/api/github', authMiddleware, githubSelectRepoRoutes);
