@@ -149,8 +149,9 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   });
   next();
 }, uploadRoutes);
-app.use('/api', authMiddleware, githubAuthRoutes);
-app.use('/api', githubCallbackRoutes);
+// GitHub OAuth
+app.use('/api/auth/github', authMiddleware, githubAuthRoutes); // inicio OAuth (requiere login)
+app.use('/api/auth/github', githubCallbackRoutes);   // callback OAuth (SIN auth) - ruta: /callback
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
 app.use('/api/github', authMiddleware, githubSelectRepoRoutes);

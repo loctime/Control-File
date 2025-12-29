@@ -7,7 +7,7 @@ const router = express.Router();
  * Inicia OAuth con GitHub
  * REQUIERE AUTENTICACIÓN para obtener el uid del usuario
  */
-router.get('/auth/github', (req, res) => {
+router.get('/', (req, res) => {
   const userId = req.user?.uid;
   
   if (!userId) {

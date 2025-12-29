@@ -2,7 +2,7 @@ const express = require('express');
 const admin = require('firebase-admin');
 const router = express.Router();
 
-router.get('/auth/github/callback', async (req, res) => {
+router.get('/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
