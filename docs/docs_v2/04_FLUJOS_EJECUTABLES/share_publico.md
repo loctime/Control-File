@@ -6,7 +6,7 @@ Ante contradicción, TRUTH.md manda.
 
 ---
 
-**Fuente:** TRUTH.md §7.2, §7.3
+**Fuente:** TRUTH.md §8.2, §8.3
 
 ---
 
@@ -103,7 +103,7 @@ function isShareValid(shareData) {
 
 ## Referencias
 
-- TRUTH.md §6.2, §7.2, §7.3
+- TRUTH.md §7.2, §8.2, §8.3
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §9.1, §9.2
 - 03_CONTRATOS_TECNICOS/modelo_shares.md
 - 03_CONTRATOS_TECNICOS/endpoints_shares.md

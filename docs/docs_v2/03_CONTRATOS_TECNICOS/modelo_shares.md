@@ -63,7 +63,7 @@ Un share es válido si:
 
 ## Referencias
 
-- TRUTH.md §4.2, §6.2, §7.2
+- TRUTH.md §4.2, §7.2, §8.2
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §4.3, §9.1
 - 06_LEGACY_Y_EXCEPCIONES/isPublic.md
 

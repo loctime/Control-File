@@ -63,7 +63,7 @@ Este documento solo interpreta TRUTH.md en forma de reglas accionables.
 
 **Antipatrón:** Usar `quotaBytes` o ignorar `pendingBytes`.
 
-**Referencia:** TRUTH.md §4.3, §7.1
+**Referencia:** TRUTH.md §4.3, §8.1
 
 ---
 
@@ -102,7 +102,7 @@ Este documento solo interpreta TRUTH.md en forma de reglas accionables.
 
 **Antipatrón:** Usar presigned URLs para `<img>` en dominios distintos.
 
-**Referencia:** TRUTH.md §6.2, §7.4
+**Referencia:** TRUTH.md §7.2, §8.4
 
 ---
 
@@ -135,7 +135,7 @@ Este documento solo interpreta TRUTH.md en forma de reglas accionables.
 
 **Antipatrón:** Exigir auth en `GET /shares/{token}`, `/download`, `/image`.
 
-**Referencia:** TRUTH.md §6.2
+**Referencia:** TRUTH.md §7.2
 
 ---
 
@@ -192,7 +192,7 @@ Este endpoint requiere que el archivo ya esté en papelera (`deletedAt !== null`
 
 **Antipatrón:** Crear `files` antes de que el upload esté confirmado.
 
-**Referencia:** TRUTH.md §4.4, §7.1
+**Referencia:** TRUTH.md §4.4, §8.1
 
 ### 7.2 Cuota se valida ANTES de presign
 - Validar con `usedBytes + pendingBytes + size`

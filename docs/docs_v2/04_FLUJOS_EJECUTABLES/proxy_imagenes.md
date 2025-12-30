@@ -6,7 +6,7 @@ Ante contradicción, TRUTH.md manda.
 
 ---
 
-**Fuente:** TRUTH.md §7.4
+**Fuente:** TRUTH.md §8.4
 
 ---
 
@@ -91,7 +91,7 @@ Content-Length: {fileData.size} (solo en HEAD)
 
 ## Referencias
 
-- TRUTH.md §6.2, §7.4
+- TRUTH.md §7.2, §8.4
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §3.3
 - 03_CONTRATOS_TECNICOS/endpoints_shares.md
 

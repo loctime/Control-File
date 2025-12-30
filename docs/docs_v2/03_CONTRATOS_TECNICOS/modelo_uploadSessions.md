@@ -71,6 +71,6 @@ Al confirmar:
 
 ## Referencias
 
-- TRUTH.md §4.4, §7.1
+- TRUTH.md §4.4, §8.1
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §7.1, §7.2
 

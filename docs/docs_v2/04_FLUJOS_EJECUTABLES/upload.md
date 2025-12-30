@@ -6,7 +6,7 @@ Ante contradicción, TRUTH.md manda.
 
 ---
 
-**Fuente:** TRUTH.md §7.1
+**Fuente:** TRUTH.md §8.1
 
 ---
 
@@ -116,7 +116,7 @@ Ante contradicción, TRUTH.md manda.
 
 ## Referencias
 
-- TRUTH.md §4.4, §7.1
+- TRUTH.md §4.4, §8.1
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §7.1, §7.2
 - 03_CONTRATOS_TECNICOS/modelo_uploadSessions.md
 

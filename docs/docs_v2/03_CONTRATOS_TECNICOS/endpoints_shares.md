@@ -6,7 +6,7 @@ Ante contradicción, TRUTH.md manda.
 
 ---
 
-**Fuente:** TRUTH.md §6
+**Fuente:** TRUTH.md §7
 
 ---
 
@@ -185,7 +185,7 @@ Incrementar contador (usado por Cloudflare Worker).
 
 ## Referencias
 
-- TRUTH.md §6, §7
+- TRUTH.md §7, §8
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §9.1
 - 04_FLUJOS_EJECUTABLES/share_publico.md
 - 04_FLUJOS_EJECUTABLES/proxy_imagenes.md

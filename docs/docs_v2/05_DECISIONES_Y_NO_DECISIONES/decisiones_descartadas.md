@@ -72,6 +72,6 @@ Decisiones arquitectónicas que **NO** se tomaron y por qué.
 
 ## Referencias
 
-- TRUTH.md §3.3, §4.1, §7.1
+- TRUTH.md §3.3, §4.1, §8.1
 - 02_FILOSOFIA_Y_PRINCIPIOS.md §2.1, §3.2, §3.3, §5.1, §7.2
 

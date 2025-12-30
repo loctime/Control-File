@@ -227,11 +227,50 @@ match /users/{userId} {
 
 ---
 
-## 6. Endpoints de Shares
+## 6. Endpoints de Files
+
+Todos los endpoints de files están en `/api/files`.  
+Estos endpoints son core de ControlFile y no están pensados para uso directo por apps externas.
+
+### 6.1 Endpoints protegidos (requieren autenticación)
+
+- `POST /api/files/restore` - Restaurar archivo desde papelera
+  - Body: `{ fileId }`
+  - Valida: ownership (`userId == uid`), archivo existe, `deletedAt !== null`
+  - Valida cuota: `usedBytes + fileData.size <= planQuotaBytes`
+  - Actualiza: `files/{fileId}.deletedAt = null`, `files/{fileId}.updatedAt = now`
+  - Actualiza cuota: `users/{uid}.usedBytes += fileData.size`
+  - Retorna: `{ success: true, message }`
+
+- `POST /api/files/permanent-delete` - Eliminar permanentemente archivo de papelera
+  - Body: `{ fileId }`
+  - Valida: ownership (`userId == uid`), archivo existe, `deletedAt !== null`
+  - Elimina: objeto en B2 (`bucketKey`), documento en `files/{fileId}`
+  - No actualiza cuota (archivo ya estaba en papelera, cuota ya fue decrementada)
+  - Retorna: `{ success: true, message }`
+
+- `POST /api/files/zip` - Descargar múltiples archivos como ZIP
+  - Body: `{ fileIds: string[], zipName?: string }`
+  - Valida: ownership (`userId == uid`), archivos existen, `deletedAt === null`, `type === "file"` (no carpetas)
+  - Límite: máximo 200 archivos
+  - Genera: ZIP stream desde B2 usando presigned URLs (expiración: 5 minutos)
+  - Retorna: `application/zip` (stream directo)
+  - Headers: `Content-Type: application/zip`, `Content-Disposition: attachment`
+
+- `POST /api/files/empty-trash` - Eliminar permanentemente múltiples archivos de papelera
+  - Body: `{ fileIds: string[] }`
+  - Valida: ownership (`userId == uid`) para cada archivo
+  - Elimina: objetos en B2 (`bucketKey`), documentos en `files/{fileId}` (batch)
+  - Actualiza cuota: `users/{uid}.usedBytes -= sum(fileData.size)` (decrementa total)
+  - Retorna: `{ success: true, deletedIds: string[], notFound: string[], unauthorized: string[] }`
+
+---
+
+## 7. Endpoints de Shares
 
 Todos los endpoints de shares están en `/api/shares`.
 
-### 6.1 Endpoints protegidos (requieren autenticación)
+### 7.1 Endpoints protegidos (requieren autenticación)
 
 - `POST /api/shares/create` - Crear share
   - Body: `{ fileId, expiresIn? }` (expiresIn en horas, default: 24)
@@ -245,7 +284,7 @@ Todos los endpoints de shares están en `/api/shares`.
   - Retorna: `{ shares: Array<{ token, fileName, fileSize, expiresAt, createdAt, downloadCount, shareUrl }> }`
   - Filtra: solo shares activos (`isActive = true`)
 
-### 6.2 Endpoints públicos (sin autenticación)
+### 7.2 Endpoints públicos (sin autenticación)
 
 - `GET /api/shares/{token}` - Obtener información de share
   - Retorna: `{ fileName, fileSize, mime, expiresAt, downloadCount }`
@@ -273,9 +312,9 @@ Todos los endpoints de shares están en `/api/shares`.
 
 ---
 
-## 7. Flujos críticos
+## 8. Flujos críticos
 
-### 7.1 Creación de share
+### 8.1 Creación de share
 
 ```
 Usuario autenticado → POST /api/shares/create
@@ -286,7 +325,7 @@ Backend crea documento en shares/{token}
 Backend retorna shareToken y shareUrl
 ```
 
-### 7.2 Acceso a share público
+### 8.2 Acceso a share público
 
 ```
 Público → GET /api/shares/{token}
@@ -299,7 +338,7 @@ Backend valida:
 Backend retorna metadatos del archivo
 ```
 
-### 7.3 Descarga de archivo compartido
+### 8.3 Descarga de archivo compartido
 
 ```
 Público → POST /api/shares/{token}/download
@@ -314,7 +353,7 @@ Backend incrementa downloadCount
 Cliente → GET directo a B2 (presigned URL)
 ```
 
-### 7.4 Proxy de imagen (CORS-safe)
+### 8.4 Proxy de imagen (CORS-safe)
 
 ```
 Público → GET /api/shares/{token}/image
