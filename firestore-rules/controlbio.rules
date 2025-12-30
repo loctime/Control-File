@@ -158,31 +158,4 @@ match /apps/controlbio/galleryLayouts/{layoutId} {
     && resource.data.userId == uid();
 }
 
-// Archivos de controlbio (para galerías públicas)
-match /files/{fileId} {
-  // Permitir lectura si:
-  // 1. El archivo pertenece al usuario autenticado, O
-  // 2. El archivo pertenece a un usuario con galería pública Y el archivo no está eliminado Y tiene downloadURL
-  allow read: if 
-    (isAuth() && resource.data.userId == uid()) ||
-    (
-      resource.data.userId != null &&
-      resource.data.deletedAt == null &&
-      "downloadURL" in resource.data &&
-      resource.data.downloadURL is string &&
-      exists(/databases/$(db)/documents/apps/controlbio/galleryLayouts/$(resource.data.userId)) &&
-      get(/databases/$(db)/documents/apps/controlbio/galleryLayouts/$(resource.data.userId)).data.isPublic == true
-    );
-  
-  // Solo el dueño puede crear/actualizar/eliminar
-  allow create: if isAuth() 
-    && request.resource.data.userId == uid()
-    && request.resource.data.deletedAt == null;
-  
-  allow update: if isAuth() 
-    && resource.data.userId == uid()
-    && (!("userId" in request.resource.data) || request.resource.data.userId == resource.data.userId);
-  
-  allow delete: if isAuth() && resource.data.userId == uid();
-}
 

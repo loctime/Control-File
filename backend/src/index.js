@@ -155,8 +155,10 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
 // 1️⃣ Callback OAuth → NUNCA pasa por auth
 app.use('/api/auth/github/callback', githubCallbackRoutes);
 
-// 2️⃣ Inicio OAuth → SÍ requiere auth
-app.use('/api/auth/github', authMiddleware, githubAuthRoutes);
+// 2️⃣ Inicio OAuth → El router maneja la autenticación internamente:
+//    - POST /init → requiere authMiddleware (aplicado en el router)
+//    - GET / → valida token manualmente (permite query string para redirects del navegador)
+app.use('/api/auth/github', githubAuthRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
 app.use('/api/github', authMiddleware, githubSelectRepoRoutes);

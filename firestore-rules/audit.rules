@@ -100,3 +100,4 @@ match /capacitaciones/{id} {
 match /reportes/{id} {
   allow read, write: if isAuth();
 }
+
