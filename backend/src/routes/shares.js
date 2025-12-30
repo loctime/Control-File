@@ -7,6 +7,16 @@ const { logger } = require('../utils/logger');
 // Import auth middleware
 const authMiddleware = require('../middleware/auth');
 
+// Helper: Check if share is expired
+// Returns false if no expiresAt (legacy shares don't expire)
+// Returns true if expired, false if still valid
+function isShareExpired(shareData) {
+  if (!shareData.expiresAt) {
+    return false; // No expiration date = never expires
+  }
+  return shareData.expiresAt.toDate() < new Date();
+}
+
 // Create share (protected)
 router.post('/create', authMiddleware, async (req, res) => {
   try {
@@ -87,7 +97,7 @@ router.get('/:token', async (req, res) => {
     const shareData = shareDoc.data();
 
     // Check if share is expired
-    if (shareData.expiresAt.toDate() < new Date()) {
+    if (isShareExpired(shareData)) {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
@@ -125,7 +135,7 @@ router.post('/:token/download', async (req, res) => {
     const shareData = shareDoc.data();
 
     // Check if share is expired
-    if (shareData.expiresAt.toDate() < new Date()) {
+    if (isShareExpired(shareData)) {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
@@ -223,7 +233,7 @@ router.get('/:token/image', async (req, res) => {
     const shareData = shareDoc.data();
 
     // Check if share is expired
-    if (shareData.expiresAt.toDate() < new Date()) {
+    if (isShareExpired(shareData)) {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
