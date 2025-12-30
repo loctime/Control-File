@@ -20,9 +20,29 @@ match /uploadSessions/{sessionId} {
 
 // Compartir archivos
 match /shares/{shareId} {
-  allow create: if isAuth() && request.resource.data.userId == uid();
-  allow read: if resource.data.isPublic == true || (isAuth() && resource.data.userId == uid());
-  allow update, delete: if isAuth() && resource.data.userId == uid();
+  // Opción A: Derivar ownership desde files/{fileId} (más robusta)
+  // Permite crear share si el usuario es dueño del archivo referenciado
+  allow create: if isAuth()
+    && request.resource.data.fileId != null
+    && exists(/databases/$(db)/documents/files/$(request.resource.data.fileId))
+    && get(/databases/$(db)/documents/files/$(request.resource.data.fileId)).data.userId == uid();
+  
+  // Read: público si isPublic=true, o si el usuario es dueño (verificando userId o fileId)
+  allow read: if resource.data.isPublic == true 
+    || (isAuth() && (
+      resource.data.userId == uid() 
+      || (resource.data.fileId != null 
+          && exists(/databases/$(db)/documents/files/$(resource.data.fileId))
+          && get(/databases/$(db)/documents/files/$(resource.data.fileId)).data.userId == uid())
+    ));
+  
+  // Update/Delete: verificar ownership por userId o derivado desde fileId
+  allow update, delete: if isAuth() && (
+    resource.data.userId == uid()
+    || (resource.data.fileId != null 
+        && exists(/databases/$(db)/documents/files/$(resource.data.fileId))
+        && get(/databases/$(db)/documents/files/$(resource.data.fileId)).data.userId == uid())
+  );
 }
 
 // Papelera

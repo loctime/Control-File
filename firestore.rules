@@ -133,9 +133,29 @@ service cloud.firestore {
     
     // Compartir archivos
     match /shares/{shareId} {
-      allow create: if isAuth() && request.resource.data.userId == uid();
-      allow read: if resource.data.isPublic == true || (isAuth() && resource.data.userId == uid());
-      allow update, delete: if isAuth() && resource.data.userId == uid();
+      // Opción A: Derivar ownership desde files/{fileId} (más robusta)
+      // Permite crear share si el usuario es dueño del archivo referenciado
+      allow create: if isAuth()
+        && request.resource.data.fileId != null
+        && exists(/databases/$(db)/documents/files/$(request.resource.data.fileId))
+        && get(/databases/$(db)/documents/files/$(request.resource.data.fileId)).data.userId == uid();
+    
+      // Read: público si isPublic=true, o si el usuario es dueño (verificando userId o fileId)
+      allow read: if resource.data.isPublic == true 
+        || (isAuth() && (
+          resource.data.userId == uid() 
+          || (resource.data.fileId != null 
+              && exists(/databases/$(db)/documents/files/$(resource.data.fileId))
+              && get(/databases/$(db)/documents/files/$(resource.data.fileId)).data.userId == uid())
+        ));
+    
+      // Update/Delete: verificar ownership por userId o derivado desde fileId
+      allow update, delete: if isAuth() && (
+        resource.data.userId == uid()
+        || (resource.data.fileId != null 
+            && exists(/databases/$(db)/documents/files/$(resource.data.fileId))
+            && get(/databases/$(db)/documents/files/$(resource.data.fileId)).data.userId == uid())
+      );
     }
     
     // Papelera
@@ -568,119 +588,106 @@ service cloud.firestore {
     /* ========= AUDIT ========= */
 
     // ================================
-    // ControlAudit – reglas DEV claras
+    // ControlAudit – reglas específicas
     // ================================
     
     // ========= HELPERS APPID =========
-    // Valida que appId es string y es 'auditoria'
-    function hasValidAppId() {
+    function hasValidAuditAppId() {
       return request.resource.data.appId is string
         && request.resource.data.appId == 'auditoria';
     }
     
-    // Detecta si el documento existente es legacy (sin appId)
-    function isLegacyDoc() {
+    function isLegacyAuditDoc() {
       return !('appId' in resource.data);
     }
     
-    // Valida que appId coincide entre resource y request.resource
-    function sameAppId() {
+    function sameAuditAppId() {
       return resource.data.appId == request.resource.data.appId;
     }
     
-    // Verifica si el usuario autenticado es supermax
-    function isSupermax() {
-      return request.auth != null
-        && exists(/databases/(default)/documents/apps/auditoria/users/$(request.auth.uid))
-        && get(/databases/(default)/documents/apps/auditoria/users/$(request.auth.uid)).data.role == 'supermax';
+    function isAuditSupermax() {
+      return isAuth()
+        && exists(/databases/$(db)/documents/apps/auditoria/users/$(uid()))
+        && get(/databases/$(db)/documents/apps/auditoria/users/$(uid())).data.role == 'supermax';
     }
     
-    // 🔐 PERFIL
+    // ================================
+    // 🔐 PERFIL USUARIO AUDITORIA
+    // ================================
     match /apps/auditoria/users/{userId} {
-      // Permitir leer/actualizar el propio perfil
-      allow get, update: if request.auth != null
-        && request.auth.uid == userId;
+      allow get, update: if isAuth() && uid() == userId;
     
-      // Permitir crear: propio perfil O supermax creando para otros
-      allow create: if request.auth != null
-        && (request.auth.uid == userId || isSupermax())
-        && hasValidAppId();
+      allow create: if isAuth()
+        && (uid() == userId || isAuditSupermax())
+        && hasValidAuditAppId();
     }
     
-    // 🔐 LISTADO DE SUBCOLECCIONES (ESTA ERA LA PIEZA FALTANTE)
+    // 🔐 LISTADO DE SUBCOLECCIONES
     match /apps/auditoria/users/{userId}/{collection} {
-      allow list: if request.auth != null
-        && (request.auth.uid == userId || isSupermax());
+      allow list: if isAuth()
+        && (uid() == userId || isAuditSupermax());
     }
     
-    // 🔐 DOCUMENTOS DENTRO DE SUBCOLECCIONES
+    // 🔐 DOCUMENTOS EN SUBCOLECCIONES
     match /apps/auditoria/users/{userId}/{collection}/{docId} {
-      allow read, create, update, delete: if request.auth != null
-        && (request.auth.uid == userId || isSupermax());
+      allow read, create, update, delete: if isAuth()
+        && (uid() == userId || isAuditSupermax());
     }
     
-    // 🔓 Datos generales de la app (excluye explícitamente 'users')
+    // ================================
+    // 🔓 DATOS GENERALES DE AUDITORIA
+    // ================================
     match /apps/auditoria/{collection}/{document=**} {
-      // Solo aplicar si NO es 'users' (las rutas de usuarios ya están manejadas arriba)
-      allow read: if request.auth != null
-        && collection != 'users';
+      allow read: if isAuth() && collection != 'users';
     
-      allow create: if request.auth != null
+      allow create: if isAuth()
         && collection != 'users'
-        && hasValidAppId();
+        && hasValidAuditAppId();
     
-      allow update: if request.auth != null
+      allow update: if isAuth()
         && collection != 'users'
-        && (isLegacyDoc() || (hasValidAppId() && sameAppId()));
+        && (isLegacyAuditDoc() || (hasValidAuditAppId() && sameAuditAppId()));
     
-      allow delete: if request.auth != null
-        && collection != 'users';
+      allow delete: if isAuth() && collection != 'users';
     }
     
-    // 📊 Colecciones en raíz (empresas, sucursales, auditorías, etc)
-    match /empresas/{empresaId} {
-      allow read, write: if request.auth != null;
+    // ================================
+    // 📊 COLECCIONES RAÍZ (AUDITORIA)
+    // ================================
+    match /empresas/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /sucursales/{sucursalId} {
-      allow read, write: if request.auth != null;
+    match /sucursales/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /auditorias/{auditoriaId} {
-      allow read, write: if request.auth != null;
+    match /auditorias/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /formularios/{formularioId} {
-      allow read, write: if request.auth != null;
+    match /formularios/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /empleados/{empleadoId} {
-      allow read, write: if request.auth != null;
+    match /empleados/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /accidentes/{accidenteId} {
-      allow read, write: if request.auth != null;
+    match /accidentes/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /incidentes/{incidenteId} {
-      allow read, write: if request.auth != null;
+    match /incidentes/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /capacitaciones/{capacitacionId} {
-      allow read, write: if request.auth != null;
+    match /capacitaciones/{id} {
+      allow read, write: if isAuth();
     }
     
-    match /reportes/{reporteId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /logs/{logId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // ❌ Todo lo demás cerrado
-    match /{document=**} {
-      allow read, write: if false;
+    match /reportes/{id} {
+      allow read, write: if isAuth();
     }
     
 
