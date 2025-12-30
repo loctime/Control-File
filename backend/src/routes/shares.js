@@ -217,6 +217,15 @@ router.post('/:token/download', async (req, res) => {
   }
 });
 
+// OPTIONS handler for CORS preflight
+router.options('/:token/image', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(204).end();
+});
+
 // Get shared file directly (public, for embedding in <img> tags)
 router.get('/:token/image', async (req, res) => {
   try {
@@ -265,16 +274,41 @@ router.get('/:token/image', async (req, res) => {
       });
     }
 
-    // Generate presigned URL and redirect (1 hour validity for better caching)
-    const downloadUrl = await b2Service.createPresignedGetUrl(fileData.bucketKey, 3600);
+    // Set CORS headers for cross-origin requests
+    res.setHeader('Content-Type', fileData.mime || 'application/octet-stream');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
 
-    // Update download count
-    await shareRef.update({
-      downloadCount: admin.firestore.FieldValue.increment(1),
+    // Handle HEAD request - return headers only, no stream
+    if (req.method === 'HEAD') {
+      res.setHeader('Content-Length', fileData.size || 0);
+      return res.status(200).end();
+    }
+
+    // PROXY DE IMAGEN (CORS SAFE) - Stream desde B2 a través del backend
+    const fileStream = await b2Service.getObjectStream(fileData.bucketKey);
+
+    // Update download count (no bloquear si falla)
+    try {
+      await shareRef.update({
+        downloadCount: admin.firestore.FieldValue.increment(1),
+      });
+    } catch (updateError) {
+      logger.warn('Failed to update download count', { error: updateError.message, token });
+      // Continuar de todos modos
+    }
+
+    // Stream the file directly to the client
+    fileStream.on('error', (error) => {
+      logger.error('Error streaming file from B2', { error: error.message, bucketKey: fileData.bucketKey, token });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error al obtener archivo' });
+      }
     });
 
-    // Redirect to the actual file URL
-    res.redirect(downloadUrl);
+    fileStream.pipe(res);
   } catch (error) {
     logger.error('Error getting shared image', { error: error.message, token: req.params.token });
     res.status(500).json({ error: 'Error interno del servidor' });

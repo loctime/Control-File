@@ -214,6 +214,19 @@ async function getObjectBuffer(key) {
   return Buffer.concat(chunks);
 }
 
+// Get object as stream (for proxying files with CORS)
+async function getObjectStream(key) {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  
+  // Return the stream directly (response.Body is a Readable stream)
+  return response.Body;
+}
+
 module.exports = {
   createPresignedPutUrl,
   createPresignedGetUrl,
@@ -227,4 +240,5 @@ module.exports = {
   listObjects,
   uploadFileDirectly,
   getObjectBuffer,
+  getObjectStream,
 };
