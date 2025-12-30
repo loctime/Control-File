@@ -1,6 +1,8 @@
 # Documentación ControlFile v2
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 
@@ -13,6 +15,11 @@ Documentación técnica organizada para IA/agentes y desarrolladores.
 ### 1️⃣ TRUTH.md
 **Ley suprema.** Fuente única de verdad técnica.  
 Define qué existe, qué no existe, qué es obligatorio.
+
+**Estado:** CONGELADO. Solo se modifica por:
+- Bug real en código productivo
+- Contradicción con código productivo verificada
+- Decisión explícita del mantenedor
 
 **Prioridad:** Máxima. Si algo contradice TRUTH.md, TRUTH.md tiene razón.
 

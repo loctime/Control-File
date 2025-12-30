@@ -1,6 +1,8 @@
 # Estructura de Documentación docs_v2
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 
@@ -18,7 +20,7 @@ Jerarquía mental para IA/agentes:
 ```
 /docs_v2
 │
-├── TRUTH.md                     ← ÚNICO, plano, manda
+├── TRUTH.md                     ← ÚNICO, plano, manda, CONGELADO
 │
 ├── 01_INTRO.md                  ← Opcional, humano / contexto
 │

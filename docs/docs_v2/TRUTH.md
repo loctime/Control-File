@@ -2,6 +2,13 @@
 
 Este documento define las **verdades inmutables** del sistema ControlFile.
 
+**ESTADO: CONGELADO**
+
+Este documento está congelado y **NO se modifica** salvo:
+1. Bug real detectado en código productivo
+2. Contradicción con código productivo verificada
+3. Decisión explícita del mantenedor
+
 Si algo **no está definido aquí**, se considera:
 - no soportado
 - no implementado

@@ -1,6 +1,8 @@
 # ControlFile – Sistema de Archivos
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 
@@ -64,7 +66,6 @@ Los archivos y carpetas se almacenan en la misma colección `files`, diferenciad
   id: string,                    // ID único del archivo
   userId: string,                 // Owner del archivo
   name: string,                   // Nombre original del archivo
-  slug: string,                   // Slug para URLs amigables
   size: number,                   // Tamaño en bytes
   mime: string,                   // MIME type (ej: "image/png")
   bucketKey: string,              // Ruta en B2 (ej: "users/{userId}/files/{timestamp}-{name}")
@@ -73,13 +74,9 @@ Los archivos y carpetas se almacenan en la misma colección `files`, diferenciad
   ancestors: string[],            // IDs de carpetas ancestras
   type: "file",                   // Tipo: "file" o "folder"
   createdAt: Timestamp,           // Fecha de creación
-  modifiedAt: Timestamp,         // Última modificación
+  updatedAt: Timestamp,           // Última modificación
   deletedAt: Timestamp | null,   // Soft delete (null = activo)
-  metadata: {
-    etag?: string,                // ETag de B2 (validación de integridad)
-    thumbnailUrl?: string,        // URL de thumbnail (si aplica)
-    // ... otros metadatos opcionales
-  }
+  etag?: string                   // ETag de B2 (validación de integridad, opcional)
 }
 ```
 
@@ -96,27 +93,8 @@ Los archivos y carpetas se almacenan en la misma colección `files`, diferenciad
   ancestors: string[],            // IDs de carpetas ancestras
   type: "folder",                // Tipo: "folder"
   createdAt: Timestamp,
-  modifiedAt: Timestamp,
-  deletedAt: Timestamp | null,
-  metadata: {
-    isMainFolder: boolean,        // true si parentId === null
-    isDefault: boolean,           // Carpeta por defecto
-    icon: string,                 // Icono (ej: "Folder", "Taskbar")
-    color: string,                // Color CSS (ej: "text-purple-600")
-    description: string,          // Descripción opcional
-    tags: string[],               // Tags para búsqueda
-    isPublic: boolean,            // Carpeta pública (legacy, no usado)
-    viewCount: number,            // Contador de vistas
-    lastAccessedAt: Timestamp,    // Último acceso
-    source: "navbar" | "taskbar", // Origen de la carpeta
-    permissions: {
-      canEdit: boolean,
-      canDelete: boolean,
-      canShare: boolean,
-      canDownload: boolean
-    },
-    customFields: Record<string, any>  // Campos personalizados
-  }
+  modifiedAt: Timestamp,         // (o updatedAt, ambos aceptados)
+  deletedAt: Timestamp | null
 }
 ```
 
@@ -233,7 +211,7 @@ Las carpetas pueden accederse mediante URLs basadas en slugs:
 /usuario/documentos/informes
 ```
 
-**Endpoint:** `GET /api/folders/by-slug/:username/:path(*)`
+**Nota:** Endpoint `GET /api/folders/by-slug/:username/:path(*)` no está documentado en TRUTH.md §6.
 
 **Validación:**
 - Solo el owner puede acceder (por ahora)
@@ -246,40 +224,7 @@ Las carpetas pueden accederse mediante URLs basadas en slugs:
 
 ### Carpetas raíz
 
-Las carpetas con `parentId === null` son carpetas principales:
-
-```typescript
-{
-  parentId: null,
-  metadata: {
-    isMainFolder: true
-  }
-}
-```
-
-**Características:**
-- Aparecen en la navegación principal
-- Pueden tener `source: "navbar"` o `source: "taskbar"`
-- Se crean automáticamente si no existen
-
-**Endpoint:** `GET /api/folders/root?name={nombre}&pin={0|1}`
-
----
-
-## Sistema de Taskbar vs Navbar
-
-### Diferenciación por `metadata.source`
-
-| Característica | Navbar (`source: "navbar"`) | Taskbar (`source: "taskbar"`) |
-|----------------|----------------------------|-------------------------------|
-| **Ubicación** | Barra superior | Barra inferior fija |
-| **Estilo** | Borde morado | Borde azul |
-| **Propósito** | Navegación principal | Acceso rápido |
-| **Context menu** | Sí | No |
-
-**Validación:** Solo `"navbar"` y `"taskbar"` están permitidos. Cualquier otro valor se normaliza a `"navbar"`.
-
-**Código:** `backend/src/routes/folders.js` → `validateAndNormalizeSource()`
+**Nota:** Campos `metadata` y endpoints de carpetas (`/api/folders/*`) no están documentados en TRUTH.md §6.
 
 ---
 
@@ -384,16 +329,7 @@ POST /api/uploads/confirm
 
 El backend implementa un sistema de cache para carpetas usando TanStack Query:
 
-**Endpoints con cache:**
-- `GET /api/files/list` (carpetas)
-- `GET /api/folders/root`
-
-**Invalidación:**
-- Crear carpeta → invalida cache
-- Eliminar carpeta → invalida cache
-- Renombrar carpeta → invalida cache
-
-**Código:** `backend/src/middleware/cache.js`
+**Nota:** Endpoints con cache (`GET /api/files/list`, `GET /api/folders/root`) y sistema de cache no están documentados en TRUTH.md §6.
 
 ---
 
@@ -452,18 +388,7 @@ if (fileDoc.data().userId !== uid) {
 
 ### Listado de archivos y carpetas
 
-**Endpoint:** `GET /api/files/list`
-
-**Query parameters:**
-- `parentId`: string | null - Filtrar por carpeta padre
-- `pageSize`: number - Tamaño de página (default: 100, max: 200)
-- `cursor`: string - Cursor para paginación
-
-**Filtros automáticos:**
-- Solo items del usuario (`userId == uid`)
-- Solo items activos (`deletedAt == null`)
-- Archivos ordenados por `updatedAt` descendente
-- Carpetas ordenadas por `createdAt` descendente
+**Nota:** Endpoint `GET /api/files/list` y sus parámetros no están documentados en TRUTH.md §6.
 - Archivos y carpetas se obtienen en queries separadas y se combinan
 
 **Respuesta:**

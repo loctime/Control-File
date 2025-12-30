@@ -1,6 +1,8 @@
 # ControlFile – Filosofía y Principios (Para IA/Agentes)
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 

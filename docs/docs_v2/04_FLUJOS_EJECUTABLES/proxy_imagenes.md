@@ -1,6 +1,8 @@
 # Flujo Ejecutable: Proxy de Imágenes CORS-safe
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 

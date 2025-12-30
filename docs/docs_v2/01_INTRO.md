@@ -1,6 +1,8 @@
 # ControlFile – Introducción
 
-⚠️ **Este documento NO define comportamiento. Deriva estrictamente de TRUTH.md. Ante contradicción, TRUTH.md manda.**
+⚠️ Este documento NO define comportamiento.
+Deriva estrictamente de TRUTH.md.
+Ante contradicción, TRUTH.md manda.
 
 ---
 
@@ -273,7 +275,7 @@ Backend retorna imagen con headers CORS
   ancestors: string[],
   type: "file",             // Diferenciador: "file" o "folder"
   createdAt: Timestamp,
-  modifiedAt: Timestamp,
+  updatedAt: Timestamp,      // (modifiedAt para carpetas)
   deletedAt: Timestamp | null
 }
 
@@ -288,13 +290,8 @@ Backend retorna imagen con headers CORS
   ancestors: string[],
   type: "folder",           // Diferenciador: "folder"
   createdAt: Timestamp,
-  modifiedAt: Timestamp,
-  deletedAt: Timestamp | null,
-  metadata: {
-    isMainFolder: boolean,
-    source: "navbar" | "taskbar",
-    // ... otros campos
-  }
+  updatedAt: Timestamp,      // (modifiedAt para carpetas)    // (o updatedAt, ambos aceptados)
+  deletedAt: Timestamp | null
 }
 ```
 
@@ -311,9 +308,9 @@ shares/{token}
   - downloadCount: number
 
 users/{userId}
-  - email: string
-  - quotaBytes: number
+  - planQuotaBytes: number
   - usedBytes: number
+  - pendingBytes: number
   - planId: string
 
 uploadSessions/{sessionId}
@@ -386,21 +383,12 @@ uploadSessions/{sessionId}
 ## Endpoints principales
 
 ### Uploads
-- `POST /api/uploads/presign` - Generar URL de subida
-- `POST /api/uploads/confirm` - Confirmar upload completado
-- `POST /upload` - Upload directo desde apps externas (legacy)
+- Endpoints de upload no están documentados en TRUTH.md §6.
+- Ver `04_FLUJOS_EJECUTABLES/upload.md` para flujo de upload.
 
-### Archivos
-- `GET /api/files/list` - Listar archivos y carpetas (paginado, filtra por `type`)
-- `POST /api/files/presign-get` - Generar URL de descarga
-- `POST /api/files/delete` - Eliminar archivo
-- `POST /api/files/rename` - Renombrar archivo
-- `POST /api/files/replace` - Reemplazar contenido
-
-### Carpetas
-- `POST /api/folders/create` - Crear carpeta (almacenada en `files` con `type: "folder"`)
-- `GET /api/folders/by-slug/:username/:path` - Obtener carpeta por slug
-- `GET /api/folders/root` - Obtener o crear carpeta raíz
+### Archivos y Carpetas
+- Endpoints de archivos y carpetas no están documentados en TRUTH.md §6.
+- Ver código fuente para endpoints específicos.
 
 ### Shares
 - `POST /api/shares/create` - Crear share (protegido)
@@ -409,8 +397,7 @@ uploadSessions/{sessionId}
 - `GET /api/shares/{token}/image` - Proxy de imagen CORS-safe (público, para `<img>` tags)
 
 ### Health
-- `GET /health` - Health check (público)
-- `GET /api/health` - Health check detallado
+- Endpoints de health no están documentados en TRUTH.md §6.
 
 ---
 
@@ -433,7 +420,7 @@ Las aplicaciones externas pueden integrar ControlFile usando el SDK incluido.
 - `rename()` - Renombrar archivo
 - `replace()` - Reemplazar contenido
 
-**Ver documentación completa:** `INTEGRACION.md` (próximamente)
+**Ver documentación completa:** Ver `03_CONTRATOS_TECNICOS/` para especificaciones técnicas.
 
 ---
 
@@ -480,7 +467,7 @@ DOMAIN_CONFIGS = {
 ## Próximos pasos
 
 Ver los siguientes documentos en orden:
-1. `CONTROLFILESYSTEM.md` - Arquitectura del sistema de archivos
-2. `API.md` - Documentación completa de endpoints
-3. `INTEGRACION.md` - Guía de integración con otras apps
-4. `DEPLOYMENT.md` - Guía de deployment
+1. `TRUTH.md` - Fuente única de verdad técnica
+2. `02_FILOSOFIA_Y_PRINCIPIOS.md` - Principios operativos
+3. `03_CONTRATOS_TECNICOS/` - Contratos técnicos derivados de TRUTH.md
+4. `04_FLUJOS_EJECUTABLES/` - Flujos paso a paso
