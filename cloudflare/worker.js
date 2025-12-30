@@ -77,8 +77,8 @@ async function handleImageShare(token, request, corsHeaders) {
       return jsonResponse({ error: 'Enlace expirado' }, 410, corsHeaders)
     }
     
-    // 4. Validar estado activo
-    if (!shareData.isActive) {
+    // 4. Validar estado activo (retrocompatible: isActive = nuevo, isPublic = legacy)
+    if (shareData.isActive === false || shareData.isPublic === false) {
       return jsonResponse({ error: 'Enlace revocado' }, 410, corsHeaders)
     }
     
@@ -89,14 +89,24 @@ async function handleImageShare(token, request, corsHeaders) {
       return jsonResponse({ error: 'Archivo no encontrado' }, 404, corsHeaders)
     }
     
-    if (fileData.isDeleted) {
+    // Validar archivo eliminado (usar deletedAt, consistente con backend)
+    if (fileData.deletedAt) {
       return jsonResponse({ error: 'Archivo eliminado' }, 404, corsHeaders)
     }
     
-    // 6. Generar URL de B2 (público o presignado)
+    // 6. Validar bucketKey (shares solo soportan almacenamiento B2)
+    if (!fileData.bucketKey) {
+      console.error(`File missing bucketKey for share image`, { fileId: shareData.fileId, token })
+      return jsonResponse({ 
+        error: 'Archivo no compatible con share/image',
+        code: 'FILE_STORAGE_KEY_MISSING'
+      }, 415, corsHeaders)
+    }
+    
+    // 7. Generar URL de B2 (público o presignado)
     const b2Url = generateB2Url(fileData.bucketKey)
     
-    // 7. Crear respuesta redirect con caché
+    // 8. Crear respuesta redirect con caché
     const response = Response.redirect(b2Url, 302)
     const newResponse = new Response(response.body, {
       status: response.status,
@@ -110,10 +120,10 @@ async function handleImageShare(token, request, corsHeaders) {
       }
     })
     
-    // 8. Guardar en caché por 1 hora
+    // 9. Guardar en caché por 1 hora
     await cache.put(cacheKey, newResponse.clone())
     
-    // 9. Incrementar contador de descargas (async, no bloquea respuesta)
+    // 10. Incrementar contador de descargas (async, no bloquea respuesta)
     // Solo si está configurado el backend
     if (typeof BACKEND_URL !== 'undefined' && BACKEND_URL) {
       // waitUntil no está disponible aquí, pero la respuesta ya se envía
@@ -176,6 +186,17 @@ async function getFileFromFirestore(fileId) {
 
 // Generar URL de B2
 function generateB2Url(bucketKey) {
+  // ⚠️ IMPORTANTE:
+  // Este worker asume bucket B2 público.
+  // Si el bucket se vuelve privado, este método DEBE reemplazarse
+  // por un presigned URL generado por backend.
+  // 
+  // Limitaciones actuales:
+  // - No soporta versionado de objetos
+  // - No tiene expiración (URLs permanentes)
+  // - No funciona si el bucket cambia a privado
+  // - No funciona si cambia la región del bucket
+  
   // Si el bucket es público, usar URL directa
   if (typeof B2_PUBLIC_URL !== 'undefined' && B2_PUBLIC_URL) {
     return `${B2_PUBLIC_URL}/${bucketKey}`

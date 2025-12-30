@@ -91,8 +91,8 @@ router.get('/:token', async (req, res) => {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
-    // Check if share is active
-    if (!shareData.isActive) {
+    // Check if share is active (retrocompatible: isActive = nuevo, isPublic = legacy)
+    if (shareData.isActive === false || shareData.isPublic === false) {
       return res.status(410).json({ error: 'Enlace revocado' });
     }
 
@@ -129,8 +129,8 @@ router.post('/:token/download', async (req, res) => {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
-    // Check if share is active
-    if (!shareData.isActive) {
+    // Check if share is active (retrocompatible: isActive = nuevo, isPublic = legacy)
+    if (shareData.isActive === false || shareData.isPublic === false) {
       return res.status(410).json({ error: 'Enlace revocado' });
     }
 
@@ -146,6 +146,15 @@ router.post('/:token/download', async (req, res) => {
 
     if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
+    }
+
+    // Validate bucketKey exists (shares only support B2 storage)
+    if (!fileData.bucketKey) {
+      logger.error('File missing bucketKey for share', { fileId: shareData.fileId, token: req.params.token });
+      return res.status(415).json({ 
+        error: 'Archivo no compatible con share/image',
+        code: 'FILE_STORAGE_KEY_MISSING'
+      });
     }
 
     // Virus scan si es archivo compartido sospechoso y no ha sido escaneado
@@ -218,8 +227,8 @@ router.get('/:token/image', async (req, res) => {
       return res.status(410).json({ error: 'Enlace expirado' });
     }
 
-    // Check if share is active
-    if (!shareData.isActive) {
+    // Check if share is active (retrocompatible: isActive = nuevo, isPublic = legacy)
+    if (shareData.isActive === false || shareData.isPublic === false) {
       return res.status(410).json({ error: 'Enlace revocado' });
     }
 
@@ -235,6 +244,15 @@ router.get('/:token/image', async (req, res) => {
 
     if (fileData.deletedAt) {
       return res.status(404).json({ error: 'Archivo eliminado' });
+    }
+
+    // Validate bucketKey exists (shares only support B2 storage)
+    if (!fileData.bucketKey) {
+      logger.error('File missing bucketKey for share image', { fileId: shareData.fileId, token: req.params.token });
+      return res.status(415).json({ 
+        error: 'Archivo no compatible con share/image',
+        code: 'FILE_STORAGE_KEY_MISSING'
+      });
     }
 
     // Generate presigned URL and redirect (1 hour validity for better caching)
