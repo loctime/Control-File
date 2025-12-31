@@ -111,6 +111,12 @@ Thumbs.db
 logs
 *.log
 
+# Repository locks (filesystem locks)
+backend/locks/
+
+# Repository indexes (heavy data stored in filesystem)
+backend/indexes/
+
 # Build artifacts
 tsconfig.tsbuildinfo
 

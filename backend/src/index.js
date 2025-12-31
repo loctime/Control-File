@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const githubStatusRoutes = require('./routes/github-status');
 const githubSelectRepoRoutes = require('./routes/github-select-repo');
+const repositoryIndexRoutes = require('./routes/repository-index');
 
 const adminRoutes = require('./routes/admin');
 const compression = require('compression');
@@ -162,6 +163,9 @@ app.use('/api/auth/github', githubAuthRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
 app.use('/api/github', authMiddleware, githubSelectRepoRoutes);
+
+// Repository indexing endpoint - NO usa authMiddleware (viene desde ControlRepo)
+app.use('/api/repository', repositoryIndexRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);

@@ -1,0 +1,172 @@
+// backend/src/services/repository-indexer.js
+// Servicio de indexación de repositorios GitHub
+const { logger } = require('../utils/logger');
+
+/**
+ * Indexa un repositorio de GitHub
+ * @param {string} owner - Propietario del repositorio
+ * @param {string} repo - Nombre del repositorio
+ * @param {string} accessToken - Token de acceso de GitHub
+ * @param {string|null|undefined} branch - Rama a indexar (opcional, usa default branch si no se proporciona)
+ * @returns {Promise<{ files: Array, tree: Object, stats: Object, branch: string, branchSha: string }>}
+ */
+async function indexRepository(owner, repo, accessToken, branch) {
+  logger.info('Iniciando indexación de repositorio', { owner, repo, branch: branch || 'default' });
+  
+  try {
+    // 1. Obtener información del repositorio
+    const repoInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'controlfile-backend'
+      }
+    });
+    
+    if (!repoInfo.ok) {
+      const errorText = await repoInfo.text();
+      throw new Error(`Error obteniendo info del repositorio: ${repoInfo.status} - ${errorText}`);
+    }
+    
+    const repoData = await repoInfo.json();
+    
+    // 2. Resolver branch: usar default branch si no se proporciona
+    let resolvedBranch = branch || repoData.default_branch;
+    if (!resolvedBranch) {
+      throw new Error('No se pudo determinar el branch a indexar');
+    }
+    
+    logger.info('Branch a indexar', { branch: resolvedBranch, wasProvided: !!branch });
+    
+    // 3. Resolver SHA del branch (si no es un SHA completo)
+    let branchSha = resolvedBranch;
+    if (!resolvedBranch.match(/^[0-9a-f]{40}$/)) {
+      const branchInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${resolvedBranch}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'controlfile-backend'
+        }
+      });
+      
+      if (!branchInfo.ok) {
+        const errorText = await branchInfo.text();
+        throw new Error(`Error obteniendo branch: ${branchInfo.status} - ${errorText}`);
+      }
+      
+      const branchData = await branchInfo.json();
+      branchSha = branchData.commit.sha;
+      logger.info('Branch resuelto a SHA', { branch: resolvedBranch, sha: branchSha });
+    }
+    
+    // 3. Obtener árbol completo del repositorio
+    const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branchSha}?recursive=1`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'controlfile-backend'
+      }
+    });
+    
+    if (!treeResponse.ok) {
+      const errorText = await treeResponse.text();
+      throw new Error(`Error obteniendo árbol: ${treeResponse.status} - ${errorText}`);
+    }
+    
+    const treeData = await treeResponse.json();
+    
+    // 4. Filtrar solo archivos (excluir directorios)
+    const files = treeData.tree.filter(item => item.type === 'blob');
+    
+    // 5. Obtener contenido de archivos importantes (limitado a primeros 100 archivos para evitar rate limits)
+    const importantFiles = files.slice(0, 100).filter(file => {
+      const ext = file.path.split('.').pop()?.toLowerCase();
+      const importantExtensions = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'md', 'json', 'yaml', 'yml', 'txt'];
+      return importantExtensions.includes(ext);
+    });
+    
+    const fileContents = [];
+    for (const file of importantFiles) {
+      try {
+        const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${branchSha}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'controlfile-backend'
+          }
+        });
+        
+        if (contentResponse.ok) {
+          const contentData = await contentResponse.json();
+          if (contentData.encoding === 'base64' && contentData.content) {
+            const content = Buffer.from(contentData.content, 'base64').toString('utf-8');
+            fileContents.push({
+              path: file.path,
+              sha: file.sha,
+              size: file.size,
+              content: content.substring(0, 10000) // Limitar tamaño para evitar problemas
+            });
+          }
+        }
+      } catch (error) {
+        logger.warn('Error obteniendo contenido de archivo', { path: file.path, error: error.message });
+      }
+    }
+    
+    // 6. Calcular estadísticas
+    const stats = {
+      totalFiles: files.length,
+      totalSize: files.reduce((sum, file) => sum + (file.size || 0), 0),
+      languages: {},
+      extensions: {},
+      indexedFiles: fileContents.length
+    };
+    
+    files.forEach(file => {
+      const ext = file.path.split('.').pop()?.toLowerCase() || 'no-ext';
+      stats.extensions[ext] = (stats.extensions[ext] || 0) + 1;
+      
+      // Detectar lenguaje por extensión
+      const langMap = {
+        'js': 'JavaScript', 'ts': 'TypeScript', 'jsx': 'JavaScript',
+        'tsx': 'TypeScript', 'py': 'Python', 'java': 'Java',
+        'go': 'Go', 'rs': 'Rust', 'md': 'Markdown', 'json': 'JSON',
+        'yaml': 'YAML', 'yml': 'YAML', 'txt': 'Text'
+      };
+      const lang = langMap[ext] || 'Other';
+      stats.languages[lang] = (stats.languages[lang] || 0) + 1;
+    });
+    
+    logger.info('Indexación completada', { 
+      owner, 
+      repo, 
+      totalFiles: stats.totalFiles,
+      indexedFiles: stats.indexedFiles 
+    });
+    
+    return {
+      files: fileContents,
+      tree: treeData,
+      stats,
+      branch: resolvedBranch,
+      branchSha,
+      repoInfo: {
+        name: repoData.name,
+        description: repoData.description,
+        language: repoData.language,
+        defaultBranch: repoData.default_branch,
+        stars: repoData.stargazers_count,
+        forks: repoData.forks_count,
+        createdAt: repoData.created_at,
+        updatedAt: repoData.updated_at
+      }
+    };
+  } catch (error) {
+    logger.error('Error indexando repositorio', { owner, repo, error: error.message });
+    throw error;
+  }
+}
+
+module.exports = {
+  indexRepository
+};
