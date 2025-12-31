@@ -284,4 +284,97 @@ function generateMetrics(indexResult) {
   };
 }
 
+/**
+ * GET /api/repository/status/:repositoryId
+ * 
+ * Consulta el estado de indexación de un repositorio
+ * 
+ * Params:
+ * - repositoryId: string (formato: github:owner:repo)
+ * 
+ * Respuesta exitosa (200):
+ * {
+ *   repositoryId: string,
+ *   status: 'indexing' | 'completed' | 'error',
+ *   owner: string,
+ *   repo: string,
+ *   branch: string | null,
+ *   indexedAt: Timestamp | null,
+ *   stats: Object | null,
+ *   error?: string (solo si status === 'error')
+ * }
+ * 
+ * Respuesta no encontrado (404):
+ * {
+ *   error: 'Repositorio no encontrado',
+ *   repositoryId: string
+ * }
+ */
+router.get('/status/:repositoryId', async (req, res) => {
+  try {
+    const { repositoryId } = req.params;
+    
+    if (!repositoryId || typeof repositoryId !== 'string') {
+      return res.status(400).json({ 
+        error: 'repositoryId es requerido',
+        repositoryId: repositoryId || null
+      });
+    }
+    
+    logger.info('Consultando estado de repositorio', { repositoryId });
+    
+    const db = admin.firestore();
+    const indexRef = db.collection('apps').doc('controlrepo')
+      .collection('repositories').doc(repositoryId);
+    
+    const doc = await indexRef.get();
+    
+    if (!doc.exists) {
+      logger.warn('Repositorio no encontrado', { repositoryId });
+      return res.status(404).json({
+        error: 'Repositorio no encontrado',
+        repositoryId
+      });
+    }
+    
+    const data = doc.data();
+    
+    // Construir respuesta con campos relevantes
+    const response = {
+      repositoryId,
+      status: data.status || 'unknown',
+      owner: data.owner,
+      repo: data.repo,
+      branch: data.branch || null,
+      indexedAt: data.indexedAt || null,
+      stats: data.stats || null
+    };
+    
+    // Incluir error si existe
+    if (data.status === 'error' && data.error) {
+      response.error = data.error;
+    }
+    
+    logger.info('Estado de repositorio consultado', { 
+      repositoryId, 
+      status: response.status 
+    });
+    
+    return res.status(200).json(response);
+    
+  } catch (error) {
+    logger.error('Error consultando estado de repositorio', {
+      repositoryId: req.params.repositoryId,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    return res.status(500).json({
+      error: 'Error consultando estado del repositorio',
+      message: error.message,
+      repositoryId: req.params.repositoryId
+    });
+  }
+});
+
 module.exports = router;
