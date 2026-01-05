@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb, requireAdminAuth } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase/firestore';
+import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { createAuditLog, createChangeDiff } from '@/lib/platform/audit';
 import type { PlatformPlan } from '@/lib/platform/plans';
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     const plansSnapshot = await db.collection('platform').doc('plans').collection('plans').get();
 
     const plans: PlatformPlan[] = [];
-    plansSnapshot.forEach((doc) => {
+    plansSnapshot.forEach((doc: QueryDocumentSnapshot) => {
       plans.push(doc.data() as PlatformPlan);
     });
 

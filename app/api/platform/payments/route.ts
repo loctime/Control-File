@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb, requireAdminAuth } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase/firestore';
+import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { createAuditLog } from '@/lib/platform/audit';
 import type { PlatformPayment } from '@/lib/platform/payments';
 
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     const paymentsSnapshot = await query.get();
 
     const payments: PlatformPayment[] = [];
-    paymentsSnapshot.forEach((doc) => {
+    paymentsSnapshot.forEach((doc: QueryDocumentSnapshot) => {
       payments.push(doc.data() as PlatformPayment);
     });
 

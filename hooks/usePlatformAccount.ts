@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { doc, onSnapshot, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { PlatformAccount, PlatformPlan } from '@/lib/platform/accounts';
+import type { PlatformAccount } from '@/lib/platform/accounts';
 import { resolveEffectiveEnabledApps, resolveEffectiveLimits, canWrite, canRead } from '@/lib/platform/accounts';
-import type { PlatformPlanApps, PlatformPlanLimits } from '@/lib/platform/plans';
+import type { PlatformPlan, PlatformPlanApps, PlatformPlanLimits } from '@/lib/platform/plans';
 
 /**
  * Hook para consumir platform/accounts en modo read-only desde apps
@@ -52,7 +52,7 @@ export function usePlatformAccount(userId: string | null | undefined) {
           setAccount(accountData);
 
           // Leer plan para resolver valores efectivos
-          if (accountData.planId) {
+          if (accountData.planId && db) {
             const planRef = doc(db, 'platform', 'plans', accountData.planId);
             const planSnap = await getDoc(planRef);
             if (planSnap.exists()) {

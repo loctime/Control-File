@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-import { getPlansCatalog, getRecommendedUpsells, formatPrice, getPlanPrice } from '@/lib/plans';
+import { getPlansCatalogSync, getRecommendedUpsells, formatPrice, getPlanPrice } from '@/lib/plans';
 
 export default function SettingsPage() {
   const { user, logOut } = useAuth();
@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const usedBytes = user.usedBytes + user.pendingBytes;
   const totalBytes = user.planQuotaBytes;
   const percentage = (usedBytes / totalBytes) * 100;
-  const catalog = getPlansCatalog();
+  const catalog = getPlansCatalogSync();
   const [interval, setInterval] = useState<'monthly' | 'yearly'>(catalog.billingInterval);
   useEffect(() => {
     (async () => {

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'interval inválido' }, { status: 400 });
     }
 
-    const plan = findPlanById(planId);
+    const plan = await findPlanById(planId);
     if (!plan) {
       return NextResponse.json({ error: 'Plan inválido' }, { status: 400 });
     }

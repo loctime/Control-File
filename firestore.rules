@@ -571,8 +571,11 @@ service cloud.firestore {
     // 🔐 PERFIL USUARIO AUDITORIA
     // ================================
     match /apps/auditoria/users/{userId} {
+    
+      // El usuario solo puede verse a sí mismo
       allow get, update: if isAuth() && uid() == userId;
     
+      // Creación controlada (registro inicial o supermax)
       allow create: if isAuth()
         && (uid() == userId || isAuditSupermax())
         && hasValidAuditAppId();
@@ -582,7 +585,10 @@ service cloud.firestore {
     // 🔐 LISTADO DE SUBCOLECCIONES
     // ================================
     match /apps/auditoria/users/{userId}/{collection} {
-      // 🔑 NO usar supermax acá → evita error inicial
+    
+      // IMPORTANTE:
+      // - Solo el dueño del path puede listar
+      // - Evita leaks y errores de permisos
       allow list, read: if isAuth()
         && uid() == userId
         && exists(/databases/$(db)/documents/apps/auditoria/users/$(userId));
@@ -592,6 +598,7 @@ service cloud.firestore {
     // 🔐 DOCUMENTOS EN SUBCOLECCIONES
     // ================================
     match /apps/auditoria/users/{userId}/{collection}/{docId} {
+    
       allow read, create, update, delete: if isAuth()
         && (uid() == userId || isAuditSupermax());
     }
@@ -600,7 +607,9 @@ service cloud.firestore {
     // 🔓 DATOS GENERALES DE AUDITORIA
     // ================================
     match /apps/auditoria/{collection}/{document=**} {
-      allow read: if isAuth() && collection != 'users';
+    
+      allow read: if isAuth()
+        && collection != 'users';
     
       allow create: if isAuth()
         && collection != 'users'
@@ -613,7 +622,8 @@ service cloud.firestore {
           || (hasValidAuditAppId() && sameAuditAppId())
         );
     
-      allow delete: if isAuth() && collection != 'users';
+      allow delete: if isAuth()
+        && collection != 'users';
     }
     
     // ================================
@@ -1084,52 +1094,9 @@ service cloud.firestore {
       match /mappings/{mappingId} {
         allow read, write: if true; // Permitir leer y escribir mapeos
       }
-    }
     
-    /* ========= PLATFORM ========= */
     
-    // Helper: verificar si es owner (custom claim o UID específico)
-    function isPlatformOwner() {
-      return isAuth() && (
-        request.auth.token.role == 'platform_owner' ||
-        request.auth.uid == 'OWNER_UID_HERE'  // Reemplazar con UID real del owner
-      );
-    }
     
-    // Helper: verificar si es backend (custom claim)
-    function isBackend() {
-      return isAuth() && request.auth.token.role == 'backend';
-    }
-    
-    // platform/accounts
-    match /platform/accounts/{uid} {
-      // Usuario puede leer su propia cuenta
-      allow read: if isAuth() && uid == request.auth.uid;
-      // Owner y backend pueden leer/escribir
-      allow read, write: if isPlatformOwner() || isBackend();
-    }
-    
-    // platform/plans
-    match /platform/plans/{planId} {
-      // Lectura pública (catálogo)
-      allow read: if true;
-      // Solo owner/backend puede escribir
-      allow write: if isPlatformOwner() || isBackend();
-    }
-    
-    // platform/payments
-    match /platform/payments/{paymentId} {
-      // Usuario puede leer sus propios pagos
-      allow read: if isAuth() && resource.data.uid == request.auth.uid;
-      // Owner y backend pueden leer/escribir
-      allow read, write: if isPlatformOwner() || isBackend();
-    }
-    
-    // platform/audit (para Fase 2)
-    match /platform/audit/{auditId} {
-      // Solo owner/backend puede leer/escribir
-      allow read, write: if isPlatformOwner() || isBackend();
-    }
 
     /* ========= DENY POR DEFECTO ========= */
 

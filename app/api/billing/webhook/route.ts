@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       const interval = (session.metadata?.interval as 'monthly' | 'yearly' | undefined) || 'monthly';
 
       if (userId && planId) {
-        const plan = findPlanById(planId);
+        const plan = await findPlanById(planId);
         if (plan) {
           const db = requireAdminDb();
           const userRef = db.collection('users').doc(userId);

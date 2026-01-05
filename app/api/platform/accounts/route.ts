@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminDb, requireAdminAuth } from '@/lib/firebase-admin';
+import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import type { PlatformAccount } from '@/lib/platform/accounts';
 
 export const runtime = 'nodejs';
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     const accountsSnapshot = await query.get();
 
     const accounts: PlatformAccount[] = [];
-    accountsSnapshot.forEach((doc) => {
+    accountsSnapshot.forEach((doc: QueryDocumentSnapshot) => {
       accounts.push(doc.data() as PlatformAccount);
     });
 

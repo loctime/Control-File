@@ -1,4 +1,4 @@
-import { normalizeAppId } from "./app-ownership";
+import { normalizeAppId } from "@/lib/utils/app-ownership";
 
 interface EnsureTaskbarFolderServerOptions {
   appId: string;

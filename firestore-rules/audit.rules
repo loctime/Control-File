@@ -27,8 +27,11 @@ function isAuditSupermax() {
 // 🔐 PERFIL USUARIO AUDITORIA
 // ================================
 match /apps/auditoria/users/{userId} {
+
+  // El usuario solo puede verse a sí mismo
   allow get, update: if isAuth() && uid() == userId;
 
+  // Creación controlada (registro inicial o supermax)
   allow create: if isAuth()
     && (uid() == userId || isAuditSupermax())
     && hasValidAuditAppId();
@@ -38,7 +41,10 @@ match /apps/auditoria/users/{userId} {
 // 🔐 LISTADO DE SUBCOLECCIONES
 // ================================
 match /apps/auditoria/users/{userId}/{collection} {
-  // 🔑 NO usar supermax acá → evita error inicial
+
+  // IMPORTANTE:
+  // - Solo el dueño del path puede listar
+  // - Evita leaks y errores de permisos
   allow list, read: if isAuth()
     && uid() == userId
     && exists(/databases/$(db)/documents/apps/auditoria/users/$(userId));
@@ -48,6 +54,7 @@ match /apps/auditoria/users/{userId}/{collection} {
 // 🔐 DOCUMENTOS EN SUBCOLECCIONES
 // ================================
 match /apps/auditoria/users/{userId}/{collection}/{docId} {
+
   allow read, create, update, delete: if isAuth()
     && (uid() == userId || isAuditSupermax());
 }
@@ -56,7 +63,9 @@ match /apps/auditoria/users/{userId}/{collection}/{docId} {
 // 🔓 DATOS GENERALES DE AUDITORIA
 // ================================
 match /apps/auditoria/{collection}/{document=**} {
-  allow read: if isAuth() && collection != 'users';
+
+  allow read: if isAuth()
+    && collection != 'users';
 
   allow create: if isAuth()
     && collection != 'users'
@@ -69,7 +78,8 @@ match /apps/auditoria/{collection}/{document=**} {
       || (hasValidAuditAppId() && sameAuditAppId())
     );
 
-  allow delete: if isAuth() && collection != 'users';
+  allow delete: if isAuth()
+    && collection != 'users';
 }
 
 // ================================
