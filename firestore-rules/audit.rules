@@ -16,6 +16,7 @@ function sameAuditAppId() {
   return resource.data.appId == request.resource.data.appId;
 }
 
+// ⚠️ Supermax SOLO para escrituras sensibles
 function isAuditSupermax() {
   return isAuth()
     && exists(/databases/$(db)/documents/apps/auditoria/users/$(uid()))
@@ -33,13 +34,19 @@ match /apps/auditoria/users/{userId} {
     && hasValidAuditAppId();
 }
 
+// ================================
 // 🔐 LISTADO DE SUBCOLECCIONES
+// ================================
 match /apps/auditoria/users/{userId}/{collection} {
-  allow list: if isAuth()
-    && (uid() == userId || isAuditSupermax());
+  // 🔑 NO usar supermax acá → evita error inicial
+  allow list, read: if isAuth()
+    && uid() == userId
+    && exists(/databases/$(db)/documents/apps/auditoria/users/$(userId));
 }
 
+// ================================
 // 🔐 DOCUMENTOS EN SUBCOLECCIONES
+// ================================
 match /apps/auditoria/users/{userId}/{collection}/{docId} {
   allow read, create, update, delete: if isAuth()
     && (uid() == userId || isAuditSupermax());
@@ -57,7 +64,10 @@ match /apps/auditoria/{collection}/{document=**} {
 
   allow update: if isAuth()
     && collection != 'users'
-    && (isLegacyAuditDoc() || (hasValidAuditAppId() && sameAuditAppId()));
+    && (
+      isLegacyAuditDoc()
+      || (hasValidAuditAppId() && sameAuditAppId())
+    );
 
   allow delete: if isAuth() && collection != 'users';
 }
@@ -100,4 +110,3 @@ match /capacitaciones/{id} {
 match /reportes/{id} {
   allow read, write: if isAuth();
 }
-
