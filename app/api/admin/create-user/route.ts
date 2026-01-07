@@ -36,7 +36,7 @@ export async function OPTIONS() {
  * 
  * FUNCIONALIDAD:
  * - Crea usuario en Firebase Auth
- * - Setea custom claims al nuevo usuario
+ * - Setea custom claims al nuevo usuario incluyendo ownerId desde el token del admin
  * - NO escribe Firestore de ninguna app (Firestore owner-centric exclusivo de ControlAudit)
  * 
  * Body esperado:
@@ -213,9 +213,11 @@ export async function POST(request: NextRequest) {
       uid = newUser.uid
 
       // 7. Setear custom claims al nuevo usuario
+      // ownerId se toma del token del admin que crea el usuario (decodedToken.uid)
       await adminAuth.setCustomUserClaims(uid, {
         appId: appId,
         role: role,
+        ownerId: decodedToken.uid,
       })
 
     } catch (error: any) {

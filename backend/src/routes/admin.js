@@ -18,7 +18,7 @@ const { logger } = require('../utils/logger');
  *
  * FUNCIONALIDAD:
  * - Crea usuario en Firebase Auth
- * - Setea custom claims al nuevo usuario
+ * - Setea custom claims al nuevo usuario incluyendo ownerId desde el token del admin
  * - NO escribe Firestore de ninguna app
  */
 router.post('/create-user', async (req, res) => {
@@ -103,9 +103,11 @@ router.post('/create-user', async (req, res) => {
       uid = newUser.uid;
 
       // Setear custom claims al nuevo usuario
+      // ownerId se toma del token del admin que crea el usuario (decodedToken.uid)
       await admin.auth().setCustomUserClaims(uid, {
         appId: appId,
         role: role,
+        ownerId: decodedToken.uid,
       });
     } catch (error) {
       // Manejar error de email ya existente (race condition)
