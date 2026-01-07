@@ -6,12 +6,20 @@ const { logger } = require('../utils/logger');
 /**
  * POST /api/admin/create-user
  *
- * Endpoint admin-only para creación de usuarios.
+ * PARCHE TRANSITORIO: Endpoint simplificado para creación de usuarios.
+ * Compatibilidad con modelo owner-centric.
+ * Firestore owner-centric queda EXCLUSIVO de ControlAudit.
  *
- * Requisitos:
+ * AUTORIZACIÓN:
  * - Authorization: Bearer <firebase-id-token>
- * - Usuario autenticado debe tener role === "max" o "supermax"
- *   en: apps/auditoria/users/{uid}
+ * - Custom claims del token:
+ *   - decodedToken.appId === 'auditoria'
+ *   - decodedToken.role in ['admin', 'supermax']
+ *
+ * FUNCIONALIDAD:
+ * - Crea usuario en Firebase Auth
+ * - Setea custom claims al nuevo usuario
+ * - NO escribe Firestore de ninguna app
  */
 router.post('/create-user', async (req, res) => {
   try {
@@ -31,30 +39,17 @@ router.post('/create-user', async (req, res) => {
       return res.status(401).json({ error: 'Token inválido o expirado' });
     }
 
-    const uidRequester = decodedToken.uid;
-    const db = admin.firestore();
-
-    // 🔒 Verificar rol del solicitante
-    const requesterRef = db
-      .collection('apps')
-      .doc('auditoria')
-      .collection('users')
-      .doc(uidRequester);
-
-    const requesterSnap = await requesterRef.get();
-
-    if (!requesterSnap.exists) {
+    // 🔒 Autorizar SOLO por custom claims del token
+    if (decodedToken.appId !== 'auditoria') {
       return res.status(403).json({
-        error: 'No tienes perfil en apps/auditoria/users',
+        error: "No tienes permisos. Se requiere appId === 'auditoria' en custom claims.",
       });
     }
 
-    const requesterData = requesterSnap.data();
-    const allowedRoles = ['max', 'supermax'];
-
-    if (!allowedRoles.includes(requesterData?.role)) {
+    const allowedRoles = ['admin', 'supermax'];
+    if (!decodedToken.role || !allowedRoles.includes(decodedToken.role)) {
       return res.status(403).json({
-        error: 'No tienes permisos. Se requiere role === max o supermax',
+        error: "No tienes permisos. Se requiere role in ['admin', 'supermax'] en custom claims.",
       });
     }
 
@@ -65,16 +60,17 @@ router.post('/create-user', async (req, res) => {
       return res.status(400).json({ error: 'Datos inválidos o incompletos' });
     }
 
+    // Validar formato de email básico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Formato de email inválido' });
+    }
+
     if (password.length < 6) {
       return res
         .status(400)
         .json({ error: 'La contraseña debe tener al menos 6 caracteres' });
     }
-
-    const usersCollection = db
-      .collection('apps')
-      .doc('auditoria')
-      .collection('users');
 
     // 🔍 Verificar si existe en Firebase Auth
     let authUser = null;
@@ -86,36 +82,17 @@ router.post('/create-user', async (req, res) => {
       }
     }
 
-    let uid;
-    let status;
-
-    // 🔁 Usuario ya existe en Auth
+    // Si el usuario ya existe, retornar error
     if (authUser) {
-      uid = authUser.uid;
+      return res.status(409).json({
+        error: 'El email ya está registrado en Firebase Auth',
+        uid: authUser.uid,
+      });
+    }
 
-      const existingProfile = await usersCollection.doc(uid).get();
-      if (existingProfile.exists) {
-        return res.status(409).json({
-          error: 'El email ya existe y tiene perfil vinculado',
-          uid,
-        });
-      }
-
-      await usersCollection.doc(uid).set(
-        {
-          uid,
-          email,
-          nombre,
-          role,
-          appId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      status = 'linked';
-    } else {
-      // 🆕 Crear usuario en Firebase Auth
+    // 🆕 Crear usuario en Firebase Auth
+    let uid;
+    try {
       const newUser = await admin.auth().createUser({
         email,
         password,
@@ -125,22 +102,41 @@ router.post('/create-user', async (req, res) => {
 
       uid = newUser.uid;
 
-      await usersCollection.doc(uid).set({
-        uid,
-        email,
-        nombre,
-        role,
-        appId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // Setear custom claims al nuevo usuario
+      await admin.auth().setCustomUserClaims(uid, {
+        appId: appId,
+        role: role,
       });
+    } catch (error) {
+      // Manejar error de email ya existente (race condition)
+      if (
+        error.code === 'auth/email-already-exists' ||
+        error.message?.includes('email-already-exists') ||
+        error.message?.includes('already exists')
+      ) {
+        return res.status(409).json({
+          error: 'email-already-exists',
+          message: 'El email ya está registrado',
+        });
+      }
 
-      status = 'created';
+      // Otros errores de Firebase Auth
+      if (error.code?.startsWith('auth/')) {
+        logger.error('creating user (firebase auth error)', { error });
+        return res.status(400).json({
+          error: error.code,
+          message: error.message || 'Error al crear usuario',
+        });
+      }
+
+      // Error desconocido
+      throw error;
     }
 
+    // NOTA: NO escribimos Firestore - Firestore owner-centric queda exclusivo de ControlAudit
     return res.status(201).json({
       uid,
-      status,
+      status: 'created',
       source: 'controlfile',
     });
   } catch (error) {

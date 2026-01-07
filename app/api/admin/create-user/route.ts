@@ -1,9 +1,9 @@
 // app/api/admin/create-user/route.ts
-// este archivo es inservible sera eliminado no usar
+// PARCHE TRANSITORIO: Compatibilidad con modelo owner-centric
+// Firestore owner-centric queda EXCLUSIVO de ControlAudit
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdminAuth, requireAdminDb } from "@/lib/firebase-admin"
+import { requireAdminAuth } from "@/lib/firebase-admin"
 import { logError } from "@/lib/logger-client"
-import { FieldValue } from 'firebase-admin/firestore'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -26,15 +26,18 @@ export async function OPTIONS() {
 /**
  * POST /api/admin/create-user
  * 
- * Endpoint admin-only para creación de usuarios.
+ * PARCHE TRANSITORIO: Endpoint simplificado para creación de usuarios.
  * 
- * REQUISITOS:
+ * AUTORIZACIÓN:
  * - Token Firebase válido en header Authorization
- * - Usuario autenticado debe tener role === "supermax" en apps/auditoria/users
+ * - Custom claims del token:
+ *   - decodedToken.appId === 'auditoria'
+ *   - decodedToken.role in ['admin', 'supermax']
  * 
- * REGLA DE ORO:
- * ❌ El frontend NO debe crear usuarios Auth
- * ✅ Todo Auth se maneja solo desde backend
+ * FUNCIONALIDAD:
+ * - Crea usuario en Firebase Auth
+ * - Setea custom claims al nuevo usuario
+ * - NO escribe Firestore de ninguna app (Firestore owner-centric exclusivo de ControlAudit)
  * 
  * Body esperado:
  * {
@@ -48,15 +51,15 @@ export async function OPTIONS() {
  * Respuesta exitosa:
  * {
  *   "uid": "firebaseAuthUid",
- *   "status": "created | linked",
+ *   "status": "created",
  *   "source": "controlfile"
  * }
  * 
  * Errores:
  * - 401: Token inválido o no proporcionado
- * - 403: Usuario no tiene permisos (no es supermax)
+ * - 403: Usuario no tiene permisos (custom claims inválidos)
  * - 400: Datos inválidos o faltantes
- * - 409: Email ya existe en Auth pero no hay perfil pending
+ * - 409: Email ya existe en Auth
  * - 500: Error del servidor
  */
 export async function POST(request: NextRequest) {
@@ -84,22 +87,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. Verificar que el usuario tenga role === "supermax"
-    const adminDb = requireAdminDb()
-    const supermaxUserRef = adminDb.collection('apps').doc('auditoria').collection('users').doc(decodedToken.uid)
-    const supermaxUserDoc = await supermaxUserRef.get()
-
-    if (!supermaxUserDoc.exists) {
+    // 2. Autorizar SOLO por custom claims del token
+    if (decodedToken.appId !== 'auditoria') {
       return NextResponse.json(
-        { error: "No tienes permisos. Se requiere perfil en apps/auditoria/users." },
+        { error: "No tienes permisos. Se requiere appId === 'auditoria' en custom claims." },
         { status: 403 }
       )
     }
 
-    const supermaxUserData = supermaxUserDoc.data()
-    if (supermaxUserData?.role !== 'supermax') {
+    const allowedRoles = ['admin', 'supermax']
+    if (!decodedToken.role || !allowedRoles.includes(decodedToken.role)) {
       return NextResponse.json(
-        { error: "No tienes permisos. Se requiere role === 'supermax'." },
+        { error: `No tienes permisos. Se requiere role in ['admin', 'supermax'] en custom claims.` },
         { status: 403 }
       )
     }
@@ -190,183 +189,69 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Buscar perfil pending en Firestore (por email, sin uid o con status pending)
-    const usersCollection = adminDb.collection('apps').doc('auditoria').collection('users')
-    let pendingProfile = null
-    let pendingProfileId = null
-
+    // 5. Si el usuario ya existe, retornar error
     if (userExists && authUser) {
-      // Si el usuario ya existe en Auth, buscar perfil por uid primero
-      const existingProfileRef = usersCollection.doc(authUser.uid)
-      const existingProfileDoc = await existingProfileRef.get()
-      
-      if (existingProfileDoc.exists) {
-        // Ya existe perfil vinculado, retornar error
+      return NextResponse.json(
+        { 
+          error: "El email ya está registrado en Firebase Auth",
+          uid: authUser.uid
+        },
+        { status: 409 }
+      )
+    }
+
+    // 6. Crear nuevo usuario en Firebase Auth
+    let uid: string
+    try {
+      const newUser = await adminAuth.createUser({
+        email,
+        password,
+        emailVerified: false,
+        displayName: nombre,
+      })
+
+      uid = newUser.uid
+
+      // 7. Setear custom claims al nuevo usuario
+      await adminAuth.setCustomUserClaims(uid, {
+        appId: appId,
+        role: role,
+      })
+
+    } catch (error: any) {
+      // Manejar error de email ya existente (race condition)
+      if (error.code === "auth/email-already-exists" || 
+          error.message?.includes("email-already-exists") ||
+          error.message?.includes("already exists")) {
         return NextResponse.json(
-          { 
-            error: "El email ya está registrado y tiene un perfil vinculado",
-            uid: authUser.uid
-          },
+          { error: "email-already-exists", message: "El email ya está registrado" },
           { status: 409 }
         )
       }
 
-      // Buscar todos los perfiles con este email
-      const emailQuery = await usersCollection
-        .where('email', '==', email)
-        .get()
-
-      // Filtrar para encontrar perfiles pending (sin uid o con status pending)
-      for (const doc of emailQuery.docs) {
-        const docData = doc.data()
-        // Es pending si no tiene uid o tiene status pending
-        if (!docData.uid || docData.status === 'pending') {
-          pendingProfile = docData
-          pendingProfileId = doc.id
-          break
-        }
-      }
-    } else {
-      // Si el usuario no existe en Auth, buscar perfil pending por email
-      const emailQuery = await usersCollection
-        .where('email', '==', email)
-        .get()
-
-      // Filtrar para encontrar perfiles pending (sin uid o con status pending)
-      for (const doc of emailQuery.docs) {
-        const docData = doc.data()
-        // Es pending si no tiene uid o tiene status pending
-        if (!docData.uid || docData.status === 'pending') {
-          pendingProfile = docData
-          pendingProfileId = doc.id
-          break
-        }
-      }
-    }
-
-    // 6. Crear usuario en Firebase Auth o usar el existente
-    let uid: string
-    let status: 'created' | 'linked'
-
-    if (userExists && authUser) {
-      // Usuario ya existe en Auth
-      uid = authUser.uid
-      
-      if (pendingProfile && pendingProfileId) {
-        // Vincular perfil pending con el uid existente
-        // Crear objeto sin el campo status si existe
-        const { status: _, ...profileWithoutStatus } = pendingProfile
-        await usersCollection.doc(uid).set({
-          ...profileWithoutStatus,
-          uid: uid,
-          email: email,
-          nombre: nombre,
-          role: role,
-          appId: appId,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true })
-
-        // Eliminar el documento pending antiguo si tiene un ID diferente al uid
-        if (pendingProfileId !== uid) {
-          await usersCollection.doc(pendingProfileId).delete()
-        }
-
-        status = 'linked'
-      } else {
-        // Crear nuevo perfil para el usuario existente
-        await usersCollection.doc(uid).set({
-          uid: uid,
-          email: email,
-          nombre: nombre,
-          role: role,
-          appId: appId,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true })
-
-        status = 'linked'
-      }
-    } else {
-      // Crear nuevo usuario en Firebase Auth
-      try {
-        const newUser = await adminAuth.createUser({
-          email,
-          password,
-          emailVerified: false,
-          displayName: nombre,
-        })
-
-        uid = newUser.uid
-
-        // Crear o actualizar perfil en Firestore
-        if (pendingProfile && pendingProfileId) {
-          // Vincular perfil pending con el nuevo uid
-          // Crear objeto sin el campo status si existe
-          const { status: _, ...profileWithoutStatus } = pendingProfile
-          await usersCollection.doc(uid).set({
-            ...profileWithoutStatus,
-            uid: uid,
-            email: email,
-            nombre: nombre,
-            role: role,
-            appId: appId,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true })
-
-          // Eliminar el documento pending antiguo si tiene un ID diferente al uid
-          if (pendingProfileId !== uid) {
-            await usersCollection.doc(pendingProfileId).delete()
-          }
-
-          status = 'linked'
-        } else {
-          // Crear nuevo perfil
-          await usersCollection.doc(uid).set({
-            uid: uid,
-            email: email,
-            nombre: nombre,
-            role: role,
-            appId: appId,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          })
-
-          status = 'created'
-        }
-      } catch (error: any) {
-        // Manejar error de email ya existente (race condition)
-        if (error.code === "auth/email-already-exists" || 
-            error.message?.includes("email-already-exists") ||
-            error.message?.includes("already exists")) {
-          return NextResponse.json(
-            { error: "email-already-exists", message: "El email ya está registrado" },
-            { status: 409 }
-          )
-        }
-
-        // Otros errores de Firebase Auth
-        if (error.code?.startsWith("auth/")) {
-          logError(error, 'creating user (firebase auth error)')
-          return NextResponse.json(
-            { error: error.code, message: error.message || "Error al crear usuario" },
-            { status: 400 }
-          )
-        }
-
-        // Error desconocido
-        logError(error, 'creating user (unknown error)')
+      // Otros errores de Firebase Auth
+      if (error.code?.startsWith("auth/")) {
+        logError(error, 'creating user (firebase auth error)')
         return NextResponse.json(
-          { error: "Error interno del servidor al crear usuario", details: error.message },
-          { status: 500 }
+          { error: error.code, message: error.message || "Error al crear usuario" },
+          { status: 400 }
         )
       }
+
+      // Error desconocido
+      logError(error, 'creating user (unknown error)')
+      return NextResponse.json(
+        { error: "Error interno del servidor al crear usuario", details: error.message },
+        { status: 500 }
+      )
     }
 
-    // 7. Responder con éxito
+    // 8. Responder con éxito
+    // NOTA: NO escribimos Firestore - Firestore owner-centric queda exclusivo de ControlAudit
     return NextResponse.json(
       {
         uid: uid,
-        status: status,
+        status: "created",
         source: "controlfile"
       },
       { status: 201 }

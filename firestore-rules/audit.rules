@@ -1,122 +1,94 @@
-// ================================
-// ControlAudit – reglas específicas
-// ================================
+/* ========= CONTROLAUDIT – OWNER-CENTRIC ========= */
 
-// ========= HELPERS APPID =========
-function hasValidAuditAppId() {
-  return request.resource.data.appId is string
-    && request.resource.data.appId == 'auditoria';
-}
-
-function isLegacyAuditDoc() {
-  return !('appId' in resource.data);
-}
-
-function sameAuditAppId() {
-  return resource.data.appId == request.resource.data.appId;
-}
-
-// ⚠️ Supermax SOLO para escrituras sensibles
-function isAuditSupermax() {
-  return isAuth()
-    && exists(/databases/$(db)/documents/apps/auditoria/users/$(uid()))
-    && get(/databases/$(db)/documents/apps/auditoria/users/$(uid())).data.role == 'supermax';
-}
+/*
+Modelo ÚNICO y definitivo:
+apps/auditoria/owners/{ownerId}/...
+La seguridad se basa EXCLUSIVAMENTE en:
+- request.auth.token.appId == 'auditoria'
+- request.auth.token.ownerId
+*/
 
 // ================================
-// 🔐 PERFIL USUARIO AUDITORIA
+// EMPRESAS
 // ================================
-match /apps/auditoria/users/{userId} {
+match /apps/auditoria/owners/{ownerId}/empresas/{empresaId} {
 
-  // El usuario solo puede verse a sí mismo
-  allow get, update: if isAuth() && uid() == userId;
-
-  // Creación controlada (registro inicial o supermax)
-  allow create: if isAuth()
-    && (uid() == userId || isAuditSupermax())
-    && hasValidAuditAppId();
-}
-
-// ================================
-// 🔐 LISTADO DE SUBCOLECCIONES
-// ================================
-match /apps/auditoria/users/{userId}/{collection} {
-
-  // IMPORTANTE:
-  // - Solo el dueño del path puede listar
-  // - Evita leaks y errores de permisos
-  allow list, read: if isAuth()
-    && uid() == userId
-    && exists(/databases/$(db)/documents/apps/auditoria/users/$(userId));
-}
-
-// ================================
-// 🔐 DOCUMENTOS EN SUBCOLECCIONES
-// ================================
-match /apps/auditoria/users/{userId}/{collection}/{docId} {
-
-  allow read, create, update, delete: if isAuth()
-    && (uid() == userId || isAuditSupermax());
-}
-
-// ================================
-// 🔓 DATOS GENERALES DE AUDITORIA
-// ================================
-match /apps/auditoria/{collection}/{document=**} {
-
-  allow read: if isAuth()
-    && collection != 'users';
+  allow read: if isAuth() && request.auth.token.appId == 'auditoria' && (
+    ownerId == uid() ||
+    (
+      request.auth.token.ownerId == ownerId &&
+      resource.data.operarios[uid()] == true
+    )
+  );
 
   allow create: if isAuth()
-    && collection != 'users'
-    && hasValidAuditAppId();
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && request.resource.data.ownerId == uid()
+    && nonEmptyString("nombre");
 
   allow update: if isAuth()
-    && collection != 'users'
-    && (
-      isLegacyAuditDoc()
-      || (hasValidAuditAppId() && sameAuditAppId())
-    );
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && unchanged("ownerId");
 
   allow delete: if isAuth()
-    && collection != 'users';
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid();
 }
 
 // ================================
-// 📊 COLECCIONES RAÍZ (AUDITORIA)
+// USUARIOS (admins / operarios)
 // ================================
-match /empresas/{id} {
-  allow read, write: if isAuth();
+match /apps/auditoria/owners/{ownerId}/usuarios/{userId} {
+
+  allow read: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && (
+      ownerId == uid() ||
+      (userId == uid() && request.auth.token.ownerId == ownerId)
+    );
+
+  allow create: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && request.resource.data.ownerId == uid()
+    && request.resource.data.role in ['admin', 'operario'];
+
+  allow update: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && unchanged("ownerId");
+
+  allow delete: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid();
 }
 
-match /sucursales/{id} {
-  allow read, write: if isAuth();
-}
+// ================================
+// REPORTES (AUDITORÍAS)
+// ================================
+match /apps/auditoria/owners/{ownerId}/reportes/{reporteId} {
 
-match /auditorias/{id} {
-  allow read, write: if isAuth();
-}
+  allow read: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && (
+      ownerId == uid() ||
+      request.auth.token.ownerId == ownerId ||
+      uid() in resource.data.compartidoCon
+    );
 
-match /formularios/{id} {
-  allow read, write: if isAuth();
-}
+  allow create: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && request.resource.data.ownerId == uid();
 
-match /empleados/{id} {
-  allow read, write: if isAuth();
-}
+  allow update: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid()
+    && unchanged("ownerId");
 
-match /accidentes/{id} {
-  allow read, write: if isAuth();
-}
-
-match /incidentes/{id} {
-  allow read, write: if isAuth();
-}
-
-match /capacitaciones/{id} {
-  allow read, write: if isAuth();
-}
-
-match /reportes/{id} {
-  allow read, write: if isAuth();
+  allow delete: if isAuth()
+    && request.auth.token.appId == 'auditoria'
+    && ownerId == uid();
 }
