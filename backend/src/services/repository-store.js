@@ -1,0 +1,291 @@
+// backend/src/services/repository-store.js
+// Servicio de almacenamiento de índices en filesystem
+// SOLO filesystem para índice completo. Metadata liviana en JSON separado.
+
+const fs = require('fs').promises;
+const path = require('path');
+const { logger } = require('../utils/logger');
+const { normalizeForFilesystem } = require('../utils/repository-id');
+
+const INDEXES_DIR = process.env.INDEXES_DIR || path.join(__dirname, '../../indexes');
+
+/**
+ * Asegura que el directorio de índices existe
+ */
+async function ensureIndexesDir() {
+  try {
+    await fs.mkdir(INDEXES_DIR, { recursive: true });
+  } catch (error) {
+    logger.error('Error creando directorio de índices', { error: error.message, dir: INDEXES_DIR });
+    throw error;
+  }
+}
+
+/**
+ * Obtiene la ruta del directorio del repositorio
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {string} - Ruta completa del directorio
+ */
+function getRepositoryDir(repositoryId) {
+  const normalizedId = normalizeForFilesystem(repositoryId);
+  return path.join(INDEXES_DIR, normalizedId);
+}
+
+/**
+ * Obtiene la ruta del archivo de índice
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {string} - Ruta completa del archivo index.json
+ */
+function getIndexPath(repositoryId) {
+  return path.join(getRepositoryDir(repositoryId), 'index.json');
+}
+
+/**
+ * Obtiene la ruta del archivo de metadata liviana
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {string} - Ruta completa del archivo metadata.json
+ */
+function getMetadataPath(repositoryId) {
+  return path.join(getRepositoryDir(repositoryId), 'metadata.json');
+}
+
+/**
+ * Obtiene la ruta del archivo de embeddings (opcional)
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {string} - Ruta completa del archivo embeddings.json
+ */
+function getEmbeddingsPath(repositoryId) {
+  return path.join(getRepositoryDir(repositoryId), 'embeddings.json');
+}
+
+/**
+ * Verifica si un repositorio existe en filesystem
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<boolean>}
+ */
+async function repositoryExists(repositoryId) {
+  try {
+    const indexPath = getIndexPath(repositoryId);
+    await fs.access(indexPath);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Obtiene el estado actual del repositorio
+ * Retorna: 'idle' | 'indexing' | 'ready' | 'error'
+ * NUNCA retorna null - si no existe, retorna 'idle'
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<'idle' | 'indexing' | 'ready' | 'error'>}
+ */
+async function getStatus(repositoryId) {
+  try {
+    const metadataPath = getMetadataPath(repositoryId);
+    const metadata = await fs.readFile(metadataPath, 'utf-8');
+    const data = JSON.parse(metadata);
+    return data.status || 'idle';
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // No existe metadata = no ha sido indexado = idle
+      return 'idle';
+    }
+    logger.error('Error leyendo status del repositorio', { repositoryId, error: error.message });
+    return 'idle'; // Por defecto, asumir idle si hay error
+  }
+}
+
+/**
+ * Obtiene metadata liviana del repositorio
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<Object | null>}
+ */
+async function getMetadata(repositoryId) {
+  try {
+    const metadataPath = getMetadataPath(repositoryId);
+    const metadata = await fs.readFile(metadataPath, 'utf-8');
+    return JSON.parse(metadata);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Obtiene el índice completo del repositorio
+ * SOLO para uso interno (chat-service, etc.)
+ * El frontend NUNCA debe recibir esto
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<Object | null>}
+ */
+async function getIndex(repositoryId) {
+  try {
+    const indexPath = getIndexPath(repositoryId);
+    const indexData = await fs.readFile(indexPath, 'utf-8');
+    return JSON.parse(indexData);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Obtiene los embeddings del repositorio (si existen)
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<Object | null>}
+ */
+async function getEmbeddings(repositoryId) {
+  try {
+    const embeddingsPath = getEmbeddingsPath(repositoryId);
+    const embeddingsData = await fs.readFile(embeddingsPath, 'utf-8');
+    return JSON.parse(embeddingsData);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Guarda el índice completo en filesystem
+ * @param {string} repositoryId - ID del repositorio
+ * @param {Object} indexData - Datos del índice completo (files, tree, etc.)
+ * @returns {Promise<void>}
+ */
+async function saveIndex(repositoryId, indexData) {
+  await ensureIndexesDir();
+  
+  const repoDir = getRepositoryDir(repositoryId);
+  await fs.mkdir(repoDir, { recursive: true });
+  
+  const indexPath = getIndexPath(repositoryId);
+  await fs.writeFile(indexPath, JSON.stringify(indexData, null, 2), 'utf-8');
+  
+  logger.info('Índice guardado en filesystem', { repositoryId, path: indexPath });
+}
+
+/**
+ * Guarda metadata liviana del repositorio
+ * Esta es la ÚNICA metadata que se consulta frecuentemente
+ * NO incluye el índice completo ni contenido pesado
+ * @param {string} repositoryId - ID del repositorio
+ * @param {Object} metadata - Metadata liviana
+ * @returns {Promise<void>}
+ */
+async function saveMetadata(repositoryId, metadata) {
+  await ensureIndexesDir();
+  
+  const repoDir = getRepositoryDir(repositoryId);
+  await fs.mkdir(repoDir, { recursive: true });
+  
+  const metadataPath = getMetadataPath(repositoryId);
+  
+  // Estructura de metadata liviana
+  const metadataToSave = {
+    repositoryId,
+    status: metadata.status || 'idle', // idle | indexing | ready | error
+    owner: metadata.owner,
+    repo: metadata.repo,
+    branch: metadata.branch || null,
+    branchSha: metadata.branchSha || null, // Para comparar cambios
+    uid: metadata.uid,
+    indexedAt: metadata.indexedAt || null, // ISO string
+    stats: metadata.stats || null, // { totalFiles, totalSize, languages, etc. }
+    error: metadata.error || null, // Solo si status === 'error'
+    createdAt: metadata.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  await fs.writeFile(metadataPath, JSON.stringify(metadataToSave, null, 2), 'utf-8');
+  
+  logger.info('Metadata guardada', { repositoryId, status: metadataToSave.status });
+}
+
+/**
+ * Guarda embeddings (opcional, para futura implementación de chat)
+ * @param {string} repositoryId - ID del repositorio
+ * @param {Object} embeddings - Embeddings vectoriales
+ * @returns {Promise<void>}
+ */
+async function saveEmbeddings(repositoryId, embeddings) {
+  await ensureIndexesDir();
+  
+  const repoDir = getRepositoryDir(repositoryId);
+  await fs.mkdir(repoDir, { recursive: true });
+  
+  const embeddingsPath = getEmbeddingsPath(repositoryId);
+  await fs.writeFile(embeddingsPath, JSON.stringify(embeddings, null, 2), 'utf-8');
+  
+  logger.info('Embeddings guardados', { repositoryId, path: embeddingsPath });
+}
+
+/**
+ * Actualiza solo el estado del repositorio
+ * @param {string} repositoryId - ID del repositorio
+ * @param {'idle' | 'indexing' | 'ready' | 'error'} status - Nuevo estado
+ * @param {Object} updates - Campos adicionales a actualizar
+ * @returns {Promise<void>}
+ */
+async function updateStatus(repositoryId, status, updates = {}) {
+  const currentMetadata = await getMetadata(repositoryId) || {};
+  
+  await saveMetadata(repositoryId, {
+    ...currentMetadata,
+    status,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Obtiene el SHA del branch actualmente indexado
+ * Para comparar si ha cambiado y decidir reindexación
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<string | null>}
+ */
+async function getIndexedBranchSha(repositoryId) {
+  const metadata = await getMetadata(repositoryId);
+  return metadata?.branchSha || null;
+}
+
+/**
+ * Elimina un repositorio completo del filesystem
+ * Usar con precaución - no hay limpieza automática por defecto
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<void>}
+ */
+async function deleteRepository(repositoryId) {
+  try {
+    const repoDir = getRepositoryDir(repositoryId);
+    await fs.rm(repoDir, { recursive: true, force: true });
+    logger.info('Repositorio eliminado del filesystem', { repositoryId });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+    // Ya no existe, OK
+  }
+}
+
+module.exports = {
+  getStatus,
+  getMetadata,
+  getIndex,
+  getEmbeddings,
+  saveIndex,
+  saveMetadata,
+  saveEmbeddings,
+  updateStatus,
+  getIndexedBranchSha,
+  repositoryExists,
+  deleteRepository
+};

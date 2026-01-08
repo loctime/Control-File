@@ -6,21 +6,37 @@ const { logger } = require('../utils/logger');
  * Indexa un repositorio de GitHub
  * @param {string} owner - Propietario del repositorio
  * @param {string} repo - Nombre del repositorio
- * @param {string} accessToken - Token de acceso de GitHub
+ * @param {string|null|undefined} accessToken - Token de acceso de GitHub (opcional para repos públicos)
  * @param {string|null|undefined} branch - Rama a indexar (opcional, usa default branch si no se proporciona)
  * @returns {Promise<{ files: Array, tree: Object, stats: Object, branch: string, branchSha: string }>}
  */
 async function indexRepository(owner, repo, accessToken, branch) {
-  logger.info('Iniciando indexación de repositorio', { owner, repo, branch: branch || 'default' });
+  logger.info('Iniciando indexación de repositorio', { 
+    owner, 
+    repo, 
+    branch: branch || 'default',
+    hasToken: !!accessToken 
+  });
+  
+  // Headers para requests a GitHub API
+  const getHeaders = () => {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'controlfile-backend'
+    };
+    
+    // Solo agregar Authorization si hay token (repos privados)
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    
+    return headers;
+  };
   
   try {
     // 1. Obtener información del repositorio
     const repoInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'controlfile-backend'
-      }
+      headers: getHeaders()
     });
     
     if (!repoInfo.ok) {
@@ -42,11 +58,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
     let branchSha = resolvedBranch;
     if (!resolvedBranch.match(/^[0-9a-f]{40}$/)) {
       const branchInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${resolvedBranch}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'controlfile-backend'
-        }
+        headers: getHeaders()
       });
       
       if (!branchInfo.ok) {
@@ -59,13 +71,9 @@ async function indexRepository(owner, repo, accessToken, branch) {
       logger.info('Branch resuelto a SHA', { branch: resolvedBranch, sha: branchSha });
     }
     
-    // 3. Obtener árbol completo del repositorio
+    // 4. Obtener árbol completo del repositorio
     const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branchSha}?recursive=1`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'controlfile-backend'
-      }
+      headers: getHeaders()
     });
     
     if (!treeResponse.ok) {
@@ -75,10 +83,10 @@ async function indexRepository(owner, repo, accessToken, branch) {
     
     const treeData = await treeResponse.json();
     
-    // 4. Filtrar solo archivos (excluir directorios)
+    // 5. Filtrar solo archivos (excluir directorios)
     const files = treeData.tree.filter(item => item.type === 'blob');
     
-    // 5. Obtener contenido de archivos importantes (limitado a primeros 100 archivos para evitar rate limits)
+    // 6. Obtener contenido de archivos importantes (limitado a primeros 100 archivos para evitar rate limits)
     const importantFiles = files.slice(0, 100).filter(file => {
       const ext = file.path.split('.').pop()?.toLowerCase();
       const importantExtensions = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'md', 'json', 'yaml', 'yml', 'txt'];
@@ -89,11 +97,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
     for (const file of importantFiles) {
       try {
         const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${branchSha}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github+json',
-            'User-Agent': 'controlfile-backend'
-          }
+          headers: getHeaders()
         });
         
         if (contentResponse.ok) {
@@ -113,7 +117,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
       }
     }
     
-    // 6. Calcular estadísticas
+    // 7. Calcular estadísticas
     const stats = {
       totalFiles: files.length,
       totalSize: files.reduce((sum, file) => sum + (file.size || 0), 0),
