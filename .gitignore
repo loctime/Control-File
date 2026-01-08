@@ -123,3 +123,8 @@ tsconfig.tsbuildinfo
 # Temporary files
 tmp/
 temp/
+
+# Service Account Keys (secrets)
+**/serviceAccountKey*.json
+backend/serviceAccountKey*.json
+*.json.key
