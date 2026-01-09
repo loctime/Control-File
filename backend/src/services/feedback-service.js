@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const b2Service = require('./b2');
-const { normalizeAppId } = require('../../../lib/utils/app-ownership');
+const { normalizeAppId } = require('../../../../lib/utils/app-ownership');
 const {
   validateScreenshot,
   generateFeedbackId,
