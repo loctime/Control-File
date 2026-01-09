@@ -82,8 +82,8 @@ router.post('/', upload.single('screenshot'), async (req, res) => {
 
     // Auditoría global (async, no bloquea respuesta)
     if (!result.fromCache) {
-      // Importar dinámicamente para evitar problemas de módulos
-      const { createAuditLog } = require('../../../../lib/platform/audit');
+      // Importar función de auditoría del backend
+      const { createAuditLog } = require('../utils/audit');
       createAuditLog(
         'feedback.created',
         userId,
@@ -352,7 +352,7 @@ router.patch('/:feedbackId', async (req, res) => {
     }
 
     // Auditoría global (async, no bloquea respuesta)
-    const { createAuditLog } = require('../../../../lib/platform/audit');
+    const { createAuditLog } = require('../utils/audit');
     createAuditLog(
       'feedback.updated',
       userId,
