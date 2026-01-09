@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const githubStatusRoutes = require('./routes/github-status');
 const githubSelectRepoRoutes = require('./routes/github-select-repo');
+const githubDisconnectRoutes = require('./routes/github-disconnect');
 const repositoryIndexRoutes = require('./routes/repository-index'); // Legacy - mantener por compatibilidad
 const repositoriesRoutes = require('./routes/repositories'); // Nuevo endpoint rediseñado
 const chatRoutes = require('./routes/chat'); // Endpoint de chat
@@ -166,6 +167,7 @@ app.use('/api/auth/github', githubAuthRoutes);
 app.use('/api/github', authMiddleware, githubReposRoutes);
 app.use('/api/github', authMiddleware, githubStatusRoutes);
 app.use('/api/github', authMiddleware, githubSelectRepoRoutes);
+app.use('/api/github', authMiddleware, githubDisconnectRoutes);
 
 // Repository indexing endpoint - NO usa authMiddleware (viene desde ControlRepo)
 // Legacy endpoint - mantener por compatibilidad temporal
