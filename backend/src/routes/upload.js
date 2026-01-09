@@ -5,6 +5,14 @@ const b2Service = require('../services/b2');
 const multer = require('multer'); // Added multer for file uploads
 const { resolveParentAndAncestors } = require('../services/metadata');
 const { logger } = require('../utils/logger');
+const { 
+  loadAccount, 
+  requireActiveAccount, 
+  requireStorage,
+  AccountNotFoundError,
+  AccountNotActiveError,
+  QuotaExceededError
+} = require('../platform/guards/require-account');
 
 // Test endpoint for debugging (no auth required)
 router.post('/test-no-auth', async (req, res) => {
@@ -64,33 +72,10 @@ router.post('/presign', async (req, res) => {
       return res.status(400).json({ error: 'El archivo es demasiado grande (máx. 5GB)' });
     }
 
-    // Get user quota information
-    logger.debug('Getting user quota', { uid });
-    const userRef = admin.firestore().collection('users').doc(uid);
-    const userDoc = await userRef.get();
-    
-    if (!userDoc.exists) {
-      logger.warn('User not found in Firestore', { uid });
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    const userData = userDoc.data();
-    const { planQuotaBytes, usedBytes, pendingBytes } = userData;
-    
-    logger.debug('User quota data', { planQuotaBytes, usedBytes, pendingBytes, requestedSize: size });
-
-    // Check if user has enough quota
-    const totalUsed = usedBytes + pendingBytes + size;
-    if (totalUsed > planQuotaBytes) {
-      return res.status(413).json({ 
-        error: 'No tienes suficiente espacio disponible',
-        details: {
-          requested: size,
-          available: planQuotaBytes - usedBytes - pendingBytes,
-          total: planQuotaBytes
-        }
-      });
-    }
+    // Validación de cuenta y cuota usando el guard
+    const account = await loadAccount(uid);
+    requireActiveAccount(account);
+    requireStorage(account, size);
 
     // Resolve parent and ancestors
     logger.debug('Resolving parent folder', { parentId, uid });
@@ -153,13 +138,37 @@ router.post('/presign', async (req, res) => {
 
     // Lógica de taskbar eliminada - ya no necesitamos APP_CODE
 
-    // Update user's pending bytes
-    await userRef.update({
-      pendingBytes: pendingBytes + size,
-    });
-
     res.json(uploadSessionData);
   } catch (error) {
+    // Manejar errores del guard
+    if (error instanceof AccountNotFoundError) {
+      return res.status(404).json({
+        error: error.message,
+        code: error.code
+      });
+    }
+    
+    if (error instanceof AccountNotActiveError) {
+      return res.status(403).json({
+        error: error.message,
+        code: error.code,
+        details: {
+          status: error.account.status
+        }
+      });
+    }
+    
+    if (error instanceof QuotaExceededError) {
+      return res.status(413).json({
+        error: error.message,
+        code: error.code,
+        details: {
+          requestedBytes: error.requestedBytes,
+          availableBytes: error.availableBytes
+        }
+      });
+    }
+    
     logger.error('Error in presign upload', { error: error.message, userId: req.user?.uid });
     res.status(500).json({ error: 'Error interno del servidor' });
   }
@@ -207,7 +216,7 @@ router.post('/confirm', async (req, res) => {
     const fileRef = admin.firestore().collection('files').doc();
     await fileRef.set({
       id: fileRef.id,
-      userId: uid, // Cambiar de uid a userId para consistencia
+      userId: uid,
       name: sessionData.name,
       size: sessionData.size,
       mime: sessionData.mime,
@@ -217,15 +226,7 @@ router.post('/confirm', async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
-      // appCode eliminado
       ancestors: Array.isArray(sessionData.ancestors) ? sessionData.ancestors : [],
-    });
-
-    // Update user quota
-    const userRef = admin.firestore().collection('users').doc(uid);
-    await userRef.update({
-      usedBytes: admin.firestore.FieldValue.increment(sessionData.size),
-      pendingBytes: admin.firestore.FieldValue.increment(-sessionData.size),
     });
 
     // Update session status
