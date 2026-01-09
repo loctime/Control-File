@@ -57,7 +57,8 @@ router.post('/init', authMiddleware, async (req, res) => {
       `?client_id=${clientId}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&scope=repo` +
-      `&state=${state}`;
+      `&state=${state}` +
+      `&prompt=select_account`;
 
     return res.json({
       githubAuthUrl,
@@ -154,7 +155,8 @@ router.get('/', async (req, res) => {
       `?client_id=${clientId}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&scope=repo` +
-      `&state=${state}`;
+      `&state=${state}` +
+      `&prompt=select_account`;
 
     // Redirigir a GitHub
     res.redirect(githubAuthUrl);
