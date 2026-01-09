@@ -29,6 +29,7 @@ const usersRoutes = require('./routes/users');
 const audioRoutes = require('./routes/audio');
 const storesRoutes = require('./routes/stores/sheets');
 const feedbackRoutes = require('./routes/feedback');
+const accountsRoutes = require('./routes/accounts');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
@@ -191,6 +192,7 @@ app.use('/api/audio', authMiddleware, audioRoutes);
 app.use('/api/stores', authMiddleware, storesRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
+app.use('/api/accounts', authMiddleware, accountsRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
