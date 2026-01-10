@@ -1,9 +1,11 @@
 // backend/src/services/repository-store.js
 // Servicio de almacenamiento de índices en filesystem
 // SOLO filesystem para índice completo. Metadata liviana en JSON separado.
+// Compatible con formato antiguo (Firestore + formato plano) y nuevo (filesystem JSON)
 
 const fs = require('fs').promises;
 const path = require('path');
+const admin = require('firebase-admin');
 const { logger } = require('../utils/logger');
 const { normalizeForFilesystem } = require('../utils/repository-id');
 
@@ -32,12 +34,22 @@ function getRepositoryDir(repositoryId) {
 }
 
 /**
- * Obtiene la ruta del archivo de índice
+ * Obtiene la ruta del archivo de índice (formato nuevo)
  * @param {string} repositoryId - ID del repositorio
  * @returns {string} - Ruta completa del archivo index.json
  */
 function getIndexPath(repositoryId) {
   return path.join(getRepositoryDir(repositoryId), 'index.json');
+}
+
+/**
+ * Obtiene la ruta del archivo de índice en formato antiguo
+ * Formato antiguo: {INDEXES_DIR}/{repositoryId}.json
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {string} - Ruta completa del archivo {repositoryId}.json
+ */
+function getLegacyIndexPath(repositoryId) {
+  return path.join(INDEXES_DIR, `${repositoryId}.json`);
 }
 
 /**
@@ -80,20 +92,63 @@ async function repositoryExists(repositoryId) {
  * Obtiene el estado actual del repositorio
  * Retorna: 'idle' | 'indexing' | 'ready' | 'error'
  * NUNCA retorna null - si no existe, retorna 'idle'
+ * 
+ * Compatibilidad con formato antiguo:
+ * - Primero busca metadata en filesystem (formato nuevo)
+ * - Si no existe, busca en Firestore (formato antiguo)
+ * - Mapea 'completed' (formato antiguo) a 'ready' (formato nuevo)
+ * 
  * @param {string} repositoryId - ID del repositorio
  * @returns {Promise<'idle' | 'indexing' | 'ready' | 'error'>}
  */
 async function getStatus(repositoryId) {
   try {
+    // 1. Intentar obtener metadata del formato nuevo (filesystem JSON)
     const metadataPath = getMetadataPath(repositoryId);
     const metadata = await fs.readFile(metadataPath, 'utf-8');
     const data = JSON.parse(metadata);
     return data.status || 'idle';
   } catch (error) {
     if (error.code === 'ENOENT') {
-      // No existe metadata = no ha sido indexado = idle
-      return 'idle';
+      // 2. No existe metadata en filesystem, verificar Firestore (formato antiguo)
+      try {
+        const db = admin.firestore();
+        const indexRef = db.collection('apps').doc('controlrepo')
+          .collection('repositories').doc(repositoryId);
+        
+        const doc = await indexRef.get();
+        
+        if (doc.exists) {
+          const data = doc.data();
+          const firestoreStatus = data.status;
+          
+          // Mapear 'completed' del formato antiguo a 'ready' del formato nuevo
+          if (firestoreStatus === 'completed') {
+            logger.info('Repositorio encontrado en Firestore con status completed, mapeando a ready', { repositoryId });
+            return 'ready';
+          }
+          
+          // Mapear otros estados directamente si son compatibles
+          if (['indexing', 'error'].includes(firestoreStatus)) {
+            return firestoreStatus;
+          }
+          
+          // Si es 'idle' o desconocido, retornar idle
+          return 'idle';
+        }
+        
+        // No existe en Firestore tampoco = no ha sido indexado = idle
+        return 'idle';
+      } catch (firestoreError) {
+        logger.warn('Error verificando Firestore para repositorio', { 
+          repositoryId, 
+          error: firestoreError.message 
+        });
+        // Si Firestore falla, asumir idle
+        return 'idle';
+      }
     }
+    
     logger.error('Error leyendo status del repositorio', { repositoryId, error: error.message });
     return 'idle'; // Por defecto, asumir idle si hay error
   }
@@ -121,17 +176,52 @@ async function getMetadata(repositoryId) {
  * Obtiene el índice completo del repositorio
  * SOLO para uso interno (chat-service, etc.)
  * El frontend NUNCA debe recibir esto
+ * 
+ * Compatibilidad con formato antiguo:
+ * - Primero busca índice en formato nuevo: {normalizedId}/index.json
+ * - Si no existe, busca en formato antiguo: {repositoryId}.json
+ * - Esto permite usar índices completados sin relanzar la indexación
+ * 
  * @param {string} repositoryId - ID del repositorio
  * @returns {Promise<Object | null>}
  */
 async function getIndex(repositoryId) {
   try {
+    // 1. Intentar obtener índice en formato nuevo
     const indexPath = getIndexPath(repositoryId);
     const indexData = await fs.readFile(indexPath, 'utf-8');
-    return JSON.parse(indexData);
+    const parsed = JSON.parse(indexData);
+    logger.info('Índice cargado desde formato nuevo', { repositoryId, path: indexPath });
+    return parsed;
   } catch (error) {
     if (error.code === 'ENOENT') {
-      return null;
+      // 2. No existe en formato nuevo, intentar formato antiguo
+      try {
+        const legacyPath = getLegacyIndexPath(repositoryId);
+        const legacyIndexData = await fs.readFile(legacyPath, 'utf-8');
+        const parsed = JSON.parse(legacyIndexData);
+        logger.info('Índice cargado desde formato antiguo', { repositoryId, path: legacyPath });
+        
+        // El formato antiguo puede tener estructura ligeramente diferente
+        // Asegurar compatibilidad con el formato esperado
+        if (parsed.files && parsed.tree) {
+          return parsed;
+        }
+        
+        // Si la estructura es diferente, intentar adaptarla
+        logger.warn('Estructura de índice antiguo diferente, adaptando', { repositoryId });
+        return parsed;
+      } catch (legacyError) {
+        if (legacyError.code === 'ENOENT') {
+          logger.info('Índice no encontrado en formato nuevo ni antiguo', { repositoryId });
+          return null;
+        }
+        logger.error('Error leyendo índice en formato antiguo', { 
+          repositoryId, 
+          error: legacyError.message 
+        });
+        throw legacyError;
+      }
     }
     throw error;
   }
