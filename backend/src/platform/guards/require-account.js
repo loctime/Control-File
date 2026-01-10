@@ -1,6 +1,10 @@
 const admin = require('firebase-admin');
 const { logger } = require('../../utils/logger');
 
+// Constantes para creación automática de cuentas
+const FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+const DEFAULT_PLAN_ID = 'FREE_5GB';
+
 /**
  * Error personalizado para cuenta no encontrada
  */
@@ -41,11 +45,54 @@ class QuotaExceededError extends Error {
 }
 
 /**
+ * Crea una cuenta por defecto en platform/accounts/{uid}
+ * 
+ * @param {string} uid - ID del usuario
+ * @returns {Promise<Object>} Datos de la cuenta creada
+ */
+async function createDefaultAccount(uid) {
+  const db = admin.firestore();
+  const accountRef = db.collection('platform').doc('accounts').collection('accounts').doc(uid);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  
+  const newAccount = {
+    uid,
+    status: 'active',
+    planId: DEFAULT_PLAN_ID,
+    limits: {
+      storageBytes: FREE_STORAGE_BYTES
+    },
+    enabledApps: {},
+    paidUntil: null,
+    trialEndsAt: null,
+    createdAt: now,
+    updatedAt: now,
+    metadata: {
+      notes: 'Account auto-created',
+      flags: {}
+    }
+  };
+  
+  await accountRef.set(newAccount);
+  logger.info('Account auto-created', { uid });
+  
+  // Leer el documento recién creado para obtener timestamps reales del servidor
+  const createdDoc = await accountRef.get();
+  const accountData = createdDoc.data();
+  
+  return {
+    uid,
+    ...accountData
+  };
+}
+
+/**
  * Carga la cuenta desde platform/accounts/{uid}
+ * Si la cuenta no existe, la crea automáticamente con valores por defecto.
  * 
  * @param {string} uid - ID del usuario
  * @returns {Promise<Object>} Datos de la cuenta
- * @throws {AccountNotFoundError} Si la cuenta no existe
+ * @throws {AccountNotFoundError} Si la cuenta no existe y no se pudo crear
  */
 async function loadAccount(uid) {
   try {
@@ -56,8 +103,9 @@ async function loadAccount(uid) {
     const accountDoc = await accountRef.get();
     
     if (!accountDoc.exists) {
-      logger.error('Account not found', { uid });
-      throw new AccountNotFoundError(uid);
+      logger.info('Account not found, creating automatically', { uid });
+      // Crear cuenta automáticamente
+      return await createDefaultAccount(uid);
     }
     
     const accountData = accountDoc.data();
