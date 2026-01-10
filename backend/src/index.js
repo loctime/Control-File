@@ -63,10 +63,20 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://stock.controldoc.app',
       'https://gastos.controldoc.app',
       'https://auditoria.controldoc.app',
-      'https://repo.controldoc.app'
+      'https://repo.controldoc.app',
+      'https://hise.controldoc.app'
     ];
 
 logger.info('CORS allowed origins', { allowedOrigins });
+
+// Centralized allowed headers for CORS (including SDK headers)
+const allowedHeaders = [
+  'Authorization',
+  'Content-Type',
+  'X-Requested-With',
+  'X-SDK-Version',
+  'X-SDK-Client'
+];
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -82,7 +92,7 @@ const corsOptions = {
     }
   },
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+  allowedHeaders: allowedHeaders,
   credentials: true,
   optionsSuccessStatus: 200,
   preflightContinue: false
