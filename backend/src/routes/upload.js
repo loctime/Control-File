@@ -90,9 +90,12 @@ router.post('/presign', async (req, res) => {
 
     // Check if multipart upload is needed
     const multipartConfig = b2Service.calculateMultipartConfig(size);
+    const uploadSessionId = Math.random().toString(36).substr(2, 9);
+    let uploadUrl = '';
     let uploadSessionData = {
-      uploadSessionId: Math.random().toString(36).substr(2, 9),
+      uploadSessionId,
       key: fileKey,
+      fileKey: fileKey, // Alias para compatibilidad con SDK
       url: '',
     };
 
@@ -114,13 +117,21 @@ router.post('/presign', async (req, res) => {
         uploadId,
         parts,
       };
+      // Para multipart, usar la primera URL de parte como uploadUrl principal
+      uploadUrl = parts[0]?.url || '';
     } else {
       // Single upload
-      uploadSessionData.url = await b2Service.createPresignedPutUrl(fileKey, 3600, mime);
+      uploadUrl = await b2Service.createPresignedPutUrl(fileKey, 3600, mime);
+      uploadSessionData.url = uploadUrl;
     }
 
+    // Agregar campos requeridos por el SDK
+    uploadSessionData.uploadUrl = uploadUrl;
+    uploadSessionData.method = 'PUT'; // B2 usa PUT para uploads
+    uploadSessionData.headers = {}; // Headers vacíos, B2 maneja todo en la URL presignada
+
     // Create upload session in Firestore
-    const sessionRef = admin.firestore().collection('uploadSessions').doc(uploadSessionData.uploadSessionId);
+    const sessionRef = admin.firestore().collection('uploadSessions').doc(uploadSessionId);
     await sessionRef.set({
       uid,
       size,
