@@ -190,8 +190,8 @@ app.use('/api/repository', repositoryIndexRoutes);
 app.use('/repositories', repositoriesRoutes);
 
 // Chat endpoint
-// POST /chat/query - Consultas sobre repositorios indexados
-app.use('/chat', chatRoutes);
+// POST /api/chat/query - Consultas sobre repositorios indexados
+app.use('/api/chat', chatRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);

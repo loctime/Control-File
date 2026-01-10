@@ -30,14 +30,14 @@ async function queryRepository(repositoryId, question, conversationId = null) {
   
   // 1. Verificar que el repositorio existe y está listo
   const status = await repositoryStore.getStatus(repositoryId);
-  if (status !== 'ready') {
+  if (status !== 'ready' && status !== 'completed') {
     throw new Error(`Repositorio no está listo para queries. Estado actual: ${status}`);
   }
   
   // 2. Cargar índice completo (SOLO uso interno - nunca se envía al frontend)
   const index = await repositoryStore.getIndex(repositoryId);
   if (!index) {
-    throw new Error('Índice no encontrado aunque el estado es ready');
+    throw new Error(`Índice no encontrado aunque el estado es ${status}`);
   }
   
   // 3. Generar conversationId si no existe

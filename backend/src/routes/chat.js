@@ -106,7 +106,7 @@ router.post('/query', async (req, res) => {
     }
     
     // Si no está listo, retornar 400
-    if (status !== 'ready') {
+    if (status !== 'ready' && status !== 'completed') {
       let message;
       if (status === 'idle') {
         message = 'El repositorio no ha sido indexado. Primero ejecuta POST /repositories/index';
