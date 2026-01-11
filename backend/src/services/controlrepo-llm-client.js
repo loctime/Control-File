@@ -11,14 +11,11 @@ const CONTROLFILE_SIGNATURE = process.env.CONTROLFILE_SIGNATURE;
 /**
  * Realiza una consulta LLM delegando completamente a ControlRepo
  * 
- * @param {Object} payload - Payload según contrato InternalLLMQueryRequest
+ * @param {Object} payload - Payload según contrato de ControlRepo
  * @param {string} payload.question - Pregunta del usuario
  * @param {string} payload.repositoryId - ID del repositorio
- * @param {Array} payload.conversationMemory - Memoria de conversación (opcional)
- * @param {string} payload.role - Rol del LLM (opcional)
- * @param {Object} payload.context - Contexto completo (index, projectBrain, metrics)
- * @param {Object} payload.options - Opciones adicionales (opcional)
- * @returns {Promise<Object>} Respuesta según contrato InternalLLMQueryResponse
+ * @param {string} [payload.conversationId] - ID de conversación (opcional)
+ * @returns {Promise<Object>} Respuesta de ControlRepo
  */
 async function queryRepositoryLLM(payload) {
   if (!CONTROLREPO_URL) {
@@ -29,18 +26,27 @@ async function queryRepositoryLLM(payload) {
     throw new Error('CONTROLFILE_SIGNATURE no está configurado en variables de entorno');
   }
   
-  const url = `${CONTROLREPO_URL}/internal/llm/query`;
+  const url = `${CONTROLREPO_URL}/api/chat/query`;
   
   logger.info('Delegando consulta LLM a ControlRepo', {
     repositoryId: payload.repositoryId,
     questionLength: payload.question?.length,
-    hasConversationMemory: !!payload.conversationMemory?.length,
-    hasProjectBrain: !!payload.context?.projectBrain,
-    hasMetrics: !!payload.context?.metrics
+    hasConversationId: !!payload.conversationId
   });
   
   try {
-    const response = await axios.post(url, payload, {
+    // Construir payload según contrato de ControlRepo
+    const requestBody = {
+      repositoryId: payload.repositoryId,
+      question: payload.question
+    };
+    
+    // Agregar conversationId solo si está presente
+    if (payload.conversationId) {
+      requestBody.conversationId = payload.conversationId;
+    }
+    
+    const response = await axios.post(url, requestBody, {
       headers: {
         'Content-Type': 'application/json',
         'X-ControlFile-Signature': CONTROLFILE_SIGNATURE
@@ -49,24 +55,30 @@ async function queryRepositoryLLM(payload) {
       validateStatus: (status) => status < 500 // No lanzar error para 4xx, solo para 5xx
     });
     
-    // Si ControlRepo retorna error 4xx, propagarlo como 502 Bad Gateway
+    // Si ControlRepo retorna error 4xx, propagar el status code
     if (response.status >= 400 && response.status < 500) {
       logger.error('ControlRepo retornó error 4xx', {
         status: response.status,
         data: response.data,
         repositoryId: payload.repositoryId
       });
-      throw new Error(`ControlRepo rechazó la consulta: ${response.data?.message || response.data?.error || 'Error desconocido'}`);
+      const error = new Error(`ControlRepo rechazó la consulta: ${response.data?.message || response.data?.error || 'Error desconocido'}`);
+      error.statusCode = response.status;
+      error.responseData = response.data;
+      throw error;
     }
     
-    // Si ControlRepo retorna error 5xx, también propagarlo como 502
+    // Si ControlRepo retorna error 5xx, también propagarlo
     if (response.status >= 500) {
       logger.error('ControlRepo retornó error 5xx', {
         status: response.status,
         data: response.data,
         repositoryId: payload.repositoryId
       });
-      throw new Error(`ControlRepo reportó error interno: ${response.data?.message || response.data?.error || 'Error desconocido'}`);
+      const error = new Error(`ControlRepo reportó error interno: ${response.data?.message || response.data?.error || 'Error desconocido'}`);
+      error.statusCode = response.status;
+      error.responseData = response.data;
+      throw error;
     }
     
     logger.info('Consulta LLM completada exitosamente', {
