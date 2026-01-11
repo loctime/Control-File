@@ -213,6 +213,212 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
   }
 });
 
+/**
+ * Helper: Busca o crea una carpeta raíz por nombre
+ * Reutiliza lógica de GET /api/folders/root
+ */
+async function ensureRootFolder(uid, name) {
+  const filesCol = admin.firestore().collection('files');
+  
+  // Buscar raíz existente
+  const existingSnap = await filesCol
+    .where('userId', '==', uid)
+    .where('parentId', '==', null)
+    .where('name', '==', name)
+    .where('type', '==', 'folder')
+    .limit(1)
+    .get();
+
+  if (!existingSnap.empty) {
+    const doc = existingSnap.docs[0];
+    return { folderId: doc.id, folderData: doc.data() };
+  }
+
+  // Crear si no existe (reutiliza lógica de /root)
+  const generatedId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const folderRef = filesCol.doc(generatedId);
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+  const path = `/${slug}`;
+  
+  const doc = {
+    id: generatedId,
+    userId: uid,
+    name,
+    slug: slug,
+    parentId: null,
+    path,
+    ancestors: [],
+    createdAt: new Date(),
+    modifiedAt: new Date(),
+    type: 'folder',
+    metadata: {
+      isMainFolder: true,
+      isDefault: true,
+      icon: 'Folder',
+      color: 'text-purple-600',
+      description: '',
+      tags: [],
+      isPublic: false,
+      viewCount: 0,
+      lastAccessedAt: new Date(),
+      permissions: {
+        canEdit: true,
+        canDelete: true,
+        canShare: true,
+        canDownload: true
+      },
+      customFields: {}
+    },
+  };
+
+  await folderRef.set(doc);
+  return { folderId: generatedId, folderData: doc };
+}
+
+/**
+ * Helper: Busca o crea una carpeta por slug dentro de un parent
+ * Reutiliza lógica de GET /api/folders/by-slug y POST /api/folders/create
+ */
+async function ensureFolderBySlug(uid, slug, parentId) {
+  const filesCol = admin.firestore().collection('files');
+  
+  // Buscar carpeta existente
+  const existingQuery = await filesCol
+    .where('userId', '==', uid)
+    .where('parentId', '==', parentId)
+    .where('slug', '==', slug)
+    .where('type', '==', 'folder')
+    .limit(1)
+    .get();
+
+  if (!existingQuery.empty) {
+    const doc = existingQuery.docs[0];
+    return { folderId: doc.id, folderData: doc.data() };
+  }
+
+  // Crear si no existe (reutiliza lógica de /create)
+  const folderId = `main-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Calcular path y ancestors
+  let path = `/${slug}`;
+  let ancestors = [];
+  if (parentId) {
+    const parent = await getFolderDoc(parentId);
+    if (parent) {
+      path = `${parent.data.path}${path}`;
+      ancestors = Array.isArray(parent.data.ancestors) ? [...parent.data.ancestors, parentId] : [parentId];
+    }
+  }
+
+  const folderRef = filesCol.doc(folderId);
+  await folderRef.set({
+    id: folderId,
+    userId: uid,
+    name: slug, // Usar slug como nombre por defecto
+    slug: slug,
+    parentId: parentId || null,
+    path: path,
+    ancestors,
+    createdAt: new Date(),
+    modifiedAt: new Date(),
+    type: 'folder',
+    metadata: {
+      isMainFolder: !parentId,
+      isDefault: false,
+      icon: 'Folder',
+      color: 'text-purple-600',
+      description: '',
+      tags: [],
+      isPublic: false,
+      viewCount: 0,
+      lastAccessedAt: new Date(),
+      permissions: {
+        canEdit: true,
+        canDelete: true,
+        canShare: true,
+        canDownload: true
+      },
+      customFields: {},
+      source: 'navbar'
+    }
+  });
+
+  return { folderId, folderData: await folderRef.get().then(doc => doc.data()) };
+}
+
+/**
+ * Endpoint de compatibilidad SDK
+ * GET /api/folders?path=controldoc/perfil
+ * 
+ * Acepta path como query param y asegura que exista la carpeta completa.
+ * Reutiliza lógica de /root, /by-slug y /create sin duplicar código.
+ * 
+ * IMPORTANTE: userId se obtiene SIEMPRE de req.user (token), NO de query params
+ */
+router.get('/', async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const pathParam = req.query.path || req.query.name || '';
+    
+    if (!uid) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    // Si no hay path o es solo un nombre, usar lógica de /root
+    if (!pathParam || pathParam.trim() === '') {
+      // Si no hay path, buscar o crear carpeta raíz con nombre por defecto
+      const defaultName = (req.query.name || 'ControlAudit').toString().trim();
+      if (!defaultName) {
+        return res.status(400).json({ error: 'Path o name requerido' });
+      }
+      
+      const { folderId } = await ensureRootFolder(uid, defaultName);
+      return res.json({ folderId });
+    }
+
+    // Parsear path en segmentos
+    const pathSegments = pathParam.split('/').filter(segment => segment.trim() !== '');
+    
+    if (pathSegments.length === 0) {
+      return res.status(400).json({ error: 'Path inválido' });
+    }
+
+    // Navegar/crear cada segmento del path
+    let currentParentId = null;
+    let currentFolderId = null;
+
+    for (const segment of pathSegments) {
+      const slug = segment.toLowerCase().trim();
+      
+      if (!slug) {
+        continue; // Saltar segmentos vacíos
+      }
+
+      if (currentParentId === null) {
+        // Primer segmento: buscar o crear carpeta raíz
+        const { folderId } = await ensureRootFolder(uid, segment);
+        currentParentId = folderId;
+        currentFolderId = folderId;
+      } else {
+        // Segmentos siguientes: buscar o crear dentro del parent
+        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
+        currentParentId = folderId;
+        currentFolderId = folderId;
+      }
+    }
+
+    return res.json({ folderId: currentFolderId });
+
+  } catch (error) {
+    logger.error('Error in GET /api/folders (SDK compatibility)', { 
+      error: error.message, 
+      userId: req.user?.uid,
+      path: req.query.path 
+    });
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;
 
 // GET /api/folders/root?name=ControlAudit&pin=1
