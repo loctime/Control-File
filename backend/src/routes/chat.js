@@ -137,12 +137,18 @@ router.post('/query', async (req, res) => {
       return res.status(200).json(result);
       
     } catch (queryError) {
-      logger.error('Error procesando query', { 
-        repositoryId, 
-        error: queryError.message,
-        stack: queryError.stack,
-        statusCode: queryError.statusCode
-      });
+      // Si el error es de consulta en curso (lock), retornar 409 Conflict
+      // Este es un comportamiento esperado, no un error real
+      if (queryError.message.includes('Ya hay una consulta en curso')) {
+        logger.info('Consulta rechazada: ya hay una consulta en curso', { 
+          repositoryId, 
+          conversationId
+        });
+        return res.status(409).json({
+          error: 'Consulta en curso',
+          message: queryError.message
+        });
+      }
       
       // Si el error viene de ControlRepo con status code 4xx, propagarlo
       // Especialmente 429 (Too Many Requests) debe propagarse con su mensaje original
@@ -152,6 +158,13 @@ router.post('/query', async (req, res) => {
           ? (queryError.responseData?.message || queryError.message)
           : queryError.message;
         
+        // Los errores 4xx de ControlRepo son esperados (ej: 429), loguear como warn
+        logger.warn('Error 4xx de ControlRepo', { 
+          repositoryId, 
+          error: queryError.message,
+          statusCode: queryError.statusCode
+        });
+        
         return res.status(queryError.statusCode).json({
           error: queryError.statusCode === 429 ? 'Demasiadas solicitudes' : 'Error en consulta',
           message: errorMessage,
@@ -159,13 +172,13 @@ router.post('/query', async (req, res) => {
         });
       }
       
-      // Si el error es de consulta en curso (lock), retornar 409 Conflict
-      if (queryError.message.includes('Ya hay una consulta en curso')) {
-        return res.status(409).json({
-          error: 'Consulta en curso',
-          message: queryError.message
-        });
-      }
+      // Errores reales (>=500 o inesperados) se loguean como error
+      logger.error('Error procesando query', { 
+        repositoryId, 
+        error: queryError.message,
+        stack: queryError.stack,
+        statusCode: queryError.statusCode
+      });
       
       // Si el error viene de ControlRepo (conexión rechazada o error del servicio),
       // retornar 502 Bad Gateway
