@@ -118,11 +118,20 @@ async function queryRepositoryLLM(payload) {
     
     // Si ControlRepo retorna otro error 4xx, propagar el status code
     if (response.status >= 400 && response.status < 500) {
-      logger.error('ControlRepo retornó error 4xx', {
-        status: response.status,
-        data: response.data,
-        repositoryId: payload.repositoryId
-      });
+      // 409 Conflict es esperado (concurrencia), no es un error real
+      if (response.status === 409) {
+        logger.info('ControlRepo retornó 409 Conflict (concurrencia esperada)', {
+          status: response.status,
+          data: response.data,
+          repositoryId: payload.repositoryId
+        });
+      } else {
+        logger.error('ControlRepo retornó error 4xx', {
+          status: response.status,
+          data: response.data,
+          repositoryId: payload.repositoryId
+        });
+      }
       const error = new Error(`ControlRepo rechazó la consulta: ${response.data?.message || response.data?.error || 'Error desconocido'}`);
       error.statusCode = response.status;
       error.responseData = response.data;

@@ -419,7 +419,61 @@ router.get('/', async (req, res) => {
   }
 });
 
-module.exports = router;
+/**
+ * Endpoint de compatibilidad SDK (POST)
+ * POST /api/folders
+ *
+ * El SDK espera este endpoint para ensurePath.
+ * Internamente delega a la misma lógica que GET /api/folders
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const pathParam = req.body?.path || req.body?.name || '';
+
+    if (!uid) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    if (!pathParam || typeof pathParam !== 'string') {
+      return res.status(400).json({ error: 'Path requerido' });
+    }
+
+    const pathSegments = pathParam.split('/').filter(Boolean);
+
+    let currentParentId = null;
+    let currentFolderId = null;
+
+    for (const segment of pathSegments) {
+      const slug = segment
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]/g, '');
+
+      if (!slug) continue;
+
+      if (currentParentId === null) {
+        const { folderId } = await ensureRootFolder(uid, segment);
+        currentParentId = folderId;
+        currentFolderId = folderId;
+      } else {
+        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
+        currentParentId = folderId;
+        currentFolderId = folderId;
+      }
+    }
+
+    return res.json({ folderId: currentFolderId });
+
+  } catch (error) {
+    logger.error('Error in POST /api/folders (SDK compatibility)', {
+      error: error.message,
+      userId: req.user?.uid,
+    });
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 
 // GET /api/folders/root?name=ControlAudit&pin=1
 router.get('/root', async (req, res) => {
@@ -522,3 +576,5 @@ router.get('/root', async (req, res) => {
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
+module.exports = router;

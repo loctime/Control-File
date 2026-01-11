@@ -82,12 +82,21 @@ async function queryRepository(repositoryId, question, conversationId = null) {
       controlRepoResponse = await queryRepositoryLLM(payload);
     } catch (error) {
       // Errores de ControlRepo se propagan (incluyendo 429)
-      logger.error('Error delegando a ControlRepo', {
-        repositoryId,
-        error: error.message,
-        stack: error.stack,
-        statusCode: error.statusCode
-      });
+      // 409 Conflict es esperado (concurrencia), no es un error real
+      if (error.statusCode === 409) {
+        logger.info('ControlRepo retornó 409 Conflict (concurrencia esperada)', {
+          repositoryId,
+          error: error.message,
+          statusCode: error.statusCode
+        });
+      } else {
+        logger.error('Error delegando a ControlRepo', {
+          repositoryId,
+          error: error.message,
+          stack: error.stack,
+          statusCode: error.statusCode
+        });
+      }
       throw error;
     }
   
