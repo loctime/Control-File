@@ -1,10 +1,12 @@
 // backend/src/services/chat-service.js
 // Servicio de chat/query sobre repositorios indexados
+// ControlFile actúa como orquestador/proxy - delega completamente el razonamiento LLM a ControlRepo
 // SOLO funciona con repositorios en estado 'ready'
 
 const { logger } = require('../utils/logger');
 const repositoryStore = require('./repository-store');
 const { isValidRepositoryId } = require('../utils/repository-id');
+const { queryRepositoryLLM } = require('./controlrepo-llm-client');
 
 /**
  * Procesa una query de chat sobre un repositorio
@@ -12,10 +14,13 @@ const { isValidRepositoryId } = require('../utils/repository-id');
  * IMPORTANTE: Este servicio SOLO funciona si el repositorio está en estado 'ready'
  * NO debe ser llamado directamente - debe validarse el estado primero
  * 
+ * ControlFile NO implementa lógica LLM propia.
+ * Recolecta contexto (index, projectBrain, metrics) y delega completamente a ControlRepo.
+ * 
  * @param {string} repositoryId - ID del repositorio
  * @param {string} question - Pregunta del usuario
  * @param {string|null} conversationId - ID de conversación (opcional, para contexto)
- * @returns {Promise<{ response: string, conversationId: string, sources: Array }>}
+ * @returns {Promise<{ response: string, conversationId: string, sources: Array, ... }>}
  */
 async function queryRepository(repositoryId, question, conversationId = null) {
   if (!isValidRepositoryId(repositoryId)) {
@@ -34,8 +39,13 @@ async function queryRepository(repositoryId, question, conversationId = null) {
     throw new Error(`Repositorio no está listo para queries. Estado actual: ${status}`);
   }
   
-  // 2. Cargar índice completo (SOLO uso interno - nunca se envía al frontend)
-  const index = await repositoryStore.getIndex(repositoryId);
+  // 2. Recolectar contexto completo del repositorio
+  const [index, projectBrain, metrics] = await Promise.all([
+    repositoryStore.getIndex(repositoryId),
+    repositoryStore.getProjectBrain(repositoryId),
+    repositoryStore.getMetrics(repositoryId)
+  ]);
+  
   if (!index) {
     throw new Error(`Índice no encontrado aunque el estado es ${status}`);
   }
@@ -45,89 +55,82 @@ async function queryRepository(repositoryId, question, conversationId = null) {
     conversationId = `conv-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
   
-  // 4. Procesar query (implementación básica por ahora)
-  // TODO: Integrar con modelo de lenguaje/embedding para respuestas reales
-  const response = await processQuery(index, question);
+  // 4. Construir conversationMemory (por ahora vacío - puede extenderse en el futuro)
+  // TODO: Implementar almacenamiento y recuperación de memoria de conversación si se requiere
+  const conversationMemory = [];
+  
+  // 5. Construir payload según contrato InternalLLMQueryRequest
+  const payload = {
+    question,
+    repositoryId,
+    conversationMemory: conversationMemory.length > 0 ? conversationMemory : undefined,
+    // role puede agregarse en el futuro si se requiere
+    context: {
+      index,
+      projectBrain: projectBrain || undefined,
+      metrics: metrics || undefined
+    },
+    // options puede agregarse desde el frontend si se requiere
+    options: {
+      includeDebug: true // Por defecto false, puede venir del frontend
+    }
+  };
+  
+  // 6. Delegar completamente a ControlRepo
+  logger.info('Delegando consulta LLM a ControlRepo', {
+    repositoryId,
+    hasIndex: !!index,
+    hasProjectBrain: !!projectBrain,
+    hasMetrics: !!metrics
+  });
+  
+  let controlRepoResponse;
+  try {
+    controlRepoResponse = await queryRepositoryLLM(payload);
+  } catch (error) {
+    // Errores de ControlRepo se propagan como 502 Bad Gateway
+    logger.error('Error delegando a ControlRepo', {
+      repositoryId,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+  
+  // 7. Transformar respuesta de ControlRepo al formato del frontend
+  // Mantener compatibilidad con contrato actual del frontend
+  // pero incluir campos adicionales si están disponibles
+  const response = {
+    response: controlRepoResponse.answer || '',
+    conversationId,
+    sources: (controlRepoResponse.files || []).map(file => ({
+      path: file.path,
+      name: file.name || file.path.split('/').pop(),
+      lines: [] // ControlRepo puede proporcionar líneas en el futuro
+    }))
+  };
+  
+  // Incluir campos adicionales si están disponibles (para compatibilidad futura)
+  if (controlRepoResponse.findings) {
+    response.findings = controlRepoResponse.findings;
+  }
+  
+  if (controlRepoResponse.debug) {
+    response.debug = controlRepoResponse.debug;
+  }
+  
+  if (controlRepoResponse.timestamp) {
+    response.timestamp = controlRepoResponse.timestamp;
+  }
   
   logger.info('Query procesada exitosamente', { 
     repositoryId, 
     conversationId,
-    responseLength: response.response.length 
+    responseLength: response.response.length,
+    sourcesCount: response.sources.length
   });
   
-  return {
-    response: response.response,
-    conversationId,
-    sources: response.sources || []
-  };
-}
-
-/**
- * Procesa una query sobre el índice
- * Implementación básica - debe extenderse con modelo de lenguaje real
- * 
- * @param {Object} index - Índice completo del repositorio
- * @param {string} question - Pregunta del usuario
- * @returns {Promise<{ response: string, sources: Array }>}
- */
-async function processQuery(index, question) {
-  // Implementación básica: búsqueda simple por palabras clave
-  // TODO: Reemplazar con embedding search o modelo de lenguaje
-  
-  const questionLower = question.toLowerCase();
-  const questionWords = questionLower.split(/\s+/);
-  
-  // Buscar archivos relevantes
-  const relevantFiles = [];
-  const files = index.files || [];
-  
-  for (const file of files) {
-    const filePath = (file.path || '').toLowerCase();
-    const fileContent = (file.content || '').toLowerCase();
-    
-    // Buscar coincidencias en path o contenido
-    const matchesInPath = questionWords.filter(word => filePath.includes(word)).length;
-    const matchesInContent = questionWords.filter(word => fileContent.includes(word)).length;
-    
-    if (matchesInPath > 0 || matchesInContent > 0) {
-      relevantFiles.push({
-        file,
-        relevance: matchesInPath * 2 + matchesInContent, // Path matches son más importantes
-        matches: matchesInPath + matchesInContent
-      });
-    }
-  }
-  
-  // Ordenar por relevancia
-  relevantFiles.sort((a, b) => b.relevance - a.relevance);
-  
-  // Tomar los 3 archivos más relevantes
-  const topFiles = relevantFiles.slice(0, 3);
-  
-  // Generar respuesta básica
-  let response = `Basándome en el repositorio, encontré ${relevantFiles.length} archivo(s) relevante(s).\n\n`;
-  
-  if (topFiles.length > 0) {
-    response += 'Los archivos más relevantes son:\n';
-    topFiles.forEach((item, index) => {
-      response += `${index + 1}. ${item.file.path}\n`;
-    });
-    response += '\n';
-    response += 'Para obtener una respuesta más detallada, integre un modelo de lenguaje (OpenAI, Anthropic, etc.).';
-  } else {
-    response += 'No se encontraron archivos específicos relacionados con tu pregunta. Intenta reformular o ser más específico.';
-  }
-  
-  // Generar fuentes
-  const sources = topFiles.map(item => ({
-    path: item.file.path,
-    lines: [1, 50] // TODO: Calcular líneas reales donde aparece la información
-  }));
-  
-  return {
-    response: response.trim(),
-    sources
-  };
+  return response;
 }
 
 module.exports = {

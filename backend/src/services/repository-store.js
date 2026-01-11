@@ -348,6 +348,74 @@ async function getIndexedBranchSha(repositoryId) {
 }
 
 /**
+ * Obtiene el Project Brain del repositorio desde Firestore
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<Object | null>}
+ */
+async function getProjectBrain(repositoryId) {
+  try {
+    const db = admin.firestore();
+    const brainRef = db.collection('apps').doc('controlrepo')
+      .collection('repositories').doc(repositoryId)
+      .collection('brains').doc('latest');
+    
+    const doc = await brainRef.get();
+    
+    if (doc.exists) {
+      const data = doc.data();
+      // Remover campos de Firestore Timestamp y convertir a objeto plano
+      const brain = { ...data };
+      if (brain.createdAt && brain.createdAt.toDate) {
+        brain.createdAt = brain.createdAt.toDate().toISOString();
+      }
+      if (brain.updatedAt && brain.updatedAt.toDate) {
+        brain.updatedAt = brain.updatedAt.toDate().toISOString();
+      }
+      return brain;
+    }
+    
+    return null;
+  } catch (error) {
+    logger.warn('Error obteniendo Project Brain', { repositoryId, error: error.message });
+    return null; // Retornar null en lugar de lanzar error para permitir queries sin brain
+  }
+}
+
+/**
+ * Obtiene las métricas del repositorio desde Firestore
+ * @param {string} repositoryId - ID del repositorio
+ * @returns {Promise<Object | null>}
+ */
+async function getMetrics(repositoryId) {
+  try {
+    const db = admin.firestore();
+    const metricsRef = db.collection('apps').doc('controlrepo')
+      .collection('repositories').doc(repositoryId)
+      .collection('metrics').doc('latest');
+    
+    const doc = await metricsRef.get();
+    
+    if (doc.exists) {
+      const data = doc.data();
+      // Remover campos de Firestore Timestamp y convertir a objeto plano
+      const metrics = { ...data };
+      if (metrics.createdAt && metrics.createdAt.toDate) {
+        metrics.createdAt = metrics.createdAt.toDate().toISOString();
+      }
+      if (metrics.updatedAt && metrics.updatedAt.toDate) {
+        metrics.updatedAt = metrics.updatedAt.toDate().toISOString();
+      }
+      return metrics;
+    }
+    
+    return null;
+  } catch (error) {
+    logger.warn('Error obteniendo métricas', { repositoryId, error: error.message });
+    return null; // Retornar null en lugar de lanzar error para permitir queries sin metrics
+  }
+}
+
+/**
  * Elimina un repositorio completo del filesystem
  * Usar con precaución - no hay limpieza automática por defecto
  * @param {string} repositoryId - ID del repositorio
@@ -371,6 +439,8 @@ module.exports = {
   getMetadata,
   getIndex,
   getEmbeddings,
+  getProjectBrain,
+  getMetrics,
   saveIndex,
   saveMetadata,
   saveEmbeddings,

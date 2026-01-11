@@ -143,6 +143,19 @@ router.post('/query', async (req, res) => {
         stack: queryError.stack
       });
       
+      // Si el error viene de ControlRepo (conexión rechazada o error del servicio),
+      // retornar 502 Bad Gateway
+      if (queryError.message.includes('ControlRepo') || 
+          queryError.message.includes('No se pudo conectar') ||
+          queryError.message.includes('rechazó la consulta') ||
+          queryError.message.includes('reportó error interno')) {
+        return res.status(502).json({
+          error: 'Error en servicio LLM externo',
+          message: queryError.message
+        });
+      }
+      
+      // Otros errores se retornan como 500
       return res.status(500).json({
         error: 'Error procesando query',
         message: queryError.message
