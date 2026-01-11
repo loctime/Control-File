@@ -145,11 +145,25 @@ router.post('/query', async (req, res) => {
       });
       
       // Si el error viene de ControlRepo con status code 4xx, propagarlo
+      // Especialmente 429 (Too Many Requests) debe propagarse con su mensaje original
       if (queryError.statusCode && queryError.statusCode >= 400 && queryError.statusCode < 500) {
+        // Para 429, usar el mensaje original de ControlRepo
+        const errorMessage = queryError.statusCode === 429 
+          ? (queryError.responseData?.message || queryError.message)
+          : queryError.message;
+        
         return res.status(queryError.statusCode).json({
-          error: 'Error en consulta',
-          message: queryError.message,
+          error: queryError.statusCode === 429 ? 'Demasiadas solicitudes' : 'Error en consulta',
+          message: errorMessage,
           ...(queryError.responseData || {})
+        });
+      }
+      
+      // Si el error es de consulta en curso (lock), retornar 409 Conflict
+      if (queryError.message.includes('Ya hay una consulta en curso')) {
+        return res.status(409).json({
+          error: 'Consulta en curso',
+          message: queryError.message
         });
       }
       

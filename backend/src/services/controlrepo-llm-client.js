@@ -46,16 +46,77 @@ async function queryRepositoryLLM(payload) {
       requestBody.conversationId = payload.conversationId;
     }
     
-    const response = await axios.post(url, requestBody, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-ControlFile-Signature': CONTROLFILE_SIGNATURE
-      },
-      timeout: 120000, // 2 minutos de timeout para consultas LLM
-      validateStatus: (status) => status < 500 // No lanzar error para 4xx, solo para 5xx
-    });
+    // Intentar con retry para 429
+    let response;
+    let retryCount = 0;
+    const maxRetries = 1; // Un solo retry
+    const retryDelay = 4000; // 4 segundos
     
-    // Si ControlRepo retorna error 4xx, propagar el status code
+    while (retryCount <= maxRetries) {
+      try {
+        response = await axios.post(url, requestBody, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-ControlFile-Signature': CONTROLFILE_SIGNATURE
+          },
+          timeout: 120000, // 2 minutos de timeout para consultas LLM
+          validateStatus: (status) => status < 500 // No lanzar error para 4xx, solo para 5xx
+        });
+        
+        // Si no es 429, salir del loop
+        if (response.status !== 429) {
+          break;
+        }
+        
+        // Si es 429 y aún tenemos retries disponibles
+        if (retryCount < maxRetries) {
+          logger.warn('ControlRepo retornó 429, reintentando después de delay', {
+            repositoryId: payload.repositoryId,
+            retryCount: retryCount + 1,
+            delay: retryDelay
+          });
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          retryCount++;
+          continue;
+        }
+        
+        // Si es 429 y no hay más retries, salir del loop para manejar el error
+        break;
+      } catch (error) {
+        // Si es un error de red/timeout, no hacer retry
+        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+          throw error;
+        }
+        // Si es otro error, reintentar solo si es 429 y tenemos retries
+        if (error.response?.status === 429 && retryCount < maxRetries) {
+          logger.warn('ControlRepo retornó 429, reintentando después de delay', {
+            repositoryId: payload.repositoryId,
+            retryCount: retryCount + 1,
+            delay: retryDelay
+          });
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          retryCount++;
+          continue;
+        }
+        throw error;
+      }
+    }
+    
+    // Si ControlRepo retorna error 429, propagarlo específicamente
+    if (response.status === 429) {
+      logger.error('ControlRepo retornó error 429 (Too Many Requests)', {
+        status: response.status,
+        data: response.data,
+        repositoryId: payload.repositoryId,
+        retries: retryCount
+      });
+      const error = new Error(response.data?.message || response.data?.error || 'Demasiadas solicitudes. Intenta de nuevo en unos momentos.');
+      error.statusCode = 429;
+      error.responseData = response.data;
+      throw error;
+    }
+    
+    // Si ControlRepo retorna otro error 4xx, propagar el status code
     if (response.status >= 400 && response.status < 500) {
       logger.error('ControlRepo retornó error 4xx', {
         status: response.status,

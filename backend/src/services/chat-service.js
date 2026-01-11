@@ -8,6 +8,9 @@ const repositoryStore = require('./repository-store');
 const { isValidRepositoryId } = require('../utils/repository-id');
 const { queryRepositoryLLM } = require('./controlrepo-llm-client');
 
+// Lock por conversación/repositorio para evitar múltiples consultas simultáneas
+const activeQueries = new Map();
+
 /**
  * Procesa una query de chat sobre un repositorio
  * 
@@ -44,66 +47,88 @@ async function queryRepository(repositoryId, question, conversationId = null) {
     conversationId = `conv-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
   
-  // 4. Construir payload según contrato de ControlRepo
-  const payload = {
-    question,
-    repositoryId,
-    conversationId: conversationId || undefined // Solo incluir si existe
-  };
+  // 3. Verificar lock por conversación/repositorio
+  // Usar conversationId si existe, sino repositoryId como clave del lock
+  const lockKey = conversationId || repositoryId;
   
-  // 5. Delegar completamente a ControlRepo
-  logger.info('Delegando consulta LLM a ControlRepo', {
-    repositoryId,
-    hasConversationId: !!conversationId
-  });
-  
-  let controlRepoResponse;
-  try {
-    controlRepoResponse = await queryRepositoryLLM(payload);
-  } catch (error) {
-    // Errores de ControlRepo se propagan como 502 Bad Gateway
-    logger.error('Error delegando a ControlRepo', {
+  if (activeQueries.has(lockKey)) {
+    logger.warn('Consulta rechazada: ya hay una consulta en curso', {
       repositoryId,
-      error: error.message,
-      stack: error.stack
+      conversationId,
+      lockKey
     });
-    throw error;
+    throw new Error('Ya hay una consulta en curso para esta conversación. Espera a que termine.');
   }
   
-  // 7. Transformar respuesta de ControlRepo al formato del frontend
-  // Mantener compatibilidad con contrato actual del frontend
-  // pero incluir campos adicionales si están disponibles
-  const response = {
-    response: controlRepoResponse.answer || '',
-    conversationId,
-    sources: (controlRepoResponse.files || []).map(file => ({
-      path: file.path,
-      name: file.name || file.path.split('/').pop(),
-      lines: [] // ControlRepo puede proporcionar líneas en el futuro
-    }))
-  };
+  // 4. Adquirir lock
+  activeQueries.set(lockKey, Date.now());
   
-  // Incluir campos adicionales si están disponibles (para compatibilidad futura)
-  if (controlRepoResponse.findings) {
-    response.findings = controlRepoResponse.findings;
+  try {
+    // 5. Construir payload según contrato de ControlRepo
+    const payload = {
+      question,
+      repositoryId,
+      conversationId: conversationId || undefined // Solo incluir si existe
+    };
+    
+    // 6. Delegar completamente a ControlRepo
+    logger.info('Delegando consulta LLM a ControlRepo', {
+      repositoryId,
+      hasConversationId: !!conversationId
+    });
+    
+    let controlRepoResponse;
+    try {
+      controlRepoResponse = await queryRepositoryLLM(payload);
+    } catch (error) {
+      // Errores de ControlRepo se propagan (incluyendo 429)
+      logger.error('Error delegando a ControlRepo', {
+        repositoryId,
+        error: error.message,
+        stack: error.stack,
+        statusCode: error.statusCode
+      });
+      throw error;
+    }
+  
+    // 7. Transformar respuesta de ControlRepo al formato del frontend
+    // Mantener compatibilidad con contrato actual del frontend
+    // pero incluir campos adicionales si están disponibles
+    const response = {
+      response: controlRepoResponse.answer || '',
+      conversationId,
+      sources: (controlRepoResponse.files || []).map(file => ({
+        path: file.path,
+        name: file.name || file.path.split('/').pop(),
+        lines: [] // ControlRepo puede proporcionar líneas en el futuro
+      }))
+    };
+    
+    // Incluir campos adicionales si están disponibles (para compatibilidad futura)
+    if (controlRepoResponse.findings) {
+      response.findings = controlRepoResponse.findings;
+    }
+    
+    if (controlRepoResponse.debug) {
+      response.debug = controlRepoResponse.debug;
+    }
+    
+    if (controlRepoResponse.timestamp) {
+      response.timestamp = controlRepoResponse.timestamp;
+    }
+    
+    logger.info('Query procesada exitosamente', { 
+      repositoryId, 
+      conversationId,
+      responseLength: response.response.length,
+      sourcesCount: response.sources.length
+    });
+    
+    return response;
+  } finally {
+    // 8. Liberar lock siempre, incluso si hay error
+    activeQueries.delete(lockKey);
   }
-  
-  if (controlRepoResponse.debug) {
-    response.debug = controlRepoResponse.debug;
-  }
-  
-  if (controlRepoResponse.timestamp) {
-    response.timestamp = controlRepoResponse.timestamp;
-  }
-  
-  logger.info('Query procesada exitosamente', { 
-    repositoryId, 
-    conversationId,
-    responseLength: response.response.length,
-    sourcesCount: response.sources.length
-  });
-  
-  return response;
 }
 
 module.exports = {
