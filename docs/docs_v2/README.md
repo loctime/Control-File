@@ -41,8 +41,21 @@ Evita decisiones incorrectas, inventos y regresiones.
 - `modelo_uploadSessions.md` - Colección `uploadSessions`
 - `endpoints_shares.md` - Endpoints de shares
 - `firestore_rules.md` - Reglas de Firestore
+- `CONTRACT.md` - Contrato de integración de apps
 
 **Uso:** Referencia rápida para modelos de datos y endpoints.
+
+### 3️⃣ IAM_CORE_CONTRACT.md
+**Contrato IAM/Core.** Rol de ControlFile como infraestructura de identidad.
+
+- Define responsabilidades de identidad vs. negocio
+- Endpoints de identidad (Auth + Claims únicamente)
+- Arquitectura de llamadas (frontend → app backend → ControlFile)
+- Reglas de uso para frontends y backends de apps
+
+**⚠️ IMPORTANTE:** Los endpoints IAM NO deben ser llamados directamente por frontends.
+
+**Uso:** Consultar antes de integrar creación de usuarios o gestión de identidad.
 
 ---
 

@@ -6,20 +6,65 @@ const { logger } = require('../utils/logger');
 /**
  * POST /api/admin/create-user
  *
- * PARCHE TRANSITORIO: Endpoint simplificado para creación de usuarios.
- * Compatibilidad con modelo owner-centric.
- * Firestore owner-centric queda EXCLUSIVO de ControlAudit.
+ * ⚠️ ENDPOINT DE IDENTIDAD (IAM/Core) - NO LLAMAR DESDE FRONTEND
+ *
+ * Este endpoint es parte de la infraestructura IAM/Core de ControlFile.
+ * Su responsabilidad es SOLO identidad (Auth + Claims), NO lógica de negocio.
+ *
+ * ⚠️ IMPORTANTE: Este endpoint NO debe ser llamado directamente por frontends.
+ * Debe ser llamado únicamente por backends de apps (ControlAudit, ControlDoc, etc.)
+ * que orquestan flujos completos de creación de usuarios.
+ *
+ * RESPONSABILIDAD:
+ * - ✅ Crear usuario en Firebase Auth
+ * - ✅ Aplicar custom claims (appId, role, ownerId)
+ * - ✅ Retornar uid del usuario creado
+ *
+ * LO QUE NO HACE:
+ * - ❌ NO escribe Firestore de ninguna app
+ * - ❌ NO valida límites de negocio
+ * - ❌ NO aplica reglas de aplicación
+ * - ❌ NO crea documentos de usuario en Firestore
  *
  * AUTORIZACIÓN:
  * - Authorization: Bearer <firebase-id-token>
  * - Custom claims del token:
- *   - decodedToken.appId === 'auditoria'
+ *   - decodedToken.appId === 'auditoria' (o la app correspondiente)
  *   - decodedToken.role in ['admin', 'supermax']
  *
- * FUNCIONALIDAD:
- * - Crea usuario en Firebase Auth
- * - Setea custom claims al nuevo usuario incluyendo ownerId desde el token del admin
- * - NO escribe Firestore de ninguna app
+ * CONTRATO FIJO:
+ *
+ * Inputs requeridos:
+ * {
+ *   email: string,        // Email del usuario
+ *   password: string,     // Contraseña temporal
+ *   nombre: string,       // Nombre a mostrar (se mapea internamente a displayName de Firebase Auth)
+ *   role: string,         // Rol del usuario en la app
+ *   appId: string         // Identificador de la app (ej: "auditoria")
+ * }
+ * 
+ * Nota sobre naming: El parámetro es "nombre" (decisión de dominio), pero internamente
+ * se mapea a "displayName" de Firebase Auth. Si se abre el endpoint a más apps en el futuro,
+ * considerar estandarizar a "displayName" para alinearse con Firebase Auth.
+ *
+ * Output:
+ * {
+ *   uid: string,          // UID del usuario creado en Firebase Auth
+ *   status: "created",    // Estado de la operación
+ *   source: "controlfile" // Origen de la creación
+ * }
+ *
+ * QUIÉN DEBE LLAMARLO:
+ * - ✅ Backends de apps (ControlAudit, ControlDoc, etc.)
+ * - ❌ Frontends directamente
+ *
+ * FLUJO RECOMENDADO:
+ * 1. Frontend llama a su app backend (ej: POST /api/operarios/create)
+ * 2. App backend llama a este endpoint para crear identidad
+ * 3. App backend escribe Firestore con lógica de negocio
+ * 4. App backend aplica validaciones de negocio
+ *
+ * Referencia: docs/docs_v2/IAM_CORE_CONTRACT.md
  */
 router.post('/create-user', async (req, res) => {
   try {

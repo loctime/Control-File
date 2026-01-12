@@ -7,6 +7,74 @@ Todas las rutas autenticadas requieren `Authorization: Bearer <ID_TOKEN>`.
 ## Health
 - GET `/api/health` → `{ status, timestamp, uptime, environment, version }`
 
+## ⚠️ Identity & Access Management (IAM/Core)
+
+**IMPORTANTE**: Estos endpoints son parte de la infraestructura IAM/Core de ControlFile.
+**NO deben ser llamados directamente por frontends**. Deben ser llamados únicamente por backends de apps.
+
+### POST `/api/admin/create-user` (BACKEND-ONLY)
+
+**⚠️ NO LLAMAR DESDE FRONTEND**
+
+Endpoint de identidad para creación de usuarios. Responsabilidad: **SOLO Auth + Claims**, NO lógica de negocio.
+
+**Responsabilidad**:
+- ✅ Crear usuario en Firebase Auth
+- ✅ Aplicar custom claims (appId, role, ownerId)
+- ✅ Retornar uid del usuario creado
+
+**Lo que NO hace**:
+- ❌ NO escribe Firestore de ninguna app
+- ❌ NO valida límites de negocio
+- ❌ NO aplica reglas de aplicación
+
+**Autorización requerida**:
+- Token Firebase válido en header `Authorization: Bearer <token>`
+- Custom claims del token:
+  - `appId === 'auditoria'` (o la app correspondiente)
+  - `role in ['admin', 'supermax']`
+
+**Body**:
+```json
+{
+  "email": "usuario@ejemplo.com",
+  "password": "Temporal123!",
+  "nombre": "Nombre Usuario",  // Se mapea internamente a displayName de Firebase Auth
+  "role": "max",
+  "appId": "auditoria"
+}
+```
+
+**Nota sobre naming**: El parámetro es `nombre` (decisión de dominio), pero internamente se mapea a `displayName` de Firebase Auth. Si se abre el endpoint a más apps en el futuro, considerar estandarizar a `displayName` para alinearse con Firebase Auth.
+
+**Respuesta exitosa (201)**:
+```json
+{
+  "uid": "firebaseAuthUid",
+  "status": "created",
+  "source": "controlfile"
+}
+```
+
+**Quién debe llamarlo**:
+- ✅ Backends de apps (ControlAudit, ControlDoc, etc.)
+- ❌ Frontends directamente
+
+**Flujo recomendado**:
+1. Frontend llama a su app backend (ej: `POST /api/operarios/create`)
+2. App backend llama a este endpoint para crear identidad
+3. App backend escribe Firestore con lógica de negocio
+4. App backend aplica validaciones de negocio
+
+**Errores**:
+- `401` - Token inválido o no proporcionado
+- `403` - Usuario no tiene permisos (custom claims inválidos)
+- `400` - Datos inválidos o faltantes
+- `409` - Email ya existe en Auth
+- `500` - Error del servidor
+
+📚 **Documentación completa**: Ver `docs/docs_v2/IAM_CORE_CONTRACT.md`
+
 ## Google Sheets Integration (Control Store)
 - POST `/api/stores/:storeId/sheets/create` (auth) - Crear hoja de productos
 - GET `/api/stores/:storeId/products` (auth) - Obtener productos con caché
