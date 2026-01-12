@@ -1,4 +1,12 @@
 // backend/src/index.js
+/**
+ * ⚠️ LEGACY PERMISIVO - Backend actual sin restricciones de contrato
+ * 
+ * El backend actual mantiene comportamiento permisivo para compatibilidad.
+ * Ver docs/docs_v2/03_CONTRATOS_TECNICOS/CONTRACT.md para el contrato v1.
+ * 
+ * Estado: Preparado para validaciones futuras (marcadores agregados en routes/folders.js)
+ */
 const express = require('express');
 const githubAuthRoutes = require('./routes/auth-github');
 const githubCallbackRoutes = require('./routes/auth-github-callback');

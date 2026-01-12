@@ -1,3 +1,19 @@
+/**
+ * ⚠️ LEGACY PERMISIVO - Backend actual sin restricciones de contrato
+ * 
+ * Este archivo implementa el comportamiento LEGACY permisivo del backend.
+ * Cualquier caller autenticado puede crear carpetas sin restricciones.
+ * 
+ * CONTRATO v1 (docs/docs_v2/03_CONTRATOS_TECNICOS/CONTRACT.md):
+ * - Las apps NO pueden crear carpetas raíz (parentId=null)
+ * - Las apps NO pueden crear carpetas visibles en navbar
+ * - Las apps NO pueden auto-pinnear carpetas
+ * - Solo ControlFile UI tiene autoridad sobre estructura visible
+ * 
+ * Estado: Preparado para validaciones futuras (marcadores agregados)
+ * Compatibilidad: Mantiene comportamiento actual para no romper apps existentes
+ */
+
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
@@ -5,14 +21,23 @@ const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 const { logger } = require('../utils/logger');
 
+// ⚠️ LEGACY FIELD: metadata.source
+// Este campo NO tiene valor contractual según CONTRACT.md v1
+// No define UX, no define jerarquía, no debe ser usado por apps
+// Se mantiene por compatibilidad pero será eliminado o redefinido en v2
 /**
- * Whitelist de valores permitidos para metadata.source
+ * Whitelist de valores permitidos para metadata.source (LEGACY)
+ * @deprecated Este campo no tiene valor contractual. No usar en nuevas implementaciones.
  */
 const ALLOWED_SOURCES = ['navbar', 'taskbar'];
 
 /**
- * Valida y normaliza el valor de source usando whitelist defensiva
- * Si el valor no está en la whitelist, retorna 'navbar' como default seguro
+ * ⚠️ LEGACY FUNCTION: Valida y normaliza metadata.source
+ * 
+ * Este campo es LEGACY y no tiene valor contractual.
+ * Se mantiene por compatibilidad pero no debe usarse para determinar UX.
+ * 
+ * @deprecated No usar para determinar navbar vs taskbar. Ver CONTRACT.md
  */
 function validateAndNormalizeSource(source) {
   if (!source || typeof source !== 'string') {
@@ -29,7 +54,21 @@ function validateAndNormalizeSource(source) {
   return 'navbar';
 }
 
-// Create folder endpoint
+/**
+ * POST /api/folders/create
+ * 
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear carpetas sin restricciones
+ * 
+ * CONTRATO v1 - Validaciones futuras (NO implementadas todavía):
+ * - ❌ Apps NO pueden crear carpetas raíz (parentId=null)
+ * - ❌ Apps NO pueden crear carpetas visibles en navbar
+ * - ✅ Solo ControlFile UI puede crear carpetas raíz
+ * 
+ * TODO: Agregar validación usando validateRootFolderCreation() cuando se active el contrato
+ * TODO: Agregar validación usando validateSubfolderCreation() para subcarpetas
+ * 
+ * Punto de validación futuro: Línea ~49 (después de validar name)
+ */
 router.post('/create', invalidateCache('create'), async (req, res) => {
   try {
     const { 
@@ -49,6 +88,21 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Nombre de carpeta requerido' });
     }
+
+    // ⚠️ PUNTO DE VALIDACIÓN FUTURA (CONTRATO v1)
+    // TODO: Descomentar cuando se active el contrato:
+    // const { validateRootFolderCreation, validateSubfolderCreation } = require('../services/contract-validators');
+    // if (parentId === null) {
+    //   const rootValidation = validateRootFolderCreation(req, parentId);
+    //   if (!rootValidation.allowed) {
+    //     return res.status(403).json({ error: rootValidation.reason });
+    //   }
+    // } else {
+    //   const subfolderValidation = await validateSubfolderCreation(req, parentId);
+    //   if (!subfolderValidation.allowed) {
+    //     return res.status(403).json({ error: subfolderValidation.reason });
+    //   }
+    // }
 
     // Generate folder ID or use provided one
     const folderId = id && typeof id === 'string' && id.trim().length > 0
@@ -117,6 +171,7 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
           canDownload: true
         },
         customFields: customFields || {},
+        // ⚠️ LEGACY FIELD: metadata.source no tiene valor contractual
         source: validateAndNormalizeSource(source)
       }
     });
@@ -216,6 +271,16 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
 /**
  * Helper: Busca o crea una carpeta raíz por nombre
  * Reutiliza lógica de GET /api/folders/root
+ * 
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear carpetas raíz sin restricciones
+ * 
+ * CONTRATO v1 - Validaciones futuras (NO implementadas todavía):
+ * - Este helper será usado por ControlFile UI para crear carpetas navbar
+ * - Las apps NO deben usar este helper directamente
+ * - Las apps deben usar POST /api/apps/:appId/root (futuro)
+ * 
+ * TODO: Agregar validación de caller type cuando se active el contrato
+ * TODO: Este helper NO debe establecer metadata.source (campo legacy)
  */
 async function ensureRootFolder(uid, name) {
   const filesCol = admin.firestore().collection('files');
@@ -268,6 +333,8 @@ async function ensureRootFolder(uid, name) {
         canDownload: true
       },
       customFields: {}
+      // ⚠️ NOTA: No establecemos metadata.source aquí (campo legacy)
+      // Las carpetas creadas por ensureRootFolder son para navbar (ControlFile UI)
     },
   };
 
@@ -278,6 +345,15 @@ async function ensureRootFolder(uid, name) {
 /**
  * Helper: Busca o crea una carpeta por slug dentro de un parent
  * Reutiliza lógica de GET /api/folders/by-slug y POST /api/folders/create
+ * 
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear subcarpetas sin restricciones
+ * 
+ * CONTRATO v1 - Validaciones futuras (NO implementadas todavía):
+ * - Las apps solo pueden crear subcarpetas dentro de su app root
+ * - Debe validar que el parent pertenece a la app del caller
+ * 
+ * TODO: Agregar validación usando folderBelongsToApp() cuando se active el contrato
+ * TODO: El hardcodeo de source: 'navbar' es legacy y debe eliminarse
  */
 async function ensureFolderBySlug(uid, slug, parentId) {
   const filesCol = admin.firestore().collection('files');
@@ -339,6 +415,8 @@ async function ensureFolderBySlug(uid, slug, parentId) {
         canDownload: true
       },
       customFields: {},
+      // ⚠️ LEGACY: Hardcodeo de source es incorrecto según CONTRACT.md
+      // Este campo no tiene valor contractual y debe eliminarse en v2
       source: 'navbar'
     }
   });
@@ -350,10 +428,17 @@ async function ensureFolderBySlug(uid, slug, parentId) {
  * Endpoint de compatibilidad SDK
  * GET /api/folders?path=controldoc/perfil
  * 
- * Acepta path como query param y asegura que exista la carpeta completa.
- * Reutiliza lógica de /root, /by-slug y /create sin duplicar código.
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear carpetas raíz desde SDK
+ * 
+ * CONTRATO v1 - Cambios futuros:
+ * - Las apps NO deben usar este endpoint directamente para crear carpetas raíz
+ * - Las apps deben usar POST /api/apps/:appId/root (futuro)
+ * - Este endpoint será refactorizado para usar ensureAppRootFolder()
  * 
  * IMPORTANTE: userId se obtiene SIEMPRE de req.user (token), NO de query params
+ * 
+ * TODO: Refactorizar para usar ensureAppRootFolder() cuando se implemente
+ * TODO: Agregar validación de caller type cuando se active el contrato
  */
 router.get('/', async (req, res) => {
   try {
@@ -395,12 +480,16 @@ router.get('/', async (req, res) => {
       }
 
       if (currentParentId === null) {
+        // ⚠️ PUNTO DE CAMBIO FUTURO (CONTRATO v1)
         // Primer segmento: buscar o crear carpeta raíz
+        // TODO: Si es una app, usar ensureAppRootFolder() en lugar de ensureRootFolder()
+        // TODO: Si es ControlFile UI, mantener ensureRootFolder()
         const { folderId } = await ensureRootFolder(uid, segment);
         currentParentId = folderId;
         currentFolderId = folderId;
       } else {
         // Segmentos siguientes: buscar o crear dentro del parent
+        // TODO: Agregar validación de que el parent pertenece a la app cuando se active el contrato
         const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
         currentParentId = folderId;
         currentFolderId = folderId;
@@ -423,8 +512,18 @@ router.get('/', async (req, res) => {
  * Endpoint de compatibilidad SDK (POST)
  * POST /api/folders
  *
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear carpetas raíz desde SDK
+ * 
+ * CONTRATO v1 - Cambios futuros:
+ * - Las apps NO deben usar este endpoint directamente para crear carpetas raíz
+ * - Las apps deben usar POST /api/apps/:appId/root (futuro)
+ * - Este endpoint será refactorizado para usar ensureAppRootFolder()
+ * 
  * El SDK espera este endpoint para ensurePath.
  * Internamente delega a la misma lógica que GET /api/folders
+ * 
+ * TODO: Refactorizar para usar ensureAppRootFolder() cuando se implemente
+ * TODO: Agregar validación de caller type cuando se active el contrato
  */
 router.post('/', async (req, res) => {
   try {
@@ -454,10 +553,14 @@ router.post('/', async (req, res) => {
       if (!slug) continue;
 
       if (currentParentId === null) {
+        // ⚠️ PUNTO DE CAMBIO FUTURO (CONTRATO v1)
+        // TODO: Si es una app, usar ensureAppRootFolder() en lugar de ensureRootFolder()
+        // TODO: Si es ControlFile UI, mantener ensureRootFolder()
         const { folderId } = await ensureRootFolder(uid, segment);
         currentParentId = folderId;
         currentFolderId = folderId;
       } else {
+        // TODO: Agregar validación de que el parent pertenece a la app cuando se active el contrato
         const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
         currentParentId = folderId;
         currentFolderId = folderId;
@@ -475,7 +578,19 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/folders/root?name=ControlAudit&pin=1
+/**
+ * GET /api/folders/root?name=ControlAudit&pin=1
+ * 
+ * ⚠️ LEGACY PERMISIVO: Actualmente permite crear carpetas raíz y pin opcional
+ * 
+ * CONTRATO v1 - Validaciones futuras (NO implementadas todavía):
+ * - Solo ControlFile UI puede crear carpetas raíz (navbar)
+ * - Solo ControlFile UI puede hacer pin en taskbar
+ * - Las apps NO pueden usar este endpoint directamente
+ * 
+ * TODO: Agregar validación usando validateRootFolderCreation() cuando se active el contrato
+ * TODO: Agregar validación usando validateTaskbarPin() para el parámetro pin
+ */
 router.get('/root', async (req, res) => {
   try {
     const { uid } = req.user;
@@ -548,7 +663,16 @@ router.get('/root', async (req, res) => {
       folderData = doc;
     }
 
+    // ⚠️ PUNTO DE VALIDACIÓN FUTURA (CONTRATO v1)
     // Pin opcional en barra de tareas
+    // TODO: Descomentar cuando se active el contrato:
+    // const { validateTaskbarPin } = require('../services/contract-validators');
+    // if (shouldPin) {
+    //   const pinValidation = validateTaskbarPin(req);
+    //   if (!pinValidation.allowed) {
+    //     return res.status(403).json({ error: pinValidation.reason });
+    //   }
+    // }
     if (shouldPin) {
       const settingsRef = admin.firestore().collection('userSettings').doc(uid);
       await admin.firestore().runTransaction(async (t) => {
