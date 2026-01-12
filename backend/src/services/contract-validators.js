@@ -13,24 +13,153 @@
  */
 
 const { logger } = require('../utils/logger');
+const { recordCallerTypeDetection } = require('./contract-metrics');
+const { isAppWhitelisted } = require('./contract-feature-flags');
 
 /**
  * Determina si el caller es ControlFile UI o una app externa
  * 
- * TODO: Implementar detección basada en:
- * - Claims del token (ej: req.claims.appId)
- * - Headers específicos
- * - Origen de la request
+ * Estrategia multi-señal (prioridad):
+ * 1. Header X-ControlFile-Caller (más confiable)
+ * 2. Claims del token (appId)
+ * 3. User-Agent pattern matching
+ * 4. Origin domain matching
+ * 5. Fallback a UNKNOWN
  * 
  * @param {Object} req - Express request object
- * @returns {Object} { isControlFileUI: boolean, appId?: string }
+ * @returns {Object} { 
+ *   isControlFileUI: boolean, 
+ *   appId?: string,
+ *   detectionMethod: string,
+ *   confidence: number
+ * }
  */
 function detectCallerType(req) {
-  // LEGACY: Por ahora siempre retorna permisivo
-  // TODO: Implementar detección real cuando se active el contrato
+  const signals = [];
+  let appId = null;
+  let isControlFileUI = false;
+  let detectionMethod = 'FALLBACK';
+  let confidence = 0;
+  
+  // 1. Header X-ControlFile-Caller (más confiable)
+  const callerHeader = req.headers['x-controlfile-caller'] || req.headers['X-ControlFile-Caller'];
+  if (callerHeader) {
+    const normalized = callerHeader.trim().toLowerCase();
+    if (normalized === 'ui' || normalized === 'controlfile-ui') {
+      isControlFileUI = true;
+      detectionMethod = 'HEADER';
+      confidence = 0.95;
+      signals.push('HEADER_UI');
+    } else if (normalized === 'app' || normalized.startsWith('app:')) {
+      isControlFileUI = false;
+      appId = normalized.startsWith('app:') ? normalized.split(':')[1] : null;
+      detectionMethod = 'HEADER';
+      confidence = 0.95;
+      signals.push('HEADER_APP');
+    }
+  }
+  
+  // 2. Claims del token (appId)
+  if (!isControlFileUI && req.claims) {
+    const claimsAppId = req.claims.appId || req.claims.app_id || req.claims.application_id;
+    if (claimsAppId) {
+      appId = claimsAppId;
+      isControlFileUI = false;
+      if (detectionMethod === 'FALLBACK') {
+        detectionMethod = 'CLAIMS';
+        confidence = 0.85;
+      }
+      signals.push('CLAIMS_APP_ID');
+    }
+    
+    // Verificar si hay claim explícito de ControlFile UI
+    if (req.claims.controlfile_ui === true || req.claims.controlFileUI === true) {
+      isControlFileUI = true;
+      detectionMethod = 'CLAIMS';
+      confidence = 0.90;
+      signals.push('CLAIMS_CONTROLFILE_UI');
+    }
+  }
+  
+  // 3. User-Agent pattern matching
+  const userAgent = req.headers['user-agent'] || '';
+  if (userAgent && !isControlFileUI && !appId) {
+    // Patrones conocidos de ControlFile UI
+    const controlFilePatterns = [
+      /controlfile/i,
+      /control-file/i,
+      /controldoc.*web/i,
+      /next\.js/i // ControlFile usa Next.js
+    ];
+    
+    if (controlFilePatterns.some(pattern => pattern.test(userAgent))) {
+      isControlFileUI = true;
+      if (detectionMethod === 'FALLBACK') {
+        detectionMethod = 'USER_AGENT';
+        confidence = 0.60;
+      }
+      signals.push('USER_AGENT_CONTROLFILE');
+    }
+  }
+  
+  // 4. Origin domain matching
+  const origin = req.headers.origin || req.headers.referer || '';
+  if (origin && !isControlFileUI && !appId) {
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname.toLowerCase();
+      
+      // Dominios conocidos de ControlFile
+      const controlFileDomains = [
+        'controlfile.app',
+        'controlfile.com',
+        'controldoc.app',
+        'files.controldoc.app',
+        'localhost' // Desarrollo
+      ];
+      
+      if (controlFileDomains.some(domain => hostname.includes(domain))) {
+        isControlFileUI = true;
+        if (detectionMethod === 'FALLBACK') {
+          detectionMethod = 'ORIGIN';
+          confidence = 0.70;
+        }
+        signals.push('ORIGIN_CONTROLFILE');
+      }
+    } catch (e) {
+      // URL inválida, ignorar
+    }
+  }
+  
+  // 5. Fallback: Si no se detectó nada, marcar como UNKNOWN
+  if (detectionMethod === 'FALLBACK') {
+    confidence = 0.10;
+    signals.push('FALLBACK_UNKNOWN');
+  }
+  
+  // Determinar caller type final
+  let callerType = 'UNKNOWN';
+  if (isControlFileUI) {
+    callerType = 'CONTROLFILE_UI';
+  } else if (appId) {
+    callerType = 'APP';
+  }
+  
+  // Registrar métrica de detección
+  recordCallerTypeDetection({
+    method: detectionMethod,
+    callerType,
+    appId,
+    signals
+  });
+  
   return {
-    isControlFileUI: true, // Por defecto permisivo
-    appId: null
+    isControlFileUI,
+    appId,
+    callerType,
+    detectionMethod,
+    confidence,
+    signals
   };
 }
 

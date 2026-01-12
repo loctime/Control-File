@@ -20,6 +20,14 @@ const admin = require('firebase-admin');
 const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 const { logger } = require('../utils/logger');
+const { detectCallerType } = require('../services/contract-validators');
+const { 
+  recordRootFolderCreation, 
+  recordSubfolderCreation, 
+  recordTaskbarPin,
+  getMetrics
+} = require('../services/contract-metrics');
+const { isEnabled } = require('../services/contract-feature-flags');
 
 // ⚠️ LEGACY FIELD: metadata.source
 // Este campo NO tiene valor contractual según CONTRACT.md v1
@@ -87,6 +95,63 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Nombre de carpeta requerido' });
+    }
+
+    // 🔍 SOFT ENFORCEMENT: Instrumentación y logging (sin bloquear)
+    const callerInfo = detectCallerType(req);
+    const isRootFolder = parentId === null || parentId === undefined;
+    
+    // Logging estructurado para análisis
+    if (isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+      if (isRootFolder) {
+        // Violación potencial: App creando carpeta raíz
+        logger.warn('CONTRACT_VIOLATION_WARNING', {
+          event: 'CONTRACT_VIOLATION_WARNING',
+          type: 'ROOT_FOLDER_CREATION',
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          endpoint: 'POST /api/folders/create',
+          parentId: null,
+          folderName: name.trim(),
+          detectionMethod: callerInfo.detectionMethod,
+          confidence: callerInfo.confidence,
+          signals: callerInfo.signals,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Registrar métrica
+        recordRootFolderCreation({
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          folderId: null // Aún no creado
+        });
+      } else {
+        // Subcarpeta: verificar si está fuera de app root (futuro)
+        // Por ahora solo logueamos
+        logger.info('SUBFOLDER_CREATION', {
+          event: 'SUBFOLDER_CREATION',
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          endpoint: 'POST /api/folders/create',
+          parentId: parentId,
+          folderName: name.trim(),
+          detectionMethod: callerInfo.detectionMethod,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Registrar métrica (outsideAppRoot será false por ahora)
+        recordSubfolderCreation({
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          folderId: null,
+          parentId: parentId,
+          outsideAppRoot: false // TODO: Verificar cuando se implemente folderBelongsToApp
+        });
+      }
     }
 
     // ⚠️ PUNTO DE VALIDACIÓN FUTURA (CONTRATO v1)
@@ -175,6 +240,29 @@ router.post('/create', invalidateCache('create'), async (req, res) => {
         source: validateAndNormalizeSource(source)
       }
     });
+
+    // 🔍 SOFT ENFORCEMENT: Actualizar métricas con folderId real después de crear
+    if (isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+      if (isRootFolder) {
+        // Re-registrar con folderId real (la métrica anterior tenía folderId=null)
+        recordRootFolderCreation({
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          folderId: folderId
+        });
+      } else {
+        // Re-registrar subcarpeta con folderId real
+        recordSubfolderCreation({
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          folderId: folderId,
+          parentId: parentId,
+          outsideAppRoot: false // TODO: Verificar cuando se implemente folderBelongsToApp
+        });
+      }
+    }
 
     res.json({ 
       success: true, 
@@ -281,8 +369,12 @@ router.get('/by-slug/:username/:path(*)', async (req, res) => {
  * 
  * TODO: Agregar validación de caller type cuando se active el contrato
  * TODO: Este helper NO debe establecer metadata.source (campo legacy)
+ * 
+ * @param {string} uid - User ID
+ * @param {string} name - Folder name
+ * @param {Object} req - Express request object (opcional, para instrumentación)
  */
-async function ensureRootFolder(uid, name) {
+async function ensureRootFolder(uid, name, req = null) {
   const filesCol = admin.firestore().collection('files');
   
   // Buscar raíz existente
@@ -297,6 +389,26 @@ async function ensureRootFolder(uid, name) {
   if (!existingSnap.empty) {
     const doc = existingSnap.docs[0];
     return { folderId: doc.id, folderData: doc.data() };
+  }
+
+  // 🔍 SOFT ENFORCEMENT: Instrumentación si req está disponible
+  let callerInfo = null;
+  if (req && isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+    callerInfo = detectCallerType(req);
+    
+    logger.warn('CONTRACT_VIOLATION_WARNING', {
+      event: 'CONTRACT_VIOLATION_WARNING',
+      type: 'ROOT_FOLDER_CREATION_VIA_HELPER',
+      callerType: callerInfo.callerType,
+      appId: callerInfo.appId,
+      userId: uid,
+      helper: 'ensureRootFolder',
+      folderName: name,
+      detectionMethod: callerInfo.detectionMethod,
+      confidence: callerInfo.confidence,
+      signals: callerInfo.signals,
+      timestamp: new Date().toISOString()
+    });
   }
 
   // Crear si no existe (reutiliza lógica de /root)
@@ -339,6 +451,17 @@ async function ensureRootFolder(uid, name) {
   };
 
   await folderRef.set(doc);
+  
+  // 🔍 SOFT ENFORCEMENT: Registrar métrica después de crear
+  if (req && callerInfo && isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+    recordRootFolderCreation({
+      callerType: callerInfo.callerType,
+      appId: callerInfo.appId,
+      userId: uid,
+      folderId: generatedId
+    });
+  }
+  
   return { folderId: generatedId, folderData: doc };
 }
 
@@ -354,8 +477,13 @@ async function ensureRootFolder(uid, name) {
  * 
  * TODO: Agregar validación usando folderBelongsToApp() cuando se active el contrato
  * TODO: El hardcodeo de source: 'navbar' es legacy y debe eliminarse
+ * 
+ * @param {string} uid - User ID
+ * @param {string} slug - Folder slug
+ * @param {string} parentId - Parent folder ID
+ * @param {Object} req - Express request object (opcional, para instrumentación)
  */
-async function ensureFolderBySlug(uid, slug, parentId) {
+async function ensureFolderBySlug(uid, slug, parentId, req = null) {
   const filesCol = admin.firestore().collection('files');
   
   // Buscar carpeta existente
@@ -370,6 +498,24 @@ async function ensureFolderBySlug(uid, slug, parentId) {
   if (!existingQuery.empty) {
     const doc = existingQuery.docs[0];
     return { folderId: doc.id, folderData: doc.data() };
+  }
+
+  // 🔍 SOFT ENFORCEMENT: Instrumentación si req está disponible
+  let callerInfo = null;
+  if (req && isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+    callerInfo = detectCallerType(req);
+    
+    logger.info('SUBFOLDER_CREATION_VIA_HELPER', {
+      event: 'SUBFOLDER_CREATION_VIA_HELPER',
+      callerType: callerInfo.callerType,
+      appId: callerInfo.appId,
+      userId: uid,
+      helper: 'ensureFolderBySlug',
+      slug: slug,
+      parentId: parentId,
+      detectionMethod: callerInfo.detectionMethod,
+      timestamp: new Date().toISOString()
+    });
   }
 
   // Crear si no existe (reutiliza lógica de /create)
@@ -421,6 +567,18 @@ async function ensureFolderBySlug(uid, slug, parentId) {
     }
   });
 
+  // 🔍 SOFT ENFORCEMENT: Registrar métrica después de crear
+  if (req && callerInfo && isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+    recordSubfolderCreation({
+      callerType: callerInfo.callerType,
+      appId: callerInfo.appId,
+      userId: uid,
+      folderId: folderId,
+      parentId: parentId,
+      outsideAppRoot: false // TODO: Verificar cuando se implemente folderBelongsToApp
+    });
+  }
+
   return { folderId, folderData: await folderRef.get().then(doc => doc.data()) };
 }
 
@@ -457,7 +615,7 @@ router.get('/', async (req, res) => {
         return res.status(400).json({ error: 'Path o name requerido' });
       }
       
-      const { folderId } = await ensureRootFolder(uid, defaultName);
+      const { folderId } = await ensureRootFolder(uid, defaultName, req);
       return res.json({ folderId });
     }
 
@@ -484,13 +642,13 @@ router.get('/', async (req, res) => {
         // Primer segmento: buscar o crear carpeta raíz
         // TODO: Si es una app, usar ensureAppRootFolder() en lugar de ensureRootFolder()
         // TODO: Si es ControlFile UI, mantener ensureRootFolder()
-        const { folderId } = await ensureRootFolder(uid, segment);
+        const { folderId } = await ensureRootFolder(uid, segment, req);
         currentParentId = folderId;
         currentFolderId = folderId;
       } else {
         // Segmentos siguientes: buscar o crear dentro del parent
         // TODO: Agregar validación de que el parent pertenece a la app cuando se active el contrato
-        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
+        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId, req);
         currentParentId = folderId;
         currentFolderId = folderId;
       }
@@ -556,12 +714,12 @@ router.post('/', async (req, res) => {
         // ⚠️ PUNTO DE CAMBIO FUTURO (CONTRATO v1)
         // TODO: Si es una app, usar ensureAppRootFolder() en lugar de ensureRootFolder()
         // TODO: Si es ControlFile UI, mantener ensureRootFolder()
-        const { folderId } = await ensureRootFolder(uid, segment);
+        const { folderId } = await ensureRootFolder(uid, segment, req);
         currentParentId = folderId;
         currentFolderId = folderId;
       } else {
         // TODO: Agregar validación de que el parent pertenece a la app cuando se active el contrato
-        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId);
+        const { folderId } = await ensureFolderBySlug(uid, slug, currentParentId, req);
         currentParentId = folderId;
         currentFolderId = folderId;
       }
@@ -600,6 +758,44 @@ router.get('/root', async (req, res) => {
 
     if (!name) {
       return res.status(400).json({ error: 'Nombre inválido' });
+    }
+
+    // 🔍 SOFT ENFORCEMENT: Instrumentación y logging (sin bloquear)
+    const callerInfo = detectCallerType(req);
+    
+    if (isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+      // Logging de creación de carpeta raíz
+      logger.warn('CONTRACT_VIOLATION_WARNING', {
+        event: 'CONTRACT_VIOLATION_WARNING',
+        type: 'ROOT_FOLDER_CREATION',
+        callerType: callerInfo.callerType,
+        appId: callerInfo.appId,
+        userId: uid,
+        endpoint: 'GET /api/folders/root',
+        folderName: name,
+        shouldPin: shouldPin,
+        detectionMethod: callerInfo.detectionMethod,
+        confidence: callerInfo.confidence,
+        signals: callerInfo.signals,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Logging de pin en taskbar si aplica
+      if (shouldPin) {
+        logger.warn('CONTRACT_VIOLATION_WARNING', {
+          event: 'CONTRACT_VIOLATION_WARNING',
+          type: 'TASKBAR_PIN',
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          endpoint: 'GET /api/folders/root',
+          folderName: name,
+          detectionMethod: callerInfo.detectionMethod,
+          confidence: callerInfo.confidence,
+          signals: callerInfo.signals,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
 
     const filesCol = admin.firestore().collection('files');
@@ -663,6 +859,16 @@ router.get('/root', async (req, res) => {
       folderData = doc;
     }
 
+    // 🔍 SOFT ENFORCEMENT: Registrar métricas después de crear carpeta
+    if (isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+      recordRootFolderCreation({
+        callerType: callerInfo.callerType,
+        appId: callerInfo.appId,
+        userId: uid,
+        folderId: folderId
+      });
+    }
+
     // ⚠️ PUNTO DE VALIDACIÓN FUTURA (CONTRATO v1)
     // Pin opcional en barra de tareas
     // TODO: Descomentar cuando se active el contrato:
@@ -674,6 +880,16 @@ router.get('/root', async (req, res) => {
     //   }
     // }
     if (shouldPin) {
+      // 🔍 SOFT ENFORCEMENT: Registrar métrica de pin
+      if (isEnabled('CONTRACT_SOFT_ENFORCEMENT_ENABLED')) {
+        recordTaskbarPin({
+          callerType: callerInfo.callerType,
+          appId: callerInfo.appId,
+          userId: uid,
+          folderId: folderId
+        });
+      }
+      
       const settingsRef = admin.firestore().collection('userSettings').doc(uid);
       await admin.firestore().runTransaction(async (t) => {
         const s = await t.get(settingsRef);
