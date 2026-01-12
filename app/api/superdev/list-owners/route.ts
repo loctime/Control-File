@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
 import { verifySuperdev } from '@/lib/middleware/superdev-auth';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     const owners: Array<{ uid: string; email: string | null; nombre: string | null }> = [];
 
     // Procesar owners en paralelo para mejor rendimiento
-    const ownerPromises = ownersSnapshot.docs.map(async (ownerDoc) => {
+    const ownerPromises = ownersSnapshot.docs.map(async (ownerDoc: QueryDocumentSnapshot) => {
       const ownerId = ownerDoc.id;
       const ownerData = ownerDoc.data();
 
