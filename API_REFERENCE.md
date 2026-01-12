@@ -177,6 +177,124 @@ const user = getAuth().currentUser;
 const idToken = await user.getIdToken();
 ```
 
+## Superdev - Impersonación
+
+### POST `/api/superdev/impersonate` (SUPERDEV-ONLY)
+
+Permite a un usuario con custom claim `superdev: true` generar un custom token para impersonar a cualquier owner válido.
+
+**⚠️ CRÍTICO**: Este endpoint es exclusivo para usuarios con permisos de superdev. Solo debe ser usado para soporte y debugging.
+
+**Requisitos:**
+- Custom claim `superdev: true` en el token del solicitante
+- El `ownerId` debe existir en `apps/auditoria/owners/{ownerId}` en Firestore
+- El owner debe tener `role: 'admin'`, `appId: 'auditoria'` y `ownerId` coincidente con el UID
+
+**Headers:**
+```
+Authorization: Bearer <SUPERDEV_ID_TOKEN>
+Content-Type: application/json
+```
+
+**Body:**
+```typescript
+{
+  ownerId: string; // UID del owner a impersonar
+}
+```
+
+**Respuesta exitosa (200):**
+```typescript
+{
+  customToken: string; // Firebase Custom Token para el owner
+}
+```
+
+**Uso del custom token:**
+```typescript
+import { signInWithCustomToken } from 'firebase/auth';
+
+// 1. Obtener custom token
+const response = await fetch('/api/superdev/impersonate', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${superdevToken}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ ownerId: 'target-owner-uid' }),
+});
+
+const { customToken } = await response.json();
+
+// 2. Autenticarse con el custom token
+await signInWithCustomToken(auth, customToken);
+
+// 3. El usuario ahora está autenticado como el owner
+// Al hacer logout, se revierte a la sesión original
+```
+
+**Validaciones:**
+- ✅ Verifica que el solicitante tenga `superdev: true`
+- ✅ Verifica que el owner exista en Firestore (`apps/auditoria/owners/{ownerId}`)
+- ✅ Valida que el owner tenga `role: 'admin'`, `appId: 'auditoria'` y `ownerId` coincidente
+- ✅ Verifica que el owner exista en Firebase Auth
+
+**Códigos de error:**
+- `400` - `INVALID_OWNER_ID`: ownerId faltante o inválido
+- `401` - `UNAUTHORIZED`: Token ausente o inválido
+- `401` - `TOKEN_EXPIRED`: Token expirado
+- `401` - `TOKEN_REVOKED`: Token revocado
+- `403` - `FORBIDDEN`: Sin permisos de superdev
+- `403` - `INVALID_OWNER`: El UID no corresponde a un owner válido
+- `404` - `OWNER_NOT_FOUND`: Owner no encontrado en Firestore
+- `404` - `OWNER_AUTH_NOT_FOUND`: Owner no tiene cuenta de autenticación
+- `500` - `INTERNAL_ERROR`: Error interno del servidor
+
+**Logging de auditoría:**
+- Todas las impersonaciones exitosas se registran con:
+  - UID y email del superdev
+  - UID y email del owner objetivo
+  - Timestamp
+- Los intentos fallidos también se registran con contexto
+
+**Restricciones:**
+- ❌ No modifica Firestore (solo lectura)
+- ❌ No persiste estado
+- ✅ Solo genera token temporal (logout revierte la impersonación)
+- ✅ No usa contraseñas
+
+**Ejemplo completo:**
+```typescript
+// Como superdev, impersonar a un owner
+const superdevUser = getAuth().currentUser;
+const superdevToken = await superdevUser.getIdToken();
+
+const response = await fetch('/api/superdev/impersonate', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${superdevToken}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ 
+    ownerId: 'abc123xyz' // UID del owner a impersonar
+  }),
+});
+
+if (!response.ok) {
+  const error = await response.json();
+  console.error('Error:', error);
+  // Manejar error según código
+}
+
+const { customToken } = await response.json();
+
+// Cambiar a la sesión del owner
+await signInWithCustomToken(auth, customToken);
+
+// Ahora estás autenticado como el owner
+// Para volver, simplemente hacer logout
+```
+
 ## ⚡ Cloudflare Worker - Optimización de Shares
 
 ### 🎯 Objetivo
