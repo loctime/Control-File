@@ -1,37 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
+import { verifySuperdev } from '@/lib/middleware/superdev-auth';
 
 export const runtime = 'nodejs';
-
-/**
- * SUPERDEV-ONLY ENDPOINT
- * 
- * Este endpoint es EXCLUSIVO para usuarios con custom claim superdev: true.
- * Permite a un superdev asumir la identidad de cualquier owner.
- * 
- * Verificar si el usuario tiene permisos de superdev
- */
-async function verifySuperdev(request: NextRequest): Promise<{ uid: string; email?: string }> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('No autorizado: token requerido');
-  }
-
-  const token = authHeader.split('Bearer ')[1];
-  const adminAuth = requireAdminAuth();
-  const decoded = await adminAuth.verifyIdToken(token);
-
-  // Verificar custom claim superdev
-  if (decoded.superdev !== true) {
-    throw new Error('No autorizado: se requieren permisos de superdev');
-  }
-
-  return {
-    uid: decoded.uid,
-    email: decoded.email,
-  };
-}
 
 /**
  * POST /api/superdev/impersonate
