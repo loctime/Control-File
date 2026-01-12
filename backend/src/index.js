@@ -21,11 +21,13 @@ const repositoriesRoutes = require('./routes/repositories'); // Nuevo endpoint r
 const chatRoutes = require('./routes/chat'); // Endpoint de chat
 
 const adminRoutes = require('./routes/admin');
+const superdevRoutes = require('./routes/superdev');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const authMiddleware = require('./middleware/auth');
+const superdevAuthMiddleware = require('./middleware/superdev-auth');
 const uploadRoutes = require('./routes/upload');
 const externalUploadRoutes = require('./routes/external-upload');
 const filesRoutes = require('./routes/files');
@@ -211,6 +213,9 @@ app.use('/api/stores', authMiddleware, storesRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
+
+// Superdev routes - EXCLUSIVO para usuarios con superdev: true
+app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
