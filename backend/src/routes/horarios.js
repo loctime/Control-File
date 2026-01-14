@@ -1,7 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const b2Service = require('../services/b2');
 const { logger } = require('../utils/logger');
+
+// Configurar multer para manejar multipart/form-data
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB máximo para imágenes de horario
+  },
+  fileFilter: (req, file, cb) => {
+    // Solo permitir imágenes PNG
+    if (file.mimetype === 'image/png') {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten archivos PNG'), false);
+    }
+  }
+});
 
 /**
  * GET /api/horarios/semana-actual?ownerId=xxx
@@ -121,6 +138,116 @@ router.get('/semana-actual', async (req, res) => {
     res.status(statusCode).json({
       error: errorMessage,
       code: errorCode
+    });
+  }
+});
+
+/**
+ * POST /api/horarios/semana-actual
+ * 
+ * Endpoint para subir/actualizar la imagen del horario semanal.
+ * La imagen se guarda en Backblaze B2 en la ruta: horarios/{ownerId}/semana-actual.png
+ * 
+ * Content-Type: multipart/form-data
+ * Campos:
+ * - file (File, requerido): Archivo PNG con el horario semanal
+ * - ownerId (string, opcional): ID del propietario. Si no se proporciona, usa "default"
+ * 
+ * Respuestas:
+ * - 200: Horario subido exitosamente
+ * - 400: Error de validación (archivo faltante, formato incorrecto, etc.)
+ * - 500: Error interno del servidor
+ */
+router.post('/semana-actual', upload.single('file'), async (req, res) => {
+  try {
+    // Validar que hay archivo
+    if (!req.file) {
+      logger.warn('POST /semana-actual: No file received');
+      return res.status(400).json({
+        error: 'Archivo requerido',
+        code: 'FILE_MISSING'
+      });
+    }
+
+    // Validar que es PNG
+    if (req.file.mimetype !== 'image/png') {
+      logger.warn('POST /semana-actual: Invalid file type', {
+        mimetype: req.file.mimetype
+      });
+      return res.status(400).json({
+        error: 'Solo se permiten archivos PNG',
+        code: 'INVALID_FILE_TYPE'
+      });
+    }
+
+    // Obtener ownerId desde body o query, usar "default" si no viene
+    const ownerId = (req.body.ownerId || req.query.ownerId || 'default').trim();
+
+    // Construir la ruta del archivo en Backblaze B2
+    const bucketKey = `horarios/${ownerId}/semana-actual.png`;
+
+    logger.info('Subiendo horario semanal', {
+      ownerId,
+      bucketKey,
+      fileSize: req.file.size,
+      mimetype: req.file.mimetype
+    });
+
+    // Subir el archivo a B2
+    await b2Service.uploadFileDirectly(
+      bucketKey,
+      req.file.buffer,
+      'image/png'
+    );
+
+    logger.info('Horario semanal subido exitosamente', {
+      ownerId,
+      bucketKey,
+      fileSize: req.file.size
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Horario semanal actualizado exitosamente',
+      ownerId,
+      bucketKey,
+      fileSize: req.file.size
+    });
+
+  } catch (error) {
+    logger.error('Error subiendo horario semanal', {
+      error: error.message,
+      code: error.code,
+      stack: error.stack,
+      ownerId: req.body?.ownerId || req.query?.ownerId || 'default'
+    });
+
+    // Si es un error de multer (tamaño de archivo, etc.)
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          error: 'El archivo es demasiado grande (máx. 10MB)',
+          code: 'FILE_TOO_LARGE'
+        });
+      }
+      return res.status(400).json({
+        error: 'Error procesando archivo',
+        code: 'UPLOAD_ERROR',
+        message: error.message
+      });
+    }
+
+    // Si es el error de validación de tipo de archivo
+    if (error.message === 'Solo se permiten archivos PNG') {
+      return res.status(400).json({
+        error: error.message,
+        code: 'INVALID_FILE_TYPE'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      code: 'INTERNAL_ERROR'
     });
   }
 });

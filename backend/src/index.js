@@ -72,6 +72,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://files.controldoc.app',
       'https://controldoc.app',
       'https://stock.controldoc.app',
+      'https://horario.controldoc.app',
       'https://gastos.controldoc.app',
       'https://auditoria.controldoc.app',
       'https://repo.controldoc.app',
