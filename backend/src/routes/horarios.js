@@ -23,23 +23,32 @@ const upload = multer({
 /**
  * GET /api/horarios/semana-actual?ownerId=xxx
  * 
- * Endpoint público que sirve la imagen del horario semanal.
+ * Endpoint público que redirige a la URL pública del horario semanal.
  * La imagen se busca en Backblaze B2 en la ruta: horarios/{ownerId}/semana-actual.png
  * 
  * Query params:
- * - ownerId (opcional): Si no se proporciona, usa "default"
+ * - ownerId (obligatorio): ID del propietario
  * 
  * Respuestas:
- * - 200: Imagen servida exitosamente (Content-Type: image/png)
- * - 404: Horario semanal no disponible
+ * - 302: Redirect a la URL pública del archivo
+ * - 400: ownerId no proporcionado
+ * - 404: Horario semanal no encontrado
  * - 500: Error interno del servidor
  */
 router.get('/semana-actual', async (req, res) => {
   try {
-    // Obtener ownerId desde query param, usar "default" si no viene
-    const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim() 
-      ? req.query.ownerId.trim() 
-      : 'default';
+    // Validar que ownerId esté presente y no esté vacío
+    const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
+      ? req.query.ownerId.trim()
+      : null;
+
+    if (!ownerId) {
+      logger.warn('GET /semana-actual: ownerId no proporcionado');
+      return res.status(400).json({
+        error: 'ownerId es obligatorio',
+        code: 'OWNER_ID_REQUIRED'
+      });
+    }
 
     // Construir la ruta del archivo en Backblaze B2
     const bucketKey = `horarios/${ownerId}/semana-actual.png`;
@@ -55,7 +64,7 @@ router.get('/semana-actual', async (req, res) => {
       if (metadataError.name === 'NotFound' || metadataError.code === 'NotFound') {
         logger.info('Horario semanal no encontrado', { ownerId, bucketKey });
         return res.status(404).json({
-          error: 'Horario semanal no disponible',
+          error: 'Horario semanal no encontrado',
           code: 'SCHEDULE_NOT_FOUND'
         });
       }
@@ -72,51 +81,29 @@ router.get('/semana-actual', async (req, res) => {
     if (!fileMetadata) {
       logger.info('Horario semanal no encontrado (metadata null)', { ownerId, bucketKey });
       return res.status(404).json({
-        error: 'Horario semanal no disponible',
+        error: 'Horario semanal no encontrado',
         code: 'SCHEDULE_NOT_FOUND'
       });
     }
 
-    // Configurar headers de respuesta
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=21600');
-    res.setHeader('Content-Length', fileMetadata.size || 0);
+    // Generar URL presignada con expiración de 1 hora (3600 segundos)
+    const publicUrl = await b2Service.createPresignedGetUrl(bucketKey, 3600);
 
-    // Obtener el stream del archivo desde B2
-    const fileStream = await b2Service.getObjectStream(bucketKey);
-
-    // Manejar errores del stream
-    fileStream.on('error', (streamError) => {
-      logger.error('Error streaming horario desde B2', {
-        error: streamError.message,
-        code: streamError.code,
-        ownerId,
-        bucketKey
-      });
-
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Error interno del servidor',
-          code: 'STREAM_ERROR'
-        });
-      }
-    });
-
-    // Pipe el stream directamente al cliente
-    fileStream.pipe(res);
-
-    logger.debug('Horario semanal servido exitosamente', {
+    logger.debug('Horario semanal encontrado, redirigiendo', {
       ownerId,
       bucketKey,
       size: fileMetadata.size
     });
+
+    // Redirigir a la URL pública del archivo
+    res.redirect(302, publicUrl);
 
   } catch (error) {
     logger.error('Error en endpoint de horarios', {
       error: error.message,
       code: error.code,
       stack: error.stack,
-      ownerId: req.query.ownerId || 'default'
+      ownerId: req.query.ownerId || null
     });
 
     // Si los headers ya fueron enviados, no podemos enviar una respuesta JSON
@@ -131,7 +118,7 @@ router.get('/semana-actual', async (req, res) => {
 
     if (error.name === 'NotFound' || error.code === 'NotFound') {
       statusCode = 404;
-      errorMessage = 'Horario semanal no disponible';
+      errorMessage = 'Horario semanal no encontrado';
       errorCode = 'SCHEDULE_NOT_FOUND';
     }
 
