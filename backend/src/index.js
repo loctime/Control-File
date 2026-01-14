@@ -40,6 +40,7 @@ const audioRoutes = require('./routes/audio');
 const storesRoutes = require('./routes/stores/sheets');
 const feedbackRoutes = require('./routes/feedback');
 const accountsRoutes = require('./routes/accounts');
+const horariosRoutes = require('./routes/horarios');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
@@ -213,6 +214,7 @@ app.use('/api/stores', authMiddleware, storesRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
+app.use('/api/horarios', horariosRoutes);
 
 // Superdev routes - EXCLUSIVO para usuarios con superdev: true
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
