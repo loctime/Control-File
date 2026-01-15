@@ -56,7 +56,18 @@ router.get('/semana-actual', async (req, res) => {
     });
   }
   
-  const publicUrl = `${B2_PUBLIC_BASE_URL}/horarios/${ownerId}/semana-actual.png`;
+  // Normalizar B2_PUBLIC_BASE_URL: eliminar barra final si existe
+  const baseUrl = B2_PUBLIC_BASE_URL.replace(/\/$/, '');
+  
+  // Construir URL usando B2_PUBLIC_BASE_URL (nunca URLs directas de Backblaze)
+  const publicUrl = `${baseUrl}/horarios/${ownerId}/semana-actual.png`;
+  
+  // Log explícito con la URL final devuelta
+  logger.info('GET /semana-actual: URL generada', {
+    ownerId,
+    baseUrl: B2_PUBLIC_BASE_URL,
+    finalUrl: publicUrl
+  });
   
   res.json({ url: publicUrl });
 });
