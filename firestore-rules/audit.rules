@@ -1,8 +1,49 @@
 match /apps/auditoria/owners/{ownerId}/{document=**} {
 
- allow read, write: if isAuth()
+  allow read, write: if isAuth()
     && (
       uid() == ownerId ||
       request.auth.token.ownerId == ownerId
+    );
+}
+
+match /apps/auditoria/owners/{ownerId}/empleados/{empleadoId} {
+
+  // LECTURA
+  allow read: if isAuth()
+    && (
+      uid() == ownerId ||
+      request.auth.token.ownerId == ownerId
+    );
+
+  // CREAR
+  allow create: if isAuth()
+    && (
+      // Owner puede crear siempre
+      uid() == ownerId ||
+
+      // Operario puede crear SOLO si la empresa está asignada
+      (
+        request.auth.token.ownerId == ownerId
+        && request.resource.data.empresaId is string
+        && request.resource.data.empresaId
+           in get(
+             /databases/$(db)/documents/apps/auditoria/owners/$(ownerId)/usuarios/$(uid())
+           ).data.empresasAsignadas
+      )
+    );
+
+  // UPDATE / DELETE (permitido por ahora)
+  allow update, delete: if isAuth()
+    && (
+      uid() == ownerId ||
+      (
+        request.auth.token.ownerId == ownerId
+        && resource.data.empresaId is string
+        && resource.data.empresaId
+           in get(
+             /databases/$(db)/documents/apps/auditoria/owners/$(ownerId)/usuarios/$(uid())
+           ).data.empresasAsignadas
+      )
     );
 }

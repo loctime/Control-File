@@ -36,9 +36,10 @@ export async function OPTIONS() {
  * que orquestan flujos completos de creación de usuarios.
  * 
  * RESPONSABILIDAD:
- * - ✅ Crear usuario en Firebase Auth
- * - ✅ Aplicar custom claims (appId, role, ownerId)
- * - ✅ Retornar uid del usuario creado
+ * - ✅ Crear usuario en Firebase Auth (si no existe)
+ * - ✅ Reutilizar UID existente (si el email ya existe en Auth)
+ * - ✅ Aplicar/actualizar custom claims (appId, role, ownerId)
+ * - ✅ Retornar uid del usuario (creado o reutilizado)
  * 
  * LO QUE NO HACE:
  * - ❌ NO escribe Firestore de ninguna app
@@ -69,8 +70,8 @@ export async function OPTIONS() {
  * 
  * Output:
  * {
- *   "uid": string,          // UID del usuario creado en Firebase Auth
- *   "status": "created",    // Estado de la operación
+ *   "uid": string,          // UID del usuario (creado o reutilizado)
+ *   "status": "created" | "reused",  // Estado de la operación
  *   "source": "controlfile" // Origen de la creación
  * }
  * 
@@ -84,11 +85,17 @@ export async function OPTIONS() {
  * 3. App backend escribe Firestore con lógica de negocio
  * 4. App backend aplica validaciones de negocio
  * 
+ * COMPORTAMIENTO MULTI-APP (Opción A - Auth global reutilizable):
+ * - Si el email NO existe en Auth → crear usuario nuevo
+ * - Si el email YA existe en Auth → reutilizar UID existente
+ * - En ambos casos: setear/actualizar custom claims { appId, role, ownerId }
+ * - NO cambiar password si el usuario ya existe
+ * - NO escribir Firestore (responsabilidad de cada app)
+ * 
  * Errores:
  * - 401: Token inválido o no proporcionado
  * - 403: Usuario no tiene permisos (custom claims inválidos)
  * - 400: Datos inválidos o faltantes
- * - 409: Email ya existe en Auth
  * - 500: Error del servidor
  * 
  * Referencia: docs/docs_v2/IAM_CORE_CONTRACT.md
@@ -220,63 +227,99 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Si el usuario ya existe, retornar error
-    if (userExists && authUser) {
-      return NextResponse.json(
-        { 
-          error: "El email ya está registrado en Firebase Auth",
-          uid: authUser.uid
-        },
-        { status: 409 }
-      )
-    }
-
-    // 6. Crear nuevo usuario en Firebase Auth
     let uid: string
-    try {
-      const newUser = await adminAuth.createUser({
-        email,
-        password,
-        emailVerified: false,
-        displayName: nombre,
-      })
+    let status: "created" | "reused"
 
-      uid = newUser.uid
+    // 5. OPCIÓN A: Auth global reutilizable
+    if (userExists && authUser) {
+      // Usuario ya existe → reutilizar UID y actualizar claims
+      uid = authUser.uid
+      status = "reused"
 
-      // 7. Setear custom claims al nuevo usuario
+      // Actualizar custom claims (NO cambiar password)
       // ownerId se toma del token del admin que crea el usuario (decodedToken.uid)
-      await adminAuth.setCustomUserClaims(uid, {
-        appId: appId,
-        role: role,
-        ownerId: decodedToken.uid,
-      })
+      try {
+        await adminAuth.setCustomUserClaims(uid, {
+          appId: appId,
+          role: role,
+          ownerId: decodedToken.uid,
+        })
 
-    } catch (error: any) {
-      // Manejar error de email ya existente (race condition)
-      if (error.code === "auth/email-already-exists" || 
-          error.message?.includes("email-already-exists") ||
-          error.message?.includes("already exists")) {
+        // Opcional: actualizar displayName si es diferente
+        if (authUser.displayName !== nombre) {
+          await adminAuth.updateUser(uid, {
+            displayName: nombre,
+          })
+        }
+      } catch (error: any) {
+        logError(error, 'updating claims for existing user (admin/create-user)')
         return NextResponse.json(
-          { error: "email-already-exists", message: "El email ya está registrado" },
-          { status: 409 }
+          { error: "Error actualizando claims del usuario", details: error.message },
+          { status: 500 }
         )
       }
+    } else {
+      // 6. Usuario NO existe → crear nuevo usuario en Firebase Auth
+      try {
+        const newUser = await adminAuth.createUser({
+          email,
+          password,
+          emailVerified: false,
+          displayName: nombre,
+        })
 
-      // Otros errores de Firebase Auth
-      if (error.code?.startsWith("auth/")) {
-        logError(error, 'creating user (firebase auth error)')
-        return NextResponse.json(
-          { error: error.code, message: error.message || "Error al crear usuario" },
-          { status: 400 }
-        )
+        uid = newUser.uid
+        status = "created"
+
+        // 7. Setear custom claims al nuevo usuario
+        // ownerId se toma del token del admin que crea el usuario (decodedToken.uid)
+        await adminAuth.setCustomUserClaims(uid, {
+          appId: appId,
+          role: role,
+          ownerId: decodedToken.uid,
+        })
+
+      } catch (error: any) {
+        // Manejar error de email ya existente (race condition)
+        if (error.code === "auth/email-already-exists" || 
+            error.message?.includes("email-already-exists") ||
+            error.message?.includes("already exists")) {
+          // En caso de race condition, intentar reutilizar el usuario
+          try {
+            authUser = await adminAuth.getUserByEmail(email)
+            uid = authUser.uid
+            status = "reused"
+            
+            await adminAuth.setCustomUserClaims(uid, {
+              appId: appId,
+              role: role,
+              ownerId: decodedToken.uid,
+            })
+          } catch (retryError: any) {
+            logError(retryError, 'retrying after race condition (admin/create-user)')
+            return NextResponse.json(
+              { error: "Error al procesar usuario", details: retryError.message },
+              { status: 500 }
+            )
+          }
+        } else {
+          // Otros errores de Firebase Auth
+          if (error.code?.startsWith("auth/")) {
+            logError(error, 'creating user (firebase auth error)')
+            return NextResponse.json(
+              { error: error.code, message: error.message || "Error al crear usuario" },
+              { status: 400 }
+            )
+          }
+
+          // Error desconocido
+          logError(error, 'creating user (unknown error)')
+          return NextResponse.json(
+            { error: "Error interno del servidor al crear usuario", details: error.message },
+            { status: 500 }
+          )
+        }
       }
-
-      // Error desconocido
-      logError(error, 'creating user (unknown error)')
-      return NextResponse.json(
-        { error: "Error interno del servidor al crear usuario", details: error.message },
-        { status: 500 }
-      )
     }
 
     // 8. Responder con éxito
@@ -284,10 +327,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         uid: uid,
-        status: "created",
+        status: status,
         source: "controlfile"
       },
-      { status: 201 }
+      { status: status === "created" ? 201 : 200 }
     )
 
   } catch (error: any) {
