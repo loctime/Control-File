@@ -32,101 +32,32 @@ const upload = multer({
  * Respuestas:
  * - 302: Redirect a la URL pública del archivo
  * - 400: ownerId no proporcionado
- * - 404: Horario semanal no encontrado
- * - 500: Error interno del servidor
  */
 router.get('/semana-actual', async (req, res) => {
-  try {
-    // Validar que ownerId esté presente y no esté vacío
-    const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
-      ? req.query.ownerId.trim()
-      : null;
+  const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
+    ? req.query.ownerId.trim()
+    : null;
 
-    if (!ownerId) {
-      logger.warn('GET /semana-actual: ownerId no proporcionado');
-      return res.status(400).json({
-        error: 'ownerId es obligatorio',
-        code: 'OWNER_ID_REQUIRED'
-      });
-    }
-
-    // Construir la ruta del archivo en Backblaze B2
-    const bucketKey = `horarios/${ownerId}/semana-actual.png`;
-
-    logger.debug('Buscando horario semanal', { ownerId, bucketKey });
-
-    // Verificar si el archivo existe antes de intentar obtenerlo
-    let fileMetadata;
-    try {
-      fileMetadata = await b2Service.getObjectMetadata(bucketKey);
-    } catch (metadataError) {
-      // Si el error es NotFound, el archivo no existe
-      if (metadataError.name === 'NotFound' || metadataError.code === 'NotFound') {
-        logger.info('Horario semanal no encontrado', { ownerId, bucketKey });
-        return res.status(404).json({
-          error: 'Horario semanal no encontrado',
-          code: 'SCHEDULE_NOT_FOUND'
-        });
-      }
-      // Otros errores de B2
-      logger.error('Error verificando metadata del horario', {
-        error: metadataError.message,
-        code: metadataError.code,
-        ownerId,
-        bucketKey
-      });
-      throw metadataError;
-    }
-
-    if (!fileMetadata) {
-      logger.info('Horario semanal no encontrado (metadata null)', { ownerId, bucketKey });
-      return res.status(404).json({
-        error: 'Horario semanal no encontrado',
-        code: 'SCHEDULE_NOT_FOUND'
-      });
-    }
-
-    // Generar URL presignada con expiración de 1 hora (3600 segundos)
-    const publicUrl = await b2Service.createPresignedGetUrl(bucketKey, 3600);
-
-    logger.debug('Horario semanal encontrado, redirigiendo', {
-      ownerId,
-      bucketKey,
-      size: fileMetadata.size
-    });
-
-    // Redirigir a la URL pública del archivo
-    res.redirect(302, publicUrl);
-
-  } catch (error) {
-    logger.error('Error en endpoint de horarios', {
-      error: error.message,
-      code: error.code,
-      stack: error.stack,
-      ownerId: req.query.ownerId || null
-    });
-
-    // Si los headers ya fueron enviados, no podemos enviar una respuesta JSON
-    if (res.headersSent) {
-      return res.end();
-    }
-
-    // Determinar el código de estado apropiado
-    let statusCode = 500;
-    let errorMessage = 'Error interno del servidor';
-    let errorCode = 'INTERNAL_ERROR';
-
-    if (error.name === 'NotFound' || error.code === 'NotFound') {
-      statusCode = 404;
-      errorMessage = 'Horario semanal no encontrado';
-      errorCode = 'SCHEDULE_NOT_FOUND';
-    }
-
-    res.status(statusCode).json({
-      error: errorMessage,
-      code: errorCode
+  if (!ownerId) {
+    return res.status(400).json({
+      error: 'ownerId es obligatorio',
+      code: 'OWNER_ID_REQUIRED'
     });
   }
+
+  const B2_PUBLIC_BASE_URL = process.env.B2_PUBLIC_BASE_URL;
+  
+  if (!B2_PUBLIC_BASE_URL) {
+    logger.error('B2_PUBLIC_BASE_URL no configurada en GET /semana-actual');
+    return res.status(500).json({
+      error: 'B2_PUBLIC_BASE_URL no configurada',
+      code: 'CONFIG_ERROR'
+    });
+  }
+  
+  const publicUrl = `${B2_PUBLIC_BASE_URL}/horarios/${ownerId}/semana-actual.png`;
+  
+  res.redirect(302, publicUrl);
 });
 
 /**
