@@ -23,15 +23,16 @@ const upload = multer({
 /**
  * GET /api/horarios/semana-actual?ownerId=xxx
  * 
- * Endpoint público que redirige a la URL pública del horario semanal.
+ * Endpoint público que devuelve la URL pública del horario semanal.
  * La imagen se busca en Backblaze B2 en la ruta: horarios/{ownerId}/semana-actual.png
  * 
  * Query params:
  * - ownerId (obligatorio): ID del propietario
  * 
  * Respuestas:
- * - 302: Redirect a la URL pública del archivo
+ * - 200: JSON con { url: <public B2 URL> }
  * - 400: ownerId no proporcionado
+ * - 500: B2_PUBLIC_BASE_URL no configurada
  */
 router.get('/semana-actual', async (req, res) => {
   const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
@@ -57,7 +58,7 @@ router.get('/semana-actual', async (req, res) => {
   
   const publicUrl = `${B2_PUBLIC_BASE_URL}/horarios/${ownerId}/semana-actual.png`;
   
-  res.redirect(302, publicUrl);
+  res.json({ url: publicUrl });
 });
 
 /**
