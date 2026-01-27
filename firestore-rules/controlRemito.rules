@@ -6,6 +6,8 @@ match /apps/controlRemito {
     allow create, update: if isAuth();
     allow delete: if isAdmin();
   }
+}
+
   
   match /branches/{branchId} {
     allow read: if isAuth();

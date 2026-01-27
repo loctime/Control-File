@@ -363,6 +363,37 @@
     }
 
     // =========================================================
+    // =================== EMPLOYEE REQUESTS ===================
+    // =========================================================
+    match /apps/horarios/employeeRequests/{requestId} {
+
+      // Puede leer:
+      // - el creador
+      // - el dueño del horario
+      // - admin / manager
+      allow read: if isAuth() && (
+        resource.data.createdBy == uid()
+        || canActFor(resource.data.userId)
+      );
+
+      // Crear: solo el empleado autenticado
+      allow create: if isAuth()
+        && request.resource.data.createdBy == uid();
+
+      // Actualizar:
+      // - dueño del horario
+      // - admin
+      // El creador NO puede modificar luego
+      allow update: if isAuth()
+        && canActFor(resource.data.userId)
+        && protectCreatedBy();
+
+      // Eliminar: admin o dueño
+      allow delete: if isAuth()
+        && (canActFor(resource.data.userId) || isAdmin());
+    }
+
+    // =========================================================
     // ===================== DEFAULT DENY ======================
     // =========================================================
    

@@ -1,0 +1,16 @@
+/* ========= CONTROLPDF - USERS ========= */
+
+match /apps/controlpdf/users/{userId} {
+
+  // El usuario solo puede leer su propio documento
+  allow read: if isAuth() && uid() == userId;
+
+  // Crear el documento en el primer login
+  allow create: if isAuth() && uid() == userId;
+
+  // Actualizar metadata de login (lastLoginAt, etc.)
+  allow update: if isAuth() && uid() == userId;
+
+  // Nunca permitir borrado desde cliente
+  allow delete: if false;
+}

@@ -146,11 +146,6 @@ service cloud.firestore {
       allow read, update, delete: if isAuth() && resource.data.userId == uid();
     }
     
-    // Usuarios
-    match /users/{userId} {
-      allow create: if isAuth() && userId == uid();
-      allow read, update, delete: if isAuth() && userId == uid();
-    }
     
     
 
@@ -325,61 +320,6 @@ service cloud.firestore {
     
     match /apps/controlciclo/users/{userId}/{document=**} {
       allow read, write: if isAuth() && userId == uid();
-    }
-    
-    
-
-    /* ========= CONTROLREMITO ========= */
-
-    // ========= CONTROLREMITO (remitos) =========
-    
-    match /apps/controlRemito {
-      match /users/{userId} {
-        allow read: if isAuth();
-        allow create, update: if isAuth();
-        allow delete: if isAdmin();
-      }
-    
-      match /branches/{branchId} {
-        allow read: if isAuth();
-        allow create, update, delete: if isAdmin();
-      }
-    
-      match /products/{productId} {
-        allow read: if isAuth();
-        allow create: if isAdmin() || isFactory();
-        allow update, delete: if isAdmin();
-      }
-    
-      match /orders/{orderId} {
-        allow read, create, update: if isAuth();
-        allow delete: if isAdmin();
-      }
-    
-      match /deliveryNotes/{noteId} {
-        allow read, create, update: if isAuth();
-        allow delete: if isAdmin();
-      }
-    
-      match /templates/{templateId} {
-        allow read, create, update, delete: if isAuth();
-      }
-    
-      match /remit-metadata/{metadataId} {
-        allow read, create, update: if isAuth();
-        allow delete: if isAdmin();
-      }
-    
-      match /replacementQueues/{queueId} {
-        allow read, create, update: if isAuth();
-        allow delete: if isAdmin() || (isAuth() && userBranchId() != null && resource.data.branchId == userBranchId());
-      }
-    }
-    
-    // Auditoría global
-    match /audit/{auditId} {
-      allow read: if isAuth();
-      allow write: if isAdmin();
     }
     
     
@@ -607,6 +547,26 @@ service cloud.firestore {
       match /{subPath=**} {
         allow read, write: if isAuth() && uid() == userId;
       }
+    }
+    
+
+    /* ========= PDF ========= */
+
+    /* ========= CONTROLPDF - USERS ========= */
+    
+    match /apps/controlpdf/users/{userId} {
+    
+      // El usuario solo puede leer su propio documento
+      allow read: if isAuth() && uid() == userId;
+    
+      // Crear el documento en el primer login
+      allow create: if isAuth() && uid() == userId;
+    
+      // Actualizar metadata de login (lastLoginAt, etc.)
+      allow update: if isAuth() && uid() == userId;
+    
+      // Nunca permitir borrado desde cliente
+      allow delete: if false;
     }
     
 
@@ -974,6 +934,37 @@ service cloud.firestore {
     
           allow delete: if isAuth()
             && (resource.data.remitenteId == uid() || isAdmin());
+        }
+    
+        // =========================================================
+        // =================== EMPLOYEE REQUESTS ===================
+        // =========================================================
+        match /apps/horarios/employeeRequests/{requestId} {
+    
+          // Puede leer:
+          // - el creador
+          // - el dueño del horario
+          // - admin / manager
+          allow read: if isAuth() && (
+            resource.data.createdBy == uid()
+            || canActFor(resource.data.userId)
+          );
+    
+          // Crear: solo el empleado autenticado
+          allow create: if isAuth()
+            && request.resource.data.createdBy == uid();
+    
+          // Actualizar:
+          // - dueño del horario
+          // - admin
+          // El creador NO puede modificar luego
+          allow update: if isAuth()
+            && canActFor(resource.data.userId)
+            && protectCreatedBy();
+    
+          // Eliminar: admin o dueño
+          allow delete: if isAuth()
+            && (canActFor(resource.data.userId) || isAdmin());
         }
     
         // =========================================================

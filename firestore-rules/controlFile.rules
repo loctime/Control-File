@@ -33,9 +33,4 @@ match /trash/{trashId} {
   allow read, update, delete: if isAuth() && resource.data.userId == uid();
 }
 
-// Usuarios
-match /users/{userId} {
-  allow create: if isAuth() && userId == uid();
-  allow read, update, delete: if isAuth() && userId == uid();
-}
 

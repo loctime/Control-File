@@ -23,53 +23,106 @@ const upload = multer({
 /**
  * GET /api/horarios/semana-actual?ownerId=xxx
  * 
- * Endpoint público que devuelve la URL pública del horario semanal.
+ * Endpoint público que devuelve directamente la imagen PNG del horario semanal.
  * La imagen se busca en Backblaze B2 en la ruta: horarios/{ownerId}/semana-actual.png
+ * El backend actúa como proxy del archivo (bucket privado).
  * 
  * Query params:
  * - ownerId (obligatorio): ID del propietario
  * 
  * Respuestas:
- * - 200: JSON con { url: <public B2 URL> }
+ * - 200: Imagen PNG directamente (Content-Type: image/png)
  * - 400: ownerId no proporcionado
- * - 500: B2_PUBLIC_BASE_URL no configurada
+ * - 404: Archivo no encontrado (JSON: { code: "NOT_FOUND" })
+ * - 500: Error interno del servidor
  */
 router.get('/semana-actual', async (req, res) => {
-  const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
-    ? req.query.ownerId.trim()
-    : null;
+  try {
+    const ownerId = typeof req.query.ownerId === 'string' && req.query.ownerId.trim()
+      ? req.query.ownerId.trim()
+      : null;
 
-  if (!ownerId) {
-    return res.status(400).json({
-      error: 'ownerId es obligatorio',
-      code: 'OWNER_ID_REQUIRED'
+    if (!ownerId) {
+      return res.status(400).json({
+        error: 'ownerId es obligatorio',
+        code: 'OWNER_ID_REQUIRED'
+      });
+    }
+
+    // Construir la ruta del archivo en Backblaze B2
+    const bucketKey = `horarios/${ownerId}/semana-actual.png`;
+
+    logger.info('GET /semana-actual: Obteniendo imagen', {
+      ownerId,
+      bucketKey
+    });
+
+    // Obtener stream desde B2 (bucket privado, proxy a través del backend)
+    const fileStream = await b2Service.getObjectStream(bucketKey);
+
+    // Setear headers CORS y Content-Type
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Cache-Control', 'no-store');
+
+    // Manejar errores del stream
+    fileStream.on('error', (streamError) => {
+      logger.error('Error streaming imagen desde B2', {
+        error: streamError.message,
+        bucketKey,
+        ownerId,
+        errorName: streamError.name,
+        errorCode: streamError.code,
+        httpStatusCode: streamError.$metadata?.httpStatusCode
+      });
+
+      // Si el archivo no existe, devolver 404
+      if (streamError.name === 'NotFound' || 
+          streamError.name === 'NoSuchKey' ||
+          streamError.code === 'NotFound' ||
+          streamError.$metadata?.httpStatusCode === 404) {
+        if (!res.headersSent) {
+          return res.status(404).json({ code: 'NOT_FOUND' });
+        }
+      }
+
+      // Otros errores
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Error al obtener archivo',
+          code: 'STREAM_ERROR'
+        });
+      }
+    });
+
+    // Stream el archivo directamente al cliente
+    fileStream.pipe(res);
+
+  } catch (error) {
+    logger.error('Error en GET /semana-actual', {
+      error: error.message,
+      code: error.code,
+      name: error.name,
+      httpStatusCode: error.$metadata?.httpStatusCode,
+      ownerId: req.query?.ownerId
+    });
+
+    // Si el archivo no existe, devolver 404
+    // El SDK v3 de AWS S3 puede usar 'NoSuchKey' o httpStatusCode 404
+    if (error.name === 'NotFound' || 
+        error.name === 'NoSuchKey' ||
+        error.code === 'NotFound' ||
+        error.$metadata?.httpStatusCode === 404) {
+      return res.status(404).json({ code: 'NOT_FOUND' });
+    }
+
+    // Otros errores
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      code: 'INTERNAL_ERROR'
     });
   }
-
-  const B2_PUBLIC_BASE_URL = process.env.B2_PUBLIC_BASE_URL;
-  
-  if (!B2_PUBLIC_BASE_URL) {
-    logger.error('B2_PUBLIC_BASE_URL no configurada en GET /semana-actual');
-    return res.status(500).json({
-      error: 'B2_PUBLIC_BASE_URL no configurada',
-      code: 'CONFIG_ERROR'
-    });
-  }
-  
-  // Normalizar B2_PUBLIC_BASE_URL: eliminar barra final si existe
-  const baseUrl = B2_PUBLIC_BASE_URL.replace(/\/$/, '');
-  
-  // Construir URL usando B2_PUBLIC_BASE_URL (nunca URLs directas de Backblaze)
-  const publicUrl = `${baseUrl}/horarios/${ownerId}/semana-actual.png`;
-  
-  // Log explícito con la URL final devuelta
-  logger.info('GET /semana-actual: URL generada', {
-    ownerId,
-    baseUrl: B2_PUBLIC_BASE_URL,
-    finalUrl: publicUrl
-  });
-  
-  res.json({ url: publicUrl });
 });
 
 /**
