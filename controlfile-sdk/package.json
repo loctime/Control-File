@@ -1,0 +1,41 @@
+{
+  "name": "@controlfile/sdk",
+  "version": "1.0.8",
+  "type": "module",
+  "main": "./dist/node/index.js",
+  "module": "./dist/browser/index.js",
+  "types": "./dist/node/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": {
+        "import": "./dist/browser/index.js",
+        "types": "./dist/browser/index.d.ts",
+        "default": "./dist/browser/index.js"
+      },
+      "node": {
+        "import": "./dist/node/index.js",
+        "types": "./dist/node/index.d.ts",
+        "default": "./dist/node/index.js"
+      },
+      "import": "./dist/browser/index.js",
+      "types": "./dist/browser/index.d.ts",
+      "default": "./dist/browser/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "scripts": {
+    "build": "npm run build:browser && npm run build:node",
+    "build:browser": "tsc -p tsconfig.browser.json",
+    "build:node": "tsc -p tsconfig.node.json",
+    "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\" || true",
+    "prepublishOnly": "npm run clean && npm run build",
+    "sdk-go": "npm run build && git add -A && (git commit -m \"chore: build before release\" || git diff --quiet) && npm version patch --force && git push --follow-tags"
+  },
+  "repository": "https://github.com/loctime/controlfile-sdk"
+}
