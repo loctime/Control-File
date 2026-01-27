@@ -64,7 +64,9 @@ router.get('/semana-actual', async (req, res) => {
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Cache-Control', 'no-store');
+    
 
     // Manejar errores del stream
     fileStream.on('error', (streamError) => {
