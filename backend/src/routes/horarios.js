@@ -60,12 +60,16 @@ router.get('/semana-actual', async (req, res) => {
     // Obtener stream desde B2 (bucket privado, proxy a través del backend)
     const fileStream = await b2Service.getObjectStream(bucketKey);
 
+    // Determinar Content-Type según query param format
+    const format = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : null;
+    const contentType = format === 'webp' ? 'image/webp' : 'image/png';
+
     // Setear headers CORS y Content-Type
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
     
 
     // Manejar errores del stream
