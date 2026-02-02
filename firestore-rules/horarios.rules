@@ -7,7 +7,7 @@
    
 
     function userPath(userId) {
-      return /databases/$(database)/documents/apps/horarios/users/$(userId);
+      return /databases/$(db)/documents/apps/horarios/users/$(userId);
     }
 
     function myUserPath() {
@@ -25,9 +25,9 @@
   
 
     function myOwnerId() {
-      return hasMyUser() && ('ownerId' in get(myUserPath()).data)
+      return hasMyUser()
         ? get(myUserPath()).data.ownerId
-        : '';
+        : null;
     }
 
     function invitedActingFor(ownerId) {
@@ -338,10 +338,10 @@
     // =========================================================
     match /apps/horarios/mensajes/{mensajeId} {
       function canAccessConvId(convId) {
-        return exists(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId))
-          && ('participantes' in get(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId)).data)
+        return exists(/databases/$(db)/documents/apps/horarios/conversaciones/$(convId))
+          && ('participantes' in get(/databases/$(db)/documents/apps/horarios/conversaciones/$(convId)).data)
           && isParticipantArray(
-               get(/databases/$(database)/documents/apps/horarios/conversaciones/$(convId)).data.participantes
+               get(/databases/$(db)/documents/apps/horarios/conversaciones/$(convId)).data.participantes
              );
       }
 
@@ -361,9 +361,101 @@
       allow delete: if isAuth()
         && (resource.data.remitenteId == uid() || isAdmin());
     }
+// =========================================================
+// ============ EMPLOYEE FIXED RULES (HORARIOS FIJOS) ======
+// =========================================================
+match /apps/horarios/employee_fixed_rules/{ruleId} {
+
+  // Lectura:
+  // - cualquiera autenticado que pueda actuar para el owner
+  allow read: if isAuth()
+    && canActFor(resource.data.ownerId);
+
+  // Creación:
+  allow create: if isAuth()
+    // owner correcto
+    && request.resource.data.ownerId == myOwnerId()
+    // usuario creador correcto
+    && request.resource.data.createdBy == uid()
+    // employeeId obligatorio
+    && ('employeeId' in request.resource.data)
+    // día válido
+    && request.resource.data.dayOfWeek >= 0
+    && request.resource.data.dayOfWeek <= 6;
+
+  // Actualización:
+  allow update: if isAuth()
+    && canActFor(resource.data.ownerId)
+    // no permitir cambiar owner
+    && protectFieldUnchanged('ownerId')
+    // no permitir cambiar empleado
+    && protectFieldUnchanged('employeeId')
+    // no permitir cambiar creador
+    && protectCreatedBy();
+
+  // Eliminación:
+  allow delete: if isAuth()
+    && canActFor(resource.data.ownerId);
+}
+// =========================================================
+// ================= EMPLOYEE REQUESTS =====================
+// =========================================================
+match /apps/horarios/employee_requests/{requestId} {
+
+  // Lectura:
+  // - empleado autenticado
+  // - roles con acceso (admin / manager / factory / invitado)
+  // IMPORTANTE: NO usar resource.data en read (queries)
+  allow read: if isAuth();
+
+  // Creación:
+  // - solo el empleado autenticado
+  allow create: if isAuth()
+    && request.resource.data.userId == uid()
+    && request.resource.data.ownerId == myOwnerId();
+
+  // Update:
+  // - owner / admin / manager
+  // - el empleado NO puede editar una vez creada
+  allow update: if isAuth()
+    && canActFor(resource.data.ownerId)
+    && protectFieldUnchanged('userId')
+    && protectFieldUnchanged('employeeId')
+    && protectFieldUnchanged('ownerId');
+
+  // Delete:
+  // - owner o admin
+  allow delete: if isAuth()
+    && canActFor(resource.data.ownerId);
+}
+
+// =========================================================
+// ====================== SETTINGS HORARIO =================
+// =========================================================
+match /apps/horarios/{ownerId}/settings/{settingId} {
+  // Lectura:
+  // - owner directo (fallback seguro)
+  // - o cualquiera que pueda actuar para el owner
+  allow read: if isAuth()
+    && (uid() == ownerId || canActFor(ownerId));
+
+  // Escritura: admin / owner / manager
+  allow create, update: if isAuth()
+    && canActFor(ownerId);
+
+  // No borrar settings
+  allow delete: if false;
+}
+
+match /apps/horarios/published/{ownerId} {
+  allow read: if true;
+  allow write: if false;
+}
 
     // =========================================================
     // ===================== DEFAULT DENY ======================
     // =========================================================
-   
+    match /{document=**} {
+      allow read, write: if false;
+    }
  

@@ -217,7 +217,7 @@ app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
 app.use('/api/horarios', horariosRoutes);
 
-// Superdev routes - EXCLUSIVO para usuarios con superdev: true
+// Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
 
 // Shares routes - mixed public and protected

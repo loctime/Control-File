@@ -1,7 +1,7 @@
 /**
  * Middleware de autenticación para endpoints Superdev
  * 
- * Utilidad compartida para validar custom claim superdev: true
+ * Utilidad compartida para validar role === 'superdev'
  * en endpoints exclusivos para desarrolladores.
  */
 
@@ -21,7 +21,7 @@ function getCentralAuth() {
 /**
  * Middleware Express para verificar permisos de superdev
  * 
- * Verifica que el usuario tenga custom claim superdev: true
+ * Verifica que el usuario tenga role === 'superdev'
  * 
  * @param {Object} req - Request de Express
  * @param {Object} res - Response de Express
@@ -41,8 +41,8 @@ module.exports = async (req, res, next) => {
     const centralAuth = getCentralAuth();
     const decoded = await centralAuth.verifyIdToken(token);
 
-    // Verificar custom claim superdev
-    if (decoded.superdev !== true) {
+    // Verificar role === 'superdev'
+    if (decoded.role !== 'superdev') {
       return res.status(403).json({
         error: 'No autorizado: se requieren permisos de superdev',
         code: 'FORBIDDEN',

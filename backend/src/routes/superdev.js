@@ -20,7 +20,7 @@ function getCentralAuth() {
  * SUPERDEV-ONLY: Listar todos los owners disponibles para impersonación
  * 
  * Requiere:
- * - Custom claim superdev: true (verificado por middleware)
+ * - role === 'superdev' (verificado por middleware)
  * 
  * Retorna:
  * - { owners: Array<{ uid: string; email: string | null; nombre: string | null }> }
@@ -135,7 +135,7 @@ router.get('/list-owners', async (req, res) => {
  * SUPERDEV-ONLY: Generar un custom token para impersonar a un owner
  * 
  * Requiere:
- * - Custom claim superdev: true (verificado por middleware)
+ * - role === 'superdev' (verificado por middleware)
  * - Body: { ownerId: string }
  * 
  * Retorna:

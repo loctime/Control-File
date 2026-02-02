@@ -1,7 +1,7 @@
 /**
  * Middleware de autenticación para endpoints Superdev
  * 
- * Utilidad compartida para validar custom claim superdev: true
+ * Utilidad compartida para validar role === 'superdev'
  * en endpoints exclusivos para desarrolladores.
  */
 
@@ -30,8 +30,8 @@ export async function verifySuperdev(request: NextRequest): Promise<SuperdevInfo
   const adminAuth = requireAdminAuth();
   const decoded = await adminAuth.verifyIdToken(token);
 
-  // Verificar custom claim superdev
-  if (decoded.superdev !== true) {
+  // Verificar role === 'superdev'
+  if (decoded.role !== 'superdev') {
     throw new Error('No autorizado: se requieren permisos de superdev');
   }
 

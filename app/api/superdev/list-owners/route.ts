@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * SUPERDEV-ONLY: Listar todos los owners disponibles para impersonación
  * 
  * Requiere:
- * - Custom claim superdev: true
+ * - role === 'superdev'
  * 
  * Retorna:
  * - { owners: Array<{ uid: string; email: string | null; nombre: string | null }> }
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (error.message?.includes('se requieren permisos de superdev')) {
-      logger.warn('Forbidden list owners attempt (no superdev claim)', {
+      logger.warn('Forbidden list owners attempt (no superdev role)', {
         error: error.message,
         path: request.url,
       });

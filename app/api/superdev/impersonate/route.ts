@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * SUPERDEV-ONLY: Generar un custom token para impersonar a un owner
  * 
  * Requiere:
- * - Custom claim superdev: true
+ * - role === 'superdev'
  * - Body: { ownerId: string }
  * 
  * Retorna:
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (error.message?.includes('se requieren permisos de superdev')) {
-      logger.warn('Forbidden impersonate attempt (no superdev claim)', {
+      logger.warn('Forbidden impersonate attempt (no superdev role)', {
         error: error.message,
         path: request.url,
       });
