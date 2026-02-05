@@ -25,6 +25,13 @@ async function indexRepository(owner, repo, accessToken, branch) {
     branch: branch || 'default'
     // NOTA: accessToken se ignora - solo se usa process.env.GITHUB_TOKEN como fallback
   });
+
+  if (accessToken) {
+    logger.info('Token OAuth de usuario ignorado para indexación', {
+      owner,
+      repo
+    });
+  }
   
   const baseHeaders = {
     Accept: 'application/vnd.github+json',
