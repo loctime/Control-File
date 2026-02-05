@@ -86,7 +86,7 @@ Indexación en background:
 
 El indexador detecta automáticamente si necesita token:
 - Repos públicos: Request sin `Authorization` header
-- Repos privados: Request con `Authorization: Bearer {token}`
+- Si GitHub responde **401/403**, reintenta automáticamente con `process.env.GITHUB_TOKEN`
 
 ---
 
