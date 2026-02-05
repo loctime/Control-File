@@ -42,6 +42,7 @@ const requestLogger = require('./middleware/request-logger');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const isLocalMode = process.env.NODE_ENV !== 'production';
 
 // Trust proxy for Render.com and other reverse proxies
 app.set('trust proxy', 1);
