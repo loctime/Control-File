@@ -4,9 +4,17 @@ const { logger } = require('../utils/logger');
 
 /**
  * Indexa un repositorio de GitHub
+ * 
+ * MODELO URL-ONLY + TOKEN POR ENTORNO:
+ * - Primero intenta acceso público (sin Authorization header)
+ * - Si responde 401/403/404 → retry automático con process.env.GITHUB_TOKEN
+ * - El parámetro accessToken se ignora (mantenido por compatibilidad)
+ * - NO lee tokens desde Firestore
+ * - NO falla por ausencia de accessToken
+ * 
  * @param {string} owner - Propietario del repositorio
  * @param {string} repo - Nombre del repositorio
- * @param {string|null|undefined} accessToken - Token de acceso de GitHub (opcional para repos públicos)
+ * @param {string|null|undefined} accessToken - IGNORADO (mantenido por compatibilidad, no se usa)
  * @param {string|null|undefined} branch - Rama a indexar (opcional, usa default branch si no se proporciona)
  * @returns {Promise<{ files: Array, tree: Object, stats: Object, branch: string, branchSha: string }>}
  */
@@ -14,8 +22,8 @@ async function indexRepository(owner, repo, accessToken, branch) {
   logger.info('Iniciando indexación de repositorio', { 
     owner, 
     repo, 
-    branch: branch || 'default',
-    hasToken: !!accessToken 
+    branch: branch || 'default'
+    // NOTA: accessToken se ignora - solo se usa process.env.GITHUB_TOKEN como fallback
   });
   
   const baseHeaders = {
@@ -23,12 +31,23 @@ async function indexRepository(owner, repo, accessToken, branch) {
     'User-Agent': 'controlfile-backend'
   };
 
+  // Token por entorno - fallback automático si acceso público falla
   const fallbackToken = process.env.GITHUB_TOKEN || null;
 
+  /**
+   * Flujo de acceso: público primero, luego fallback a token de entorno
+   * 1. Intenta acceso público (sin Authorization header)
+   * 2. Si 401/403/404 → retry con process.env.GITHUB_TOKEN
+   * 3. Nunca falla por ausencia de accessToken en parámetros
+   */
   const fetchWithFallback = async (url) => {
     const publicResponse = await fetch(url, { headers: baseHeaders });
 
     if ((publicResponse.status === 401 || publicResponse.status === 403 || publicResponse.status === 404) && fallbackToken) {
+      logger.info('Acceso público falló, usando token de entorno', { 
+        status: publicResponse.status,
+        url: url.replace(/\/\/api\.github\.com\/repos\/[^\/]+\/[^\/]+/, '//api.github.com/repos/OWNER/REPO')
+      });
       const authHeaders = {
         ...baseHeaders,
         Authorization: `Bearer ${fallbackToken}`

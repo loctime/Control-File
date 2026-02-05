@@ -10,10 +10,16 @@ const { generateRepositoryId } = require('../utils/repository-id');
 
 /**
  * Obtiene el SHA actual del branch en GitHub
+ * 
+ * MODELO URL-ONLY + TOKEN POR ENTORNO:
+ * - Primero intenta acceso público
+ * - Si 401/403/404 → retry con process.env.GITHUB_TOKEN
+ * - El parámetro accessToken se ignora (mantenido por compatibilidad)
+ * 
  * @param {string} owner - Propietario del repositorio
  * @param {string} repo - Nombre del repositorio
  * @param {string} branch - Branch a verificar
- * @param {string|null} accessToken - Token opcional
+ * @param {string|null} accessToken - IGNORADO (mantenido por compatibilidad, no se usa)
  * @returns {Promise<string|null>} - SHA del branch o null si error
  */
 async function getCurrentBranchSha(owner, repo, branch, accessToken) {
@@ -23,8 +29,12 @@ async function getCurrentBranchSha(owner, repo, branch, accessToken) {
       'User-Agent': 'controlfile-backend'
     };
 
+    // Token por entorno - fallback automático si acceso público falla
     const fallbackToken = process.env.GITHUB_TOKEN || null;
 
+    /**
+     * Flujo de acceso: público primero, luego fallback a token de entorno
+     */
     const fetchWithFallback = async (url) => {
       const publicResponse = await fetch(url, { headers: baseHeaders });
 
@@ -78,9 +88,15 @@ async function getCurrentBranchSha(owner, repo, branch, accessToken) {
 /**
  * Indexa un repositorio de forma asíncrona
  * Este método NO bloquea - inicia la indexación y retorna inmediatamente
+ * 
+ * MODELO URL-ONLY + TOKEN POR ENTORNO:
+ * - El parámetro accessToken se ignora (mantenido por compatibilidad)
+ * - Usa acceso público + fallback a process.env.GITHUB_TOKEN
+ * - NO lee tokens desde Firestore
+ * 
  * @param {string} owner - Propietario del repositorio
  * @param {string} repo - Nombre del repositorio
- * @param {string|null} accessToken - Token opcional (para repos privados)
+ * @param {string|null} accessToken - IGNORADO (mantenido por compatibilidad, no se usa)
  * @param {string} uid - ID del usuario
  * @param {string|null} branch - Branch a indexar (opcional)
  * @param {boolean} force - Si es true, reindexa incluso si ya está listo
