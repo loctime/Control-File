@@ -6,7 +6,7 @@ const { logger } = require('../utils/logger');
  * Indexa un repositorio de GitHub
  * @param {string} owner - Propietario del repositorio
  * @param {string} repo - Nombre del repositorio
- * @param {string|null|undefined} accessToken - Token de acceso de GitHub (opcional para repos públicos)
+ * @param {string|null|undefined} accessToken - Token OAuth de usuario (ignorado; no se usa en modo local)
  * @param {string|null|undefined} branch - Rama a indexar (opcional, usa default branch si no se proporciona)
  * @returns {Promise<{ files: Array, tree: Object, stats: Object, branch: string, branchSha: string }>}
  */
@@ -17,6 +17,13 @@ async function indexRepository(owner, repo, accessToken, branch) {
     branch: branch || 'default',
     hasToken: !!accessToken 
   });
+
+  if (accessToken) {
+    logger.info('Token OAuth de usuario ignorado para indexación', {
+      owner,
+      repo
+    });
+  }
   
   const baseHeaders = {
     Accept: 'application/vnd.github+json',

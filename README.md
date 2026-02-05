@@ -74,6 +74,64 @@ npm run dev
 
 Ver [documentación de deployment](./docs/deployment/) para configuración completa.
 
+### ✅ Modo Local (sin Render/Vercel/GitHub OAuth/Cloudflare)
+
+Este modo fuerza ejecución 100% local y deshabilita integraciones cloud (OAuth GitHub, endpoints /api/github/*).
+
+1) **Configurar variables mínimas (backend)**
+
+```env
+# Backend (backend/.env)
+LOCAL_MODE=true
+PORT=10000
+CONTROLREPO_URL=http://localhost:4001
+CONTROLFILE_SIGNATURE=local-dev-signature
+
+# Firebase (requerido para auth/Firestore locales)
+FB_ADMIN_APPDATA=...
+FB_ADMIN_IDENTITY=...
+FB_DATA_PROJECT_ID=...
+```
+
+2) **Levantar backend**
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+3) **Levantar frontend**
+
+```bash
+npm install
+npm run dev
+```
+
+4) **Ollama local**
+
+```bash
+ollama serve
+```
+
+#### Endpoints activos en modo local
+
+- `POST /api/repository/index` (indexación directa)
+- `GET /api/repository/status/:repositoryId`
+- `POST /repositories/index` (indexación asíncrona)
+- `GET /repositories/:repositoryId/status`
+- `POST /api/chat/query`
+- `GET /api/chat/status?conversationId=...`
+
+#### Endpoints deshabilitados en modo local
+
+- `POST /api/auth/github/init`
+- `GET /api/auth/github`
+- `GET /api/github/status`
+- `GET /api/github/repos`
+- `POST /api/github/select-repo`
+- `POST /api/github/disconnect`
+
 ### Para Integración con Tu App
 
 ```bash

@@ -6,7 +6,7 @@ const express = require('express');
 const { logger } = require('../utils/logger');
 const { isValidRepositoryId } = require('../utils/repository-id');
 const repositoryStore = require('../services/repository-store');
-const { queryRepository } = require('../services/chat-service');
+const { queryRepository, getChatStatus } = require('../services/chat-service');
 
 const router = express.Router();
 
@@ -209,6 +209,48 @@ router.post('/query', async (req, res) => {
       message: error.message
     });
   }
+});
+
+/**
+ * GET /chat/status
+ *
+ * Consulta el estado de una conversación de chat.
+ *
+ * Query params:
+ * - conversationId: string (requerido)
+ *
+ * Respuesta (200):
+ * {
+ *   "conversationId": "conv-123",
+ *   "status": "processing" | "completed" | "error" | "idle",
+ *   "nextPollMs": 2000 | null,
+ *   "error": "Mensaje de error" | null
+ * }
+ */
+router.get('/status', async (req, res) => {
+  const conversationId = req.query.conversationId;
+
+  if (!conversationId || typeof conversationId !== 'string') {
+    return res.status(400).json({
+      error: 'conversationId es requerido',
+      field: 'conversationId'
+    });
+  }
+
+  const statusData = getChatStatus(conversationId);
+  const nextPollMs = statusData.status === 'processing' ? 2000 : null;
+
+  logger.info('Estado de chat consultado', {
+    conversationId,
+    status: statusData.status
+  });
+
+  return res.status(200).json({
+    conversationId,
+    status: statusData.status,
+    error: statusData.error || null,
+    nextPollMs
+  });
 });
 
 module.exports = router;

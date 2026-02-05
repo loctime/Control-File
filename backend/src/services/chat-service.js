@@ -10,6 +10,34 @@ const { queryRepositoryLLM } = require('./controlrepo-llm-client');
 
 // Lock por conversación/repositorio para evitar múltiples consultas simultáneas
 const activeQueries = new Map();
+const chatStatuses = new Map();
+const CHAT_STATUS_TTL_MS = 5 * 60 * 1000;
+
+function updateChatStatus(conversationId, status, metadata = {}) {
+  chatStatuses.set(conversationId, {
+    status,
+    updatedAt: Date.now(),
+    ...metadata
+  });
+}
+
+function pruneChatStatuses() {
+  const now = Date.now();
+  for (const [conversationId, value] of chatStatuses.entries()) {
+    if (now - value.updatedAt > CHAT_STATUS_TTL_MS) {
+      chatStatuses.delete(conversationId);
+    }
+  }
+}
+
+function getChatStatus(conversationId) {
+  if (!conversationId) {
+    return { status: 'idle' };
+  }
+
+  pruneChatStatuses();
+  return chatStatuses.get(conversationId) || { status: 'idle' };
+}
 
 /**
  * Procesa una query de chat sobre un repositorio
@@ -46,6 +74,7 @@ async function queryRepository(repositoryId, question, conversationId = null) {
   if (!conversationId) {
     conversationId = `conv-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
+  updateChatStatus(conversationId, 'processing', { repositoryId });
   
   // 3. Verificar lock por conversación/repositorio
   // Usar conversationId si existe, sino repositoryId como clave del lock
@@ -133,7 +162,11 @@ async function queryRepository(repositoryId, question, conversationId = null) {
       sourcesCount: response.sources.length
     });
     
+    updateChatStatus(conversationId, 'completed', { repositoryId });
     return response;
+  } catch (error) {
+    updateChatStatus(conversationId, 'error', { repositoryId, error: error.message });
+    throw error;
   } finally {
     // 8. Liberar lock siempre, incluso si hay error
     activeQueries.delete(lockKey);
@@ -141,5 +174,6 @@ async function queryRepository(repositoryId, question, conversationId = null) {
 }
 
 module.exports = {
-  queryRepository
+  queryRepository,
+  getChatStatus
 };
