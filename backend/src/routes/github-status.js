@@ -1,52 +1,38 @@
 const express = require('express');
-const admin = require('firebase-admin');
 
 const router = express.Router();
 
 /**
  * GET /api/github/status
- * Devuelve si el usuario tiene GitHub conectado con un token válido
  * 
- * Respuesta rápida sin validar contra GitHub API.
- * Solo verifica que existe un access_token válido en Firestore.
+ * STUB DEFENSIVO - GitHub OAuth fue eliminado
  * 
- * Respuesta: { connected: boolean }
+ * Este endpoint se mantiene por compatibilidad con frontends antiguos o caché,
+ * pero ya no realiza ninguna operación relacionada con GitHub.
+ * 
+ * - NO hace llamadas a GitHub API
+ * - NO consulta tokens en Firestore
+ * - NO aplica rate limiting específico
+ * - Siempre responde 200 con payload estático y seguro
+ * 
+ * Respuesta (200):
+ * {
+ *   ok: true,
+ *   connected: false,
+ *   mode: "url-only",
+ *   message: "GitHub OAuth deshabilitado. Repositorios gestionados por URL."
+ * }
  */
-router.get('/status', async (req, res) => {
-  try {
-    const userId = req.user.uid;
-
-    const db = admin.firestore();
-    // ✅ Leer desde la nueva ruta: apps/controlrepo/{userId}/githubIntegration
-    const doc = await db
-      .doc(`apps/controlrepo/${userId}/githubIntegration`)
-      .get();
-
-    // Si no existe el documento, no está conectado
-    if (!doc.exists) {
-      return res.json({
-        connected: false
-      });
-    }
-
-    const data = doc.data();
-    const accessToken = data?.access_token;
-
-    // Verificar que existe un token válido (no vacío, no null, no undefined)
-    // NO intentamos validar contra GitHub para mantener la respuesta rápida
-    const hasValidToken = accessToken && 
-                         typeof accessToken === 'string' && 
-                         accessToken.trim().length > 0;
-
-    return res.json({
-      connected: hasValidToken
-    });
-  } catch (err) {
-    console.error('GitHub status error:', err);
-    return res.status(500).json({
-      error: 'Error consultando estado de GitHub'
-    });
-  }
+router.get('/status', (req, res) => {
+  // Log mínimo (info, no warn/error)
+  // No requiere userId ni autenticación para ser completamente inofensivo
+  
+  return res.status(200).json({
+    ok: true,
+    connected: false,
+    mode: 'url-only',
+    message: 'GitHub OAuth deshabilitado. Repositorios gestionados por URL.'
+  });
 });
 
 module.exports = router;

@@ -300,7 +300,8 @@ service cloud.firestore {
       // El usuario autenticado solo puede acceder a su propio documento
       allow read, write: if isAuth() && uid() == userId;
     
-      // Subcolecciones del usuario (preferences, githubIntegration, futuras)
+      // Subcolecciones del usuario (preferences, futuras)
+      // NOTA: githubIntegration ya no se utiliza (GitHub OAuth eliminado)
       match /{subPath=**} {
         allow read, write: if isAuth() && uid() == userId;
       }

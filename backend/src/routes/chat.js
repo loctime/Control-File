@@ -138,13 +138,16 @@ router.post('/query', async (req, res) => {
       
     } catch (queryError) {
       // Si el error es de consulta en curso (lock), retornar 409 Conflict
-      // Este es un comportamiento esperado, no un error real
+      // Este es un comportamiento esperado, no un error fatal
+      // El lock se libera automáticamente cuando la consulta anterior termina
       if (queryError.message.includes('Ya hay una consulta en curso')) {
-        logger.info('Consulta rechazada: ya hay una consulta en curso', { 
+        logger.info('Consulta rechazada: ya hay una consulta en curso (409 - no es error fatal)', { 
           repositoryId, 
           conversationId
         });
         return res.status(409).json({
+          ok: false,
+          status: 'processing',
           error: 'Consulta en curso',
           message: queryError.message
         });

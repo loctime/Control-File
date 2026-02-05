@@ -8,14 +8,9 @@
  * Estado: Preparado para validaciones futuras (marcadores agregados en routes/folders.js)
  */
 const express = require('express');
-const githubAuthRoutes = require('./routes/auth-github');
-const githubCallbackRoutes = require('./routes/auth-github-callback');
-const githubReposRoutes = require('./routes/github-repos');
 const cors = require('cors');
 const helmet = require('helmet');
 const githubStatusRoutes = require('./routes/github-status');
-const githubSelectRepoRoutes = require('./routes/github-select-repo');
-const githubDisconnectRoutes = require('./routes/github-disconnect');
 const repositoryIndexRoutes = require('./routes/repository-index'); // Legacy - mantener por compatibilidad
 const repositoriesRoutes = require('./routes/repositories'); // Nuevo endpoint rediseñado
 const chatRoutes = require('./routes/chat'); // Endpoint de chat
@@ -177,27 +172,11 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   });
   next();
 }, uploadRoutes);
-const isLocalMode = process.env.LOCAL_MODE === 'true';
-
-// GitHub OAuth
-// ===== ControlRepo - GitHub OAuth =====
-if (isLocalMode) {
-  const githubLocalStubRoutes = require('./routes/github-local-stub');
-  app.use('/api/auth/github', githubLocalStubRoutes);
-  app.use('/api/github', githubLocalStubRoutes);
-} else {
-  // 1️⃣ Callback OAuth → NUNCA pasa por auth
-  app.use('/api/auth/github/callback', githubCallbackRoutes);
-
-  // 2️⃣ Inicio OAuth → El router maneja la autenticación internamente:
-  //    - POST /init → requiere authMiddleware (aplicado en el router)
-  //    - GET / → valida token manualmente (permite query string para redirects del navegador)
-  app.use('/api/auth/github', githubAuthRoutes);
-  app.use('/api/github', authMiddleware, githubReposRoutes);
-  app.use('/api/github', authMiddleware, githubStatusRoutes);
-  app.use('/api/github', authMiddleware, githubSelectRepoRoutes);
-  app.use('/api/github', authMiddleware, githubDisconnectRoutes);
-}
+// GitHub endpoints
+// ===== ControlRepo - GitHub =====
+// NOTA: GitHub OAuth fue eliminado. Los repositorios se acceden por URL.
+// Solo se mantiene /api/github/status como stub defensivo para compatibilidad.
+app.use('/api/github', authMiddleware, githubStatusRoutes);
 
 // Repository indexing endpoint - NO usa authMiddleware (viene desde ControlRepo)
 // Legacy endpoint - mantener por compatibilidad temporal
