@@ -20,7 +20,7 @@ const router = express.Router();
  *   owner: string,
  *   repo: string,
  *   branch?: string (opcional, usa default branch si no se proporciona),
- *   accessToken: string,
+ *   accessToken?: string | null,
  *   uid: string
  * }
  * 
@@ -47,8 +47,8 @@ router.post('/index', async (req, res) => {
     if (branch !== undefined && typeof branch !== 'string') {
       return res.status(400).json({ error: 'branch debe ser string si se proporciona' });
     }
-    if (!accessToken || typeof accessToken !== 'string') {
-      return res.status(400).json({ error: 'accessToken es requerido y debe ser string' });
+    if (accessToken !== undefined && accessToken !== null && typeof accessToken !== 'string') {
+      return res.status(400).json({ error: 'accessToken debe ser string o null' });
     }
     if (!uid || typeof uid !== 'string') {
       return res.status(400).json({ error: 'uid es requerido y debe ser string' });

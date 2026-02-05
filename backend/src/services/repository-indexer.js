@@ -18,26 +18,30 @@ async function indexRepository(owner, repo, accessToken, branch) {
     hasToken: !!accessToken 
   });
   
-  // Headers para requests a GitHub API
-  const getHeaders = () => {
-    const headers = {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'controlfile-backend'
-    };
-    
-    // Solo agregar Authorization si hay token (repos privados)
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
+  const baseHeaders = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'controlfile-backend'
+  };
+
+  const fallbackToken = process.env.GITHUB_TOKEN || null;
+
+  const fetchWithFallback = async (url) => {
+    const publicResponse = await fetch(url, { headers: baseHeaders });
+
+    if ((publicResponse.status === 401 || publicResponse.status === 403 || publicResponse.status === 404) && fallbackToken) {
+      const authHeaders = {
+        ...baseHeaders,
+        Authorization: `Bearer ${fallbackToken}`
+      };
+      return fetch(url, { headers: authHeaders });
     }
-    
-    return headers;
+
+    return publicResponse;
   };
   
   try {
     // 1. Obtener información del repositorio
-    const repoInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-      headers: getHeaders()
-    });
+    const repoInfo = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}`);
     
     if (!repoInfo.ok) {
       const errorText = await repoInfo.text();
@@ -57,9 +61,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
     // 3. Resolver SHA del branch (si no es un SHA completo)
     let branchSha = resolvedBranch;
     if (!resolvedBranch.match(/^[0-9a-f]{40}$/)) {
-      const branchInfo = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${resolvedBranch}`, {
-        headers: getHeaders()
-      });
+      const branchInfo = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}/branches/${resolvedBranch}`);
       
       if (!branchInfo.ok) {
         const errorText = await branchInfo.text();
@@ -72,9 +74,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
     }
     
     // 4. Obtener árbol completo del repositorio
-    const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branchSha}?recursive=1`, {
-      headers: getHeaders()
-    });
+    const treeResponse = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branchSha}?recursive=1`);
     
     if (!treeResponse.ok) {
       const errorText = await treeResponse.text();
@@ -96,9 +96,7 @@ async function indexRepository(owner, repo, accessToken, branch) {
     const fileContents = [];
     for (const file of importantFiles) {
       try {
-        const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${branchSha}`, {
-          headers: getHeaders()
-        });
+        const contentResponse = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${branchSha}`);
         
         if (contentResponse.ok) {
           const contentData = await contentResponse.json();

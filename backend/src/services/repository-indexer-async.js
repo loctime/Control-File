@@ -18,14 +18,26 @@ const { generateRepositoryId } = require('../utils/repository-id');
  */
 async function getCurrentBranchSha(owner, repo, branch, accessToken) {
   try {
-    const headers = {
+    const baseHeaders = {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'controlfile-backend'
     };
-    
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
+
+    const fallbackToken = process.env.GITHUB_TOKEN || null;
+
+    const fetchWithFallback = async (url) => {
+      const publicResponse = await fetch(url, { headers: baseHeaders });
+
+      if ((publicResponse.status === 401 || publicResponse.status === 403 || publicResponse.status === 404) && fallbackToken) {
+        const authHeaders = {
+          ...baseHeaders,
+          Authorization: `Bearer ${fallbackToken}`
+        };
+        return fetch(url, { headers: authHeaders });
+      }
+
+      return publicResponse;
+    };
     
     // Si branch ya es un SHA, retornarlo directamente
     if (branch && branch.match(/^[0-9a-f]{40}$/)) {
@@ -34,9 +46,7 @@ async function getCurrentBranchSha(owner, repo, branch, accessToken) {
     
     // Si no tenemos branch, obtener default branch del repo
     if (!branch) {
-      const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-        headers
-      });
+      const repoResponse = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}`);
       
       if (!repoResponse.ok) {
         return null;
@@ -51,9 +61,7 @@ async function getCurrentBranchSha(owner, repo, branch, accessToken) {
     }
     
     // Obtener SHA del branch
-    const branchResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${branch}`, {
-      headers
-    });
+    const branchResponse = await fetchWithFallback(`https://api.github.com/repos/${owner}/${repo}/branches/${branch}`);
     
     if (!branchResponse.ok) {
       return null;
