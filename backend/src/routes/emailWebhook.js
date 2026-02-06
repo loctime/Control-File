@@ -16,7 +16,7 @@ router.post("/email-inbound", async (req, res) => {
         try {
             console.log(`\n📥 Obteniendo contenido del email ${emailId}...`);
             
-            const response = await axios.get(`https://api.resend.com/emails/${emailId}`, {
+            const response = await axios.get(`https://api.resend.com/emails/receiving/${emailId}`, {
                 headers: {
                     'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
                     'Content-Type': 'application/json'
