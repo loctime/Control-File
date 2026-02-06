@@ -59,6 +59,7 @@ async function fetchReceivedEmail(emailId, apiKey, maxRetries = 3) {
  * 5. Se procesa y queda listo para persistir
  */
 router.post("/email-inbound", async (req, res) => {
+  console.log("RAW BODY:", JSON.stringify(req.body, null, 2));
   // ⚠️ SIEMPRE responder 200 para no romper el webhook
   try {
     console.log("📩 [EMAIL-INBOUND] Webhook recibido");
@@ -78,7 +79,7 @@ router.post("/email-inbound", async (req, res) => {
     }
 
     // --- Metadata del webhook ---
-    const emailId = webhookData.id;
+    const emailId = webhookData.email_id;
     if (!emailId) {
       console.log("⚠️ [EMAIL-INBOUND] email_id ausente");
       return res.status(200).send("OK");
