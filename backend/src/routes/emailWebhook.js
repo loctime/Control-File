@@ -1,30 +1,21 @@
-const express = require("express");
-const cheerio = require("cheerio");
-
-const router = express.Router();
-
 router.post("/email-inbound", async (req, res) => {
 
     console.log("📩 Email recibido");
 
-    const html = req.body?.data?.html;
+    function findHtml(obj) {
+        for (const key in obj) {
+            if (typeof obj[key] === "string" && obj[key].includes("<td")) {
+                console.log("🔥 HTML encontrado en:", key);
+                console.log(obj[key]);
+            }
 
-    if (!html) {
-        console.log("❌ No hay HTML");
-        return res.status(200).send("OK");
+            if (typeof obj[key] === "object" && obj[key] !== null) {
+                findHtml(obj[key]);
+            }
+        }
     }
 
-    const $ = cheerio.load(html);
-
-    const rows = [];
-
-    $("td").each((i, el) => {
-        rows.push($(el).text().trim());
-    });
-
-    console.log("Datos extraidos:", rows);
+    findHtml(req.body);
 
     res.status(200).send("OK");
 });
-
-module.exports = router;
