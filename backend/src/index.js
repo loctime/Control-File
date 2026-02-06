@@ -119,8 +119,10 @@ app.use(limiter);
 app.use(requestLogger);
 
 // Body parsing middleware with logging
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// IMPORTANTE: Debe estar ANTES de montar las rutas para que req.body esté disponible
+// Límite de 25mb para soportar emails con attachments grandes
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Debug middleware for all requests
 app.use((req, res, next) => {

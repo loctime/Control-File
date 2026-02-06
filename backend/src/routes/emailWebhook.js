@@ -16,6 +16,12 @@ router.post("/email-inbound", async (req, res) => {
     // Siempre responder 200 OK para no romper el webhook
     // incluso si hay errores en el procesamiento
     try {
+        // 🔍 LOG TEMPORAL DE VERIFICACIÓN - Verificar que el middleware funciona correctamente
+        // Si ves type: "email.received" y data.html o data.text → Resend está funcionando perfecto
+        // Si no ves nada → problema de middleware o de dominio inbound
+        console.log("📩 RAW BODY:");
+        console.log(JSON.stringify(req.body, null, 2));
+        
         console.log("📩 [EMAIL-INBOUND] Webhook recibido");
         console.log("📦 [EMAIL-INBOUND] Tipo de evento:", req.body?.type || "desconocido");
 
@@ -45,6 +51,12 @@ router.post("/email-inbound", async (req, res) => {
         console.log("   Subject:", subject);
 
         // Logs de contenido
+        // NOTA: Resend no siempre manda HTML. Depende del email entrante:
+        // - Email simple → solo text
+        // - Reply → text + quoted content
+        // - Forward → html complejo
+        // - Sistemas legacy → solo headers + text
+        // Por eso el manejo defensivo es crítico aquí.
         if (html) {
             console.log("✅ [EMAIL-INBOUND] HTML presente:", html.length, "caracteres");
         } else {
