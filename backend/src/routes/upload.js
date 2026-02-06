@@ -86,7 +86,11 @@ router.post('/presign', async (req, res) => {
     logger.debug('Resolved parent info', { parentPath, effectiveParentId, ancestors });
 
     // Generate file key
-    const fileKey = generateFileKey(uid, parentPath, name);
+    let fileKey = generateFileKey(uid, parentPath, name);
+    
+    // Normalización adicional del key final (colapsar múltiples slashes)
+    // Esto asegura que no haya dobles slashes que rompan la firma presignada
+    fileKey = fileKey.replace(/\/+/g, '/');
 
     // Check if multipart upload is needed
     const multipartConfig = b2Service.calculateMultipartConfig(size);
@@ -384,11 +388,22 @@ function generateFileKey(userId, parentPath, fileName) {
   const randomId = Math.random().toString(36).substr(2, 9);
   const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
   
-  if (parentPath) {
-    return `${userId}/${parentPath}/${timestamp}_${randomId}_${sanitizedFileName}`;
-  }
+  // Normalizar parentPath: eliminar slashes al inicio y al final, y colapsar múltiples slashes
+  const normalizedParentPath = parentPath
+    ? parentPath.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
+    : '';
   
-  return `${userId}/${timestamp}_${randomId}_${sanitizedFileName}`;
+  // Construir las partes del path
+  const pathParts = [userId];
+  if (normalizedParentPath) {
+    pathParts.push(normalizedParentPath);
+  }
+  pathParts.push(`${timestamp}_${randomId}_${sanitizedFileName}`);
+  
+  // Unir las partes y normalizar el resultado final (colapsar múltiples slashes)
+  const finalKey = pathParts.filter(Boolean).join('/').replace(/\/+/g, '/');
+  
+  return finalKey;
 }
 
 module.exports = router;
