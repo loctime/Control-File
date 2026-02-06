@@ -4,8 +4,8 @@ const router = express.Router();
 
 router.post("/email-inbound", async (req, res) => {
 
-    console.log("📩 Email completo:");
-    console.log(JSON.stringify(req.body, null, 2));
+    console.log("📩 EMAIL RAW COMPLETO:");
+    console.dir(req.body, { depth: null });
 
     res.status(200).send("OK");
 });
