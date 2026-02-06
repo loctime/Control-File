@@ -78,7 +78,7 @@ router.post("/email-inbound", async (req, res) => {
     }
 
     // --- Metadata del webhook ---
-    const emailId = webhookData.email_id;
+    const emailId = webhookData.id;
     if (!emailId) {
       console.log("⚠️ [EMAIL-INBOUND] email_id ausente");
       return res.status(200).send("OK");
