@@ -2,6 +2,12 @@ const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
 
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const db = admin.firestore();
+
 router.post("/email-local-ingest", async (req, res) => {
   try {
     // Validación de token de autenticación local
@@ -73,9 +79,21 @@ router.post("/email-local-ingest", async (req, res) => {
       attachments_count: emailData.attachments.length
     });
 
-    // TODO: persistir en Firestore
-    // const db = admin.firestore();
-    // await db.collection("apps/emails/inbox").add(emailData);
+    // Usar message_id para evitar duplicados
+    const docId = message_id || db.collection("_").doc().id;
+
+    await db
+      .collection("apps")
+      .doc("emails")
+      .collection("inbox")
+      .doc(docId)
+      .set({
+        ...emailData,
+        preview: (body_text || "").slice(0, 200),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    console.log("✅ [EMAIL-LOCAL] Email guardado en Firestore con ID:", docId);
 
     return res.status(200).json({ 
       ok: true,
