@@ -1,3 +1,8 @@
+const express = require("express");
+const cheerio = require("cheerio");
+
+const router = express.Router();
+
 router.post("/email-inbound", async (req, res) => {
 
     console.log("📩 Email recibido");
@@ -19,3 +24,5 @@ router.post("/email-inbound", async (req, res) => {
 
     res.status(200).send("OK");
 });
+
+module.exports = router;
