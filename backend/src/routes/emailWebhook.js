@@ -5,6 +5,50 @@ const cheerio = require("cheerio");
 const router = express.Router();
 
 /**
+ * Helper: Sleep para retry con backoff
+ */
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Helper: Obtener email recibido desde Resend API con retry
+ */
+async function fetchReceivedEmail(emailId, apiKey, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.get(
+        `https://api.resend.com/emails/receiving/${emailId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`
+          }
+        }
+      );
+
+      const data = response.data?.data;
+
+      if (data) {
+        return data;
+      }
+
+      console.log(
+        `⏳ [EMAIL-INBOUND] Intento ${attempt}/${maxRetries} sin data, reintentando...`
+      );
+
+    } catch (err) {
+      console.error(
+        `❌ [EMAIL-INBOUND] Error en intento ${attempt}:`,
+        err.response?.data || err.message
+      );
+    }
+
+    // Backoff progresivo
+    await sleep(attempt * 700);
+  }
+
+  return null;
+}
+
+/**
  * POST /email-inbound
  *
  * Flujo correcto para Resend Inbound:
@@ -52,32 +96,15 @@ router.post("/email-inbound", async (req, res) => {
       return res.status(200).send("OK");
     }
 
-    // --- Obtener contenido real desde Resend ---
-    let email;
-    try {
-      const response = await axios.get(
-        `https://api.resend.com/emails/receiving/${emailId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`
-          }
-        }
-      );
+    // --- Obtener contenido real desde Resend con retry ---
+    const email = await fetchReceivedEmail(emailId, apiKey);
 
-      email = response.data?.data;
-
-      if (!email) {
-        console.log("⚠️ [EMAIL-INBOUND] Respuesta sin data");
-        return res.status(200).send("OK");
-      }
-
-      console.log("✅ [EMAIL-INBOUND] Email completo obtenido");
-
-    } catch (err) {
-      console.error("❌ [EMAIL-INBOUND] Error llamando a Resend API");
-      console.error(err.response?.data || err.message);
+    if (!email) {
+      console.log("⚠️ [EMAIL-INBOUND] Email no disponible tras reintentos");
       return res.status(200).send("OK");
     }
+
+    console.log("✅ [EMAIL-INBOUND] Email completo obtenido");
 
     // --- Campos reales del email ---
     const emailData = {
