@@ -262,16 +262,23 @@ router.post('/confirm', async (req, res) => {
 });
 
 // Proxy upload endpoint - recibe archivo y lo sube a B2
-router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single('file'), async (req, res) => {
+router.post('/proxy-upload', multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 * 1024, // 5GB máximo
+  }
+}).single('file'), async (req, res) => {
   try {
     logger.info('Proxy upload request received', { 
       fileName: req.file?.originalname, 
       fileSize: req.file?.size, 
       sessionId: req.body.sessionId,
-      userId: req.user?.uid
+      userId: req.user?.uid,
+      contentType: req.headers['content-type']
     });
     
     if (!req.file) {
+      logger.warn('No file received in proxy upload', { body: req.body, files: req.files });
       return res.status(400).json({ error: 'No se recibió archivo' });
     }
 
@@ -287,23 +294,47 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     const sessionDoc = await sessionRef.get();
 
     if (!sessionDoc.exists) {
+      logger.warn('Upload session not found', { sessionId, userId: uid });
       return res.status(404).json({ error: 'Sesión de upload no encontrada' });
     }
 
     const sessionData = sessionDoc.data();
     if (sessionData.uid !== uid) {
+      logger.warn('Unauthorized upload attempt', { sessionId, sessionUid: sessionData.uid, requestUid: uid });
       return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    // Validar que la sesión esté en estado válido
+    if (sessionData.status !== 'pending' && sessionData.status !== 'uploaded') {
+      logger.warn('Upload session already processed', { sessionId, status: sessionData.status });
+      return res.status(400).json({ error: 'Sesión ya procesada' });
+    }
+
+    // Validar tamaño del archivo coincide con la sesión
+    if (req.file.size !== sessionData.size) {
+      logger.warn('File size mismatch', { 
+        sessionId, 
+        expectedSize: sessionData.size, 
+        actualSize: req.file.size 
+      });
+      // No rechazar, pero loguear la diferencia (puede haber pequeñas diferencias por encoding)
     }
 
     // Virus scan si es archivo sospechoso
     const cloudmersive = require('../services/cloudmersive');
     let virusScanResult = null;
 
-    if (cloudmersive.enabled && cloudmersive.isSuspiciousFile(sessionData.name, req.file.size, req.file.mimetype)) {
+    if (cloudmersive.enabled && cloudmersive.isSuspiciousFile(sessionData.name, req.file.size, sessionData.mime)) {
       logger.info('Scanning suspicious file for viruses', { fileName: sessionData.name });
       try {
         virusScanResult = await cloudmersive.scanVirus(req.file.buffer);
         if (!virusScanResult.clean) {
+          // Actualizar sesión como fallida
+          await sessionRef.update({
+            status: 'failed',
+            error: `Virus detectado: ${virusScanResult.virusName}`,
+            failedAt: new Date()
+          });
           return res.status(400).json({ 
             error: `Virus detectado: ${virusScanResult.virusName}`,
             code: 'VIRUS_DETECTED'
@@ -316,25 +347,33 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
       }
     }
 
-    // Conversión automática de imágenes (placeholder para futuro)
-    let fileToUpload = req.file.buffer;
-    let mimeToUpload = req.file.mimetype;
+    // Usar mime type de la sesión (más confiable que el del request)
+    const mimeToUpload = sessionData.mime || req.file.mimetype || 'application/octet-stream';
+    const fileToUpload = req.file.buffer;
 
-    if (cloudmersive.enabled && cloudmersive.needsAutoConversion(sessionData.name, req.file.size, req.file.mimetype)) {
-      logger.debug('Auto-conversion needed (not implemented)', { fileName: sessionData.name });
-    }
+    logger.debug('Uploading file to B2', {
+      bucketKey: sessionData.bucketKey,
+      fileName: sessionData.name,
+      fileSize: req.file.size,
+      mimeType: mimeToUpload
+    });
 
     // Subir archivo a B2 usando el backend
+    const uploadStartTime = Date.now();
     const uploadResult = await b2Service.uploadFileDirectly(
       sessionData.bucketKey,
       fileToUpload,
       mimeToUpload
     );
+    const uploadDuration = Date.now() - uploadStartTime;
 
     logger.info('File uploaded to B2 successfully', { 
       fileName: sessionData.name, 
-      fileId: uploadResult.fileId,
-      userId: req.user?.uid 
+      bucketKey: sessionData.bucketKey,
+      etag: uploadResult.etag,
+      userId: uid,
+      durationMs: uploadDuration,
+      fileSize: req.file.size
     });
 
     // Actualizar estado de la sesión
@@ -342,7 +381,8 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
       status: 'uploaded',
       uploadedAt: new Date(),
       etag: uploadResult.etag,
-      virusScan: virusScanResult
+      virusScan: virusScanResult,
+      actualFileSize: req.file.size // Guardar tamaño real por si hay diferencias
     });
 
     res.json({ 
@@ -352,8 +392,31 @@ router.post('/proxy-upload', multer({ storage: multer.memoryStorage() }).single(
     });
 
   } catch (error) {
-    logger.error('Error in proxy upload', { error: error.message, userId: req.user?.uid });
-    res.status(500).json({ error: 'Error interno del servidor' });
+    logger.error('Error in proxy upload', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.user?.uid,
+      sessionId: req.body.sessionId
+    });
+    
+    // Intentar actualizar la sesión como fallida si tenemos el sessionId
+    if (req.body.sessionId) {
+      try {
+        const sessionRef = admin.firestore().collection('uploadSessions').doc(req.body.sessionId);
+        await sessionRef.update({
+          status: 'failed',
+          error: error.message,
+          failedAt: new Date()
+        });
+      } catch (updateError) {
+        logger.error('Failed to update session status', { error: updateError.message });
+      }
+    }
+    
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
