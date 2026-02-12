@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
+const { parseVehicleEventsFromBody } = require("../services/vehicleEventParser");
+const { saveVehicleEvents, upsertVehicle } = require("../services/vehicleEventService");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -95,10 +97,42 @@ router.post("/email-local-ingest", async (req, res) => {
 
     console.log("✅ [EMAIL-LOCAL] Email guardado en Firestore con ID:", docId);
 
+    // --- Procesamiento de eventos de vehículos ---
+    const bodyText = body_text || "";
+    const events = parseVehicleEventsFromBody(bodyText);
+
+    const linesWithKmh = bodyText.split(/\r?\n/).filter((line) => /Km\/h/i.test(line)).length;
+    console.log("📊 [EMAIL-LOCAL] Líneas con Km/h detectadas:", linesWithKmh);
+    console.log("📊 [EMAIL-LOCAL] Eventos parseados:", events.length);
+
+    let eventsCreated = 0;
+    let vehiclesUpdated = 0;
+
+    if (events.length > 0) {
+      const { created, skipped } = await saveVehicleEvents(
+        events,
+        emailData.message_id,
+        "outlook-local"
+      );
+      eventsCreated = created;
+      console.log("📊 [EMAIL-LOCAL] vehicleEvents: creados:", created, "omitidos (duplicados):", skipped);
+
+      const updatedPlates = new Set();
+      for (const event of events) {
+        await upsertVehicle(event);
+        updatedPlates.add(event.plate);
+      }
+      vehiclesUpdated = updatedPlates.size;
+      console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
+    }
+
     return res.status(200).json({ 
       ok: true,
       message_id: emailData.message_id,
-      ingested_at: emailData.ingested_at
+      ingested_at: emailData.ingested_at,
+      vehicle_events: events.length,
+      vehicle_events_created: eventsCreated,
+      vehicles_updated: vehiclesUpdated
     });
 
   } catch (err) {
