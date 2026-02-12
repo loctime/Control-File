@@ -101,21 +101,24 @@ router.post("/email-local-ingest", async (req, res) => {
     const bodyText = body_text || "";
     const events = parseVehicleEventsFromBody(bodyText);
 
-    const linesWithKmh = bodyText.split(/\r?\n/).filter((line) => /Km\/h/i.test(line)).length;
-    console.log("📊 [EMAIL-LOCAL] Líneas con Km/h detectadas:", linesWithKmh);
-    console.log("📊 [EMAIL-LOCAL] Eventos parseados:", events.length);
+    const isDev = process.env.NODE_ENV !== "production";
+    if (isDev) {
+      const linesWithKmh = bodyText.split(/\r?\n/).filter((line) => /Km\/h/i.test(line)).length;
+      console.log("📊 [EMAIL-LOCAL] Líneas con Km/h detectadas:", linesWithKmh);
+      console.log("📊 [EMAIL-LOCAL] Eventos parseados:", events.length);
+    }
 
     let eventsCreated = 0;
     let vehiclesUpdated = 0;
 
     if (events.length > 0) {
-      const { created, skipped } = await saveVehicleEvents(
+      const { created } = await saveVehicleEvents(
         events,
         emailData.message_id,
         "outlook-local"
       );
       eventsCreated = created;
-      console.log("📊 [EMAIL-LOCAL] vehicleEvents: creados:", created, "omitidos (duplicados):", skipped);
+      if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created);
 
       const updatedPlates = new Set();
       for (const event of events) {
@@ -123,7 +126,7 @@ router.post("/email-local-ingest", async (req, res) => {
         updatedPlates.add(event.plate);
       }
       vehiclesUpdated = updatedPlates.size;
-      console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
+      if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
     }
 
     return res.status(200).json({ 
