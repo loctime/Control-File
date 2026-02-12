@@ -36,6 +36,7 @@ const storesRoutes = require('./routes/stores/sheets');
 const feedbackRoutes = require('./routes/feedback');
 const accountsRoutes = require('./routes/accounts');
 const horariosRoutes = require('./routes/horarios');
+const publicHorariosRoutes = require('./routes/publicHorarios.routes');
 const emailWebhookRoutes = require('./routes/emailWebhook');
 const emailReceptorRoutes = require('./routes/email-receptor');
 const { getCacheStats, clearCache } = require('./middleware/cache');
@@ -206,6 +207,8 @@ app.use('/api/stores', authMiddleware, storesRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
+// Público: GET /api/horarios/publicos-completos?companySlug=... (sin auth)
+app.use(publicHorariosRoutes);
 app.use('/api/horarios', horariosRoutes);
 app.use('/api', emailWebhookRoutes);
 app.use('/api', emailReceptorRoutes);

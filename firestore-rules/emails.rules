@@ -1,0 +1,3 @@
+match /apps/emails/{document=**} {
+  allow read: if true;
+}
