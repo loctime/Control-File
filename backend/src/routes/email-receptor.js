@@ -2,7 +2,14 @@ const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
 const { parseVehicleEventsFromBody } = require("../services/vehicleEventParser");
-const { saveVehicleEvents, upsertVehicle } = require("../services/vehicleEventService");
+const {
+  saveVehicleEvents,
+  upsertVehicle,
+  getVehicle,
+  upsertDailyAlert,
+  formatDateKey,
+  generateDeterministicEventId,
+} = require("../services/vehicleEventService");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -110,23 +117,54 @@ router.post("/email-local-ingest", async (req, res) => {
 
     let eventsCreated = 0;
     let vehiclesUpdated = 0;
+    let dailyAlertsUpdated = 0;
 
     if (events.length > 0) {
-      const { created } = await saveVehicleEvents(
-        events,
-        emailData.message_id,
-        "outlook-local"
-      );
-      eventsCreated = created;
-      if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created);
+      const dateKey = formatDateKey(new Date());
+      const validEvents = [];
+      const vehicleCache = new Map();
 
-      const updatedPlates = new Set();
       for (const event of events) {
-        await upsertVehicle(event);
-        updatedPlates.add(event.plate);
+        const plate = event.plate;
+        let vehicle = vehicleCache.get(plate);
+        if (!vehicle) {
+          vehicle = await getVehicle(plate);
+          vehicleCache.set(plate, vehicle);
+        }
+        if (!vehicle) {
+          if (isDev) console.log("⚠️ [EMAIL-LOCAL] Patente no registrada en vehicles, omitiendo:", plate);
+          continue;
+        }
+
+        event.eventId = generateDeterministicEventId(
+          event.plate,
+          event.eventTimestamp,
+          event.rawLine
+        );
+        validEvents.push(event);
       }
-      vehiclesUpdated = updatedPlates.size;
-      if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
+
+      if (validEvents.length > 0) {
+        const { created } = await saveVehicleEvents(
+          validEvents,
+          emailData.message_id,
+          "outlook-local"
+        );
+        eventsCreated = created;
+        if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created);
+
+        const updatedPlates = new Set();
+        for (const event of validEvents) {
+          await upsertVehicle(event);
+          const vehicle = vehicleCache.get(event.plate);
+          await upsertDailyAlert(dateKey, event.plate, vehicle, event);
+          updatedPlates.add(event.plate);
+        }
+        vehiclesUpdated = updatedPlates.size;
+        dailyAlertsUpdated = updatedPlates.size;
+        if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
+        if (isDev) console.log("📊 [EMAIL-LOCAL] dailyAlerts actualizados:", dailyAlertsUpdated);
+      }
     }
 
     return res.status(200).json({ 
@@ -135,7 +173,8 @@ router.post("/email-local-ingest", async (req, res) => {
       ingested_at: emailData.ingested_at,
       vehicle_events: events.length,
       vehicle_events_created: eventsCreated,
-      vehicles_updated: vehiclesUpdated
+      vehicles_updated: vehiclesUpdated,
+      daily_alerts_updated: dailyAlertsUpdated
     });
 
   } catch (err) {

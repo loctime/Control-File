@@ -23,6 +23,25 @@ function normalizePlate(plate) {
 }
 
 /**
+ * Obtiene el documento del vehículo si existe.
+ * @param {string} plate - Patente (normalizada o raw)
+ * @returns {Promise<object|null>} Datos del vehículo o null si no existe
+ */
+async function getVehicle(plate) {
+  if (!plate) return null;
+  const db = getDb();
+  const normalized = normalizePlate(plate);
+  const docSnap = await db
+    .collection("apps")
+    .doc("emails")
+    .collection("vehicles")
+    .doc(normalized)
+    .get();
+  if (!docSnap.exists) return null;
+  return { id: docSnap.id, ...docSnap.data() };
+}
+
+/**
  * Genera un eventId determinístico para deduplicación.
  * @param {string} plate - Patente del vehículo
  * @param {string} eventTimestamp - ISO timestamp del evento (con offset)
@@ -139,9 +158,73 @@ async function upsertVehicle(event) {
   }
 }
 
+/**
+ * Formatea fecha como YYYY-MM-DD.
+ */
+function formatDateKey(d) {
+  const date = d instanceof Date ? d : new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Crea o actualiza el documento diario en
+ * /apps/emails/dailyAlerts/{YYYY-MM-DD}/vehicles/{plate}
+ * @param {string} dateKey - Fecha en formato YYYY-MM-DD
+ * @param {string} plate - Patente normalizada
+ * @param {object} vehicle - Datos del vehículo (plate, brand, model, responsables)
+ * @param {object} event - Evento a agregar
+ */
+async function upsertDailyAlert(dateKey, plate, vehicle, event) {
+  const db = getDb();
+  const normalized = normalizePlate(plate);
+  const vehiclesRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("dailyAlerts")
+    .doc(dateKey)
+    .collection("vehicles")
+    .doc(normalized);
+
+  const docSnap = await vehiclesRef.get();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
+
+  const eventSummary = {
+    eventId: event.eventId,
+    speed: event.speed,
+    eventTimestamp: event.eventTimestamp,
+    location: event.location || "",
+    severity: event.severity || "info",
+  };
+
+  if (!docSnap.exists) {
+    await vehiclesRef.set({
+      plate: normalized,
+      brand: vehicle.brand || "",
+      model: vehicle.model || "",
+      responsables,
+      eventCount: 1,
+      events: [eventSummary],
+      alertSent: false,
+      createdAt: now,
+    });
+  } else {
+    await vehiclesRef.update({
+      eventCount: admin.firestore.FieldValue.increment(1),
+      events: admin.firestore.FieldValue.arrayUnion(eventSummary),
+    });
+  }
+}
+
 module.exports = {
   generateDeterministicEventId,
   saveVehicleEvents,
   upsertVehicle,
+  getVehicle,
+  upsertDailyAlert,
+  formatDateKey,
   normalizePlate,
 };
