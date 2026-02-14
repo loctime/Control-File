@@ -1,0 +1,5 @@
+/* ========= VALENTIN ========= */
+
+match /apps/valentin/respuestas/{docId} {
+  allow read, write: if true;
+}

@@ -17,6 +17,7 @@ const files = [
   'audit.rules',
   'repo.rules',
   'emails.rules',
+  'valentin.rules',
   'controlrepo.rules',
 
   // Horarios / Scheduler
