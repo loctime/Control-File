@@ -1,14 +1,19 @@
 const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
-const { parseVehicleEventsFromBody } = require("../services/vehicleEventParser");
+const {
+  parseVehicleEventsFromEmail,
+  detectEmailType,
+} = require("../services/vehicleEventParser");
 const {
   saveVehicleEvents,
   upsertVehicle,
   getVehicle,
+  createVehicleFromEvent,
   upsertDailyAlert,
   formatDateKey,
   generateDeterministicEventId,
+  isFromAllowedDomain,
 } = require("../services/vehicleEventService");
 
 if (!admin.apps.length) {
@@ -16,6 +21,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+let emailReceptorWarnedAutoCreateDomains = false;
 
 router.post("/email-local-ingest", async (req, res) => {
   try {
@@ -104,36 +110,94 @@ router.post("/email-local-ingest", async (req, res) => {
 
     console.log("✅ [EMAIL-LOCAL] Email guardado en Firestore con ID:", docId);
 
-    // --- Procesamiento de eventos de vehículos ---
+    // --- Parseo de eventos ---
     const bodyText = body_text || "";
-    const events = parseVehicleEventsFromBody(bodyText);
+    const { events: rawEvents, sourceEmailType } = parseVehicleEventsFromEmail(
+      emailData.subject || "",
+      bodyText
+    );
 
     const isDev = process.env.NODE_ENV !== "production";
     if (isDev) {
-      const linesWithKmh = bodyText.split(/\r?\n/).filter((line) => /Km\/h/i.test(line)).length;
-      console.log("📊 [EMAIL-LOCAL] Líneas con Km/h detectadas:", linesWithKmh);
-      console.log("📊 [EMAIL-LOCAL] Eventos parseados:", events.length);
+      console.log("📊 [EMAIL-LOCAL] Tipo detectado:", sourceEmailType);
+      console.log("📊 [EMAIL-LOCAL] Eventos parseados:", rawEvents.length);
+    }
+
+    // Si no se detectó tipo por subject, guardar en unclassifiedEmails para visibilidad
+    if (!sourceEmailType) {
+      const unclassifiedRef = db
+        .collection("apps")
+        .doc("emails")
+        .collection("unclassifiedEmails")
+        .doc(docId);
+      await unclassifiedRef.set({
+        subject: emailData.subject,
+        from: emailData.from,
+        preview: (bodyText || "").slice(0, 500),
+        receivedAt: emailData.received_at || new Date().toISOString(),
+        messageId: docId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (isDev) console.log("📋 [EMAIL-LOCAL] Email guardado en unclassifiedEmails");
     }
 
     let eventsCreated = 0;
     let vehiclesUpdated = 0;
     let dailyAlertsUpdated = 0;
+    let eventsSkipped = 0;
 
-    if (events.length > 0) {
+    const AUTO_CREATE = process.env.AUTO_CREATE_VEHICLES === "true";
+    const ALLOWED_DOMAINS = (process.env.AUTO_CREATE_ALLOWED_DOMAINS || "").trim();
+    const MAX_PER_EMAIL = parseInt(process.env.AUTO_CREATE_MAX_PER_EMAIL || "50", 10);
+
+    if (AUTO_CREATE && !ALLOWED_DOMAINS && !emailReceptorWarnedAutoCreateDomains) {
+      console.warn(
+        "⚠️ [EMAIL-LOCAL] AUTO_CREATE_VEHICLES está activo pero AUTO_CREATE_ALLOWED_DOMAINS está vacío. No se crearán vehículos automáticamente."
+      );
+      emailReceptorWarnedAutoCreateDomains = true;
+    }
+    let createdThisEmail = 0;
+
+    if (rawEvents.length > 0) {
       const dateKey = formatDateKey(new Date());
-      const validEvents = [];
       const vehicleCache = new Map();
+      const allEvents = [];
 
-      for (const event of events) {
+      for (const event of rawEvents) {
         const plate = event.plate;
+        if (!plate) continue;
+
         let vehicle = vehicleCache.get(plate);
         if (!vehicle) {
           vehicle = await getVehicle(plate);
           vehicleCache.set(plate, vehicle);
         }
+
         if (!vehicle) {
-          if (isDev) console.log("⚠️ [EMAIL-LOCAL] Patente no registrada en vehicles, omitiendo:", plate);
-          continue;
+          if (!AUTO_CREATE) {
+            event.vehicleRegistered = false;
+            eventsSkipped++;
+          } else {
+            const domainOk = isFromAllowedDomain(from, ALLOWED_DOMAINS);
+            const underLimit = createdThisEmail < MAX_PER_EMAIL;
+            if (domainOk && underLimit) {
+              vehicle = await createVehicleFromEvent(event);
+              if (vehicle) {
+                vehicleCache.set(plate, vehicle);
+                createdThisEmail++;
+                event.vehicleRegistered = true;
+              } else {
+                event.vehicleRegistered = false;
+                eventsSkipped++;
+              }
+            } else {
+              event.vehicleRegistered = false;
+              eventsSkipped++;
+              if (isDev && !domainOk) console.log("⚠️ [EMAIL-LOCAL] Dominio no permitido para auto-crear:", from);
+            }
+          }
+        } else {
+          event.vehicleRegistered = true;
         }
 
         event.eventId = generateDeterministicEventId(
@@ -141,40 +205,51 @@ router.post("/email-local-ingest", async (req, res) => {
           event.eventTimestamp,
           event.rawLine
         );
-        validEvents.push(event);
+        allEvents.push(event);
       }
 
-      if (validEvents.length > 0) {
-        const { created } = await saveVehicleEvents(
-          validEvents,
-          emailData.message_id,
-          "outlook-local"
-        );
-        eventsCreated = created;
-        if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created);
+      // Persistir TODOS los eventos (nunca descartar)
+      const { created } = await saveVehicleEvents(
+        allEvents,
+        emailData.message_id,
+        "outlook-local"
+      );
+      eventsCreated = created;
+      if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created, "(vehicleRegistered=false:", eventsSkipped + ")");
 
-        const updatedPlates = new Set();
-        for (const event of validEvents) {
-          await upsertVehicle(event);
-          const vehicle = vehicleCache.get(event.plate);
+      // IMPORTANTE:
+      // Los eventos con vehicleRegistered=false se guardan en vehicleEvents
+      // pero NO actualizan vehicles ni dailyAlerts.
+      // Si en el futuro se activa AUTO_CREATE_VEHICLES,
+      // estos eventos no se reprocesan automáticamente.
+      const registeredEvents = allEvents.filter((e) => e.vehicleRegistered === true);
+      const updatedPlates = new Set();
+      // TODO (optimización futura):
+      // Agrupar por plate y ejecutar un solo upsertVehicle y upsertDailyAlert por patente
+      // para mejorar performance cuando haya muchos eventos en un mismo email.
+      for (const event of registeredEvents) {
+        await upsertVehicle(event);
+        const vehicle = vehicleCache.get(event.plate);
+        if (vehicle) {
           await upsertDailyAlert(dateKey, event.plate, vehicle, event);
           updatedPlates.add(event.plate);
         }
-        vehiclesUpdated = updatedPlates.size;
-        dailyAlertsUpdated = updatedPlates.size;
-        if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
-        if (isDev) console.log("📊 [EMAIL-LOCAL] dailyAlerts actualizados:", dailyAlertsUpdated);
       }
+      vehiclesUpdated = updatedPlates.size;
+      dailyAlertsUpdated = updatedPlates.size;
+      if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
+      if (isDev) console.log("📊 [EMAIL-LOCAL] dailyAlerts actualizados:", dailyAlertsUpdated);
     }
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       ok: true,
       message_id: emailData.message_id,
       ingested_at: emailData.ingested_at,
-      vehicle_events: events.length,
+      vehicle_events: rawEvents.length,
       vehicle_events_created: eventsCreated,
+      vehicle_events_skipped: eventsSkipped,
       vehicles_updated: vehiclesUpdated,
-      daily_alerts_updated: dailyAlertsUpdated
+      daily_alerts_updated: dailyAlertsUpdated,
     });
 
   } catch (err) {

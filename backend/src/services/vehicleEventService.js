@@ -56,10 +56,11 @@ function generateDeterministicEventId(plate, eventTimestamp, rawLine) {
 /**
  * Guarda eventos en apps/emails/vehicleEvents usando batch writes.
  * Deduplicación automática por eventId determinístico.
- * @param {Array<object>} events - Array de eventos (del parser)
+ * Modelo: type, sourceEmailType, reason, vehicleRegistered, speed, eventTimestamp, etc.
+ * @param {Array<object>} events - Array de eventos (normalizados, con vehicleRegistered)
  * @param {string} messageId - ID del email
  * @param {string} source - Origen (ej: "outlook-local")
- * @returns {{ created: number, skipped: number }} created = escritos, skipped = 0 (batch sin lecturas)
+ * @returns {{ created: number, skipped: number }} created = escritos, skipped = 0
  */
 async function saveVehicleEvents(events, messageId, source) {
   if (!events || events.length === 0) return { created: 0, skipped: 0 };
@@ -72,20 +73,26 @@ async function saveVehicleEvents(events, messageId, source) {
   let opCount = 0;
 
   for (const event of events) {
-    const eventId = generateDeterministicEventId(
+    const eventId = event.eventId || generateDeterministicEventId(
       event.plate,
       event.eventTimestamp,
       event.rawLine
     );
 
-    const docRef = baseRef.doc(eventId);
-    currentBatch.set(docRef, {
+    const docData = {
       ...event,
+      type: event.type ?? (event.eventCategory === "exceso_velocidad" ? "exceso" : "exceso"),
+      sourceEmailType: event.sourceEmailType ?? "excesos_del_dia",
+      reason: event.reason ?? null,
+      vehicleRegistered: event.vehicleRegistered ?? true,
       messageId: messageId || null,
       source: source || "outlook-local",
       eventId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    const docRef = baseRef.doc(eventId);
+    currentBatch.set(docRef, docData);
     opCount++;
 
     if (opCount >= MAX_BATCH_SIZE) {
@@ -102,6 +109,42 @@ async function saveVehicleEvents(events, messageId, source) {
   }
 
   return { created: events.length, skipped: 0 };
+}
+
+/**
+ * Crea el documento del vehículo en apps/emails/vehicles/{plate} con datos mínimos del evento.
+ * @param {object} event - Evento parseado/normalizado
+ * @returns {object} Datos del vehículo creado
+ */
+async function createVehicleFromEvent(event) {
+  const db = getDb();
+  const rawPlate = event.plate;
+  if (!rawPlate) return null;
+
+  const plate = normalizePlate(rawPlate);
+  const docRef = db.collection("apps").doc("emails").collection("vehicles").doc(plate);
+  const docSnap = await docRef.get();
+  if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const hasValidBrand = event.brand && String(event.brand).trim().length > 0;
+  const hasValidModel = event.model && String(event.model).trim().length > 0;
+  const isSpeedingEvent = event.type === "exceso" || event.eventCategory === "exceso_velocidad";
+
+  await docRef.set({
+    plate,
+    brand: hasValidBrand ? event.brand.trim() : "",
+    model: hasValidModel ? event.model.trim() : "",
+    lastLocation: event.location || "",
+    lastSpeed: event.speed ?? null,
+    lastEventTimestamp: event.eventTimestamp || null,
+    totalEvents: 1,
+    totalSpeedingEvents: isSpeedingEvent ? 1 : 0,
+    updatedAt: now,
+    createdAt: now,
+  });
+
+  return { id: plate, plate, brand: event.brand || "", model: event.model || "" };
 }
 
 /**
@@ -122,7 +165,8 @@ async function upsertVehicle(event) {
 
   const hasValidBrand = event.brand && String(event.brand).trim().length > 0;
   const hasValidModel = event.model && String(event.model).trim().length > 0;
-  const isSpeedingEvent = event.eventCategory === "exceso_velocidad";
+  const isSpeedingEvent =
+    event.type === "exceso" || event.eventCategory === "exceso_velocidad";
 
   if (!docSnap.exists) {
     await docRef.set({
@@ -192,10 +236,13 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
 
+  const speedVal = event.speed;
   const eventSummary = {
     eventId: event.eventId,
-    speed: event.speed,
-    eventTimestamp: event.eventTimestamp,
+    type: event.type || "exceso",
+    speed: typeof speedVal === "number" ? speedVal : null,
+    hasSpeed: typeof speedVal === "number",
+    eventTimestamp: event.eventTimestamp || "",
     location: event.location || "",
     severity: event.severity || "info",
   };
@@ -219,12 +266,30 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   }
 }
 
+/**
+ * Verifica si el email from pertenece a dominios permitidos.
+ * @param {string} from - Campo from del email (ej: "alerta@pluspetrol.com")
+ * @param {string} allowedDomains - Dominios separados por coma (ej: "pluspetrol.com,otro.com")
+ * @returns {boolean}
+ */
+function isFromAllowedDomain(from, allowedDomains) {
+  if (!from || !allowedDomains) return false;
+  const email = String(from).trim().toLowerCase();
+  const match = email.match(/@([^@\s]+)/);
+  if (!match) return false;
+  const domain = match[1];
+  const domains = allowedDomains.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+  return domains.some((d) => domain === d || domain.endsWith("." + d));
+}
+
 module.exports = {
   generateDeterministicEventId,
   saveVehicleEvents,
   upsertVehicle,
   getVehicle,
+  createVehicleFromEvent,
   upsertDailyAlert,
   formatDateKey,
   normalizePlate,
+  isFromAllowedDomain,
 };

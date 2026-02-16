@@ -52,14 +52,18 @@ function buildSubject(doc, dateKey) {
 
 /**
  * Construye el cuerpo del email (HTML).
+ * Soporta eventSummary con estructura fija: hasSpeed, speed, type.
  */
 function buildBody(doc) {
   const { plate, brand, model, eventCount, events } = doc;
   const eventRows = (events || [])
-    .map(
-      (e) =>
-        `<tr><td>${e.speed} km/h</td><td>${e.eventTimestamp || "-"}</td><td>${e.location || "-"}</td><td>${e.severity || "info"}</td></tr>`
-    )
+    .map((e) => {
+      const hasSpeed = e.hasSpeed === true;
+      const speedCell = hasSpeed ? `${e.speed} km/h` : "-";
+      const typeLabel =
+        e.type === "no_identificado" ? "No identificado" : e.type === "contacto" ? "Contacto" : "Exceso";
+      return `<tr><td>${speedCell}</td><td>${e.eventTimestamp || "-"}</td><td>${e.location || "-"}</td><td>${typeLabel}</td><td>${e.severity || "info"}</td></tr>`;
+    })
     .join("");
 
   return `<!DOCTYPE html>
@@ -75,6 +79,7 @@ function buildBody(doc) {
         <th>Velocidad</th>
         <th>Fecha/Hora</th>
         <th>Ubicación</th>
+        <th>Tipo</th>
         <th>Severidad</th>
       </tr>
     </thead>

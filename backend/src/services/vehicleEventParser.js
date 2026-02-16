@@ -1,13 +1,26 @@
 /**
  * vehicleEventParser.js
  * Parsea líneas de telemetría de velocidad desde body_text de emails.
- * Formato esperado: "132 Km/h 04/02/26 19:27:54 AF-999-EF - RENAULT KANGOO ..."
+ * Soporta: Excesos del día, No identificados del día, Contacto sin identificación del día.
+ * Formato excesos: "132 Km/h 04/02/26 19:27:54 AF-999-EF - RENAULT KANGOO ..."
  */
 
 const DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires";
 const ARGENTINA_OFFSET = "-03:00";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+// Tipos de email reconocidos
+const EMAIL_TYPE_EXCESOS = "excesos";
+const EMAIL_TYPE_NO_IDENTIFICADOS = "no_identificados";
+const EMAIL_TYPE_CONTACTO = "contacto";
+
+// Patrones para detectar tipo de email por subject
+const SUBJECT_PATTERNS = {
+  excesos: /excesos?\s+(del\s+)?d[íi]a/i,
+  no_identificados: /no\s+identificados?\s+(del\s+)?d[íi]a/i,
+  contacto: /contacto\s+sin\s+identificaci[oó]n\s+(del\s+)?d[íi]a/i,
+};
 
 // Palabras clave que indican inicio de ubicación (case-insensitive)
 const LOCATION_KEYWORDS = [
@@ -70,6 +83,22 @@ function parseBrandModelLocation(rest) {
     locationStart >= 0 ? parts.slice(locationStart).join(" ").replace(/^\.\.\.|\.\.\.$/g, "").trim() : "";
 
   return { brand, model, location };
+}
+
+/**
+ * Detecta el tipo de email según subject (y opcionalmente body).
+ * @param {string} subject - Asunto del email
+ * @param {string} [bodyText] - Cuerpo en texto plano (opcional)
+ * @returns {string|null} "excesos" | "no_identificados" | "contacto" | null
+ */
+function detectEmailType(subject, bodyText) {
+  if (!subject || typeof subject !== "string") return null;
+  const s = subject.trim();
+  if (s.length === 0) return null;
+  if (SUBJECT_PATTERNS.excesos.test(s)) return EMAIL_TYPE_EXCESOS;
+  if (SUBJECT_PATTERNS.no_identificados.test(s)) return EMAIL_TYPE_NO_IDENTIFICADOS;
+  if (SUBJECT_PATTERNS.contacto.test(s)) return EMAIL_TYPE_CONTACTO;
+  return null;
 }
 
 /**
@@ -148,16 +177,25 @@ function parseLine(line) {
 
 /**
  * Parsea body_text y devuelve array de eventos listos para persistir.
- * Ignora líneas corruptas sin romper el flujo.
+ * Wrapper que llama a parseVehicleEventsFromEmail para compatibilidad.
  * @param {string} bodyText - Cuerpo del email en texto plano
+ * @param {string} [subject] - Asunto del email (opcional, para detectar tipo)
  * @returns {Array<object>} Array de objetos evento
  */
-function parseVehicleEventsFromBody(bodyText) {
-  if (!bodyText || typeof bodyText !== "string") return [];
+function parseVehicleEventsFromBody(bodyText, subject = "") {
+  const { events } = parseVehicleEventsFromEmail(subject, bodyText || "");
+  return events;
+}
 
+/**
+ * Parsea body_text para emails tipo "Excesos del día".
+ * @param {string} bodyText - Cuerpo del email en texto plano
+ * @returns {Array<object>} Eventos con type "exceso"
+ */
+function parseExcesos(bodyText) {
+  if (!bodyText || typeof bodyText !== "string") return [];
   const lines = bodyText.split(/\r?\n/);
   const events = [];
-
   for (const line of lines) {
     try {
       const event = parseLine(line);
@@ -166,12 +204,107 @@ function parseVehicleEventsFromBody(bodyText) {
       if (isDev) console.log("[VEHICLE-PARSER] Error parseando línea (ignorada):", err.message);
     }
   }
-
   return events;
+}
+
+/**
+ * Parsea body_text para emails tipo "No identificados del día".
+ * Stub: retorna [] hasta tener muestras reales.
+ * @param {string} bodyText - Cuerpo del email en texto plano
+ * @returns {Array<object>} Eventos con type "no_identificado"
+ */
+function parseNoIdentificados(bodyText) {
+  if (!bodyText || typeof bodyText !== "string") return [];
+  // TODO: Implementar cuando se tengan muestras reales
+  return [];
+}
+
+/**
+ * Parsea body_text para emails tipo "Contacto sin identificación del día".
+ * Stub: retorna [] hasta tener muestras reales.
+ * @param {string} bodyText - Cuerpo del email en texto plano
+ * @returns {Array<object>} Eventos con type "contacto"
+ */
+function parseContactoSinIdentificacion(bodyText) {
+  if (!bodyText || typeof bodyText !== "string") return [];
+  // TODO: Implementar cuando se tengan muestras reales
+  return [];
+}
+
+/**
+ * Mapea salida de cada parser al modelo unificado.
+ * @param {object} raw - Evento crudo del parser
+ * @param {string} sourceEmailType - "excesos_del_dia" | "no_identificados_del_dia" | "contacto_sin_identificacion"
+ * @returns {object} Evento normalizado
+ */
+function normalizarEvento(raw, sourceEmailType) {
+  const type = raw.type || (raw.eventCategory === "exceso_velocidad" ? "exceso" : "exceso");
+  return {
+    type,
+    sourceEmailType: sourceEmailType || "excesos_del_dia",
+    reason: raw.reason || null,
+    speed: raw.speed ?? null,
+    eventTimestamp: raw.eventTimestamp || null,
+    location: raw.location ?? null,
+    plate: raw.plate || "",
+    brand: raw.brand ?? "",
+    model: raw.model ?? "",
+    rawLine: raw.rawLine || "",
+    severity: raw.severity || "info",
+    timezone: raw.timezone || DEFAULT_TIMEZONE,
+    eventCategory: raw.eventCategory || "exceso_velocidad",
+    fecha: raw.fecha,
+    hora: raw.hora,
+    eventDate: raw.eventDate,
+    eventTime: raw.eventTime,
+  };
+}
+
+/**
+ * Orquesta el parseo según tipo de email detectado.
+ * @param {string} subject - Asunto del email
+ * @param {string} bodyText - Cuerpo en texto plano
+ * @returns {{ events: Array<object>, sourceEmailType: string|null }}
+ */
+function parseVehicleEventsFromEmail(subject, bodyText) {
+  const sourceEmailType = detectEmailType(subject, bodyText);
+  let rawEvents = [];
+
+  if (sourceEmailType === EMAIL_TYPE_EXCESOS) {
+    rawEvents = parseExcesos(bodyText);
+  } else if (sourceEmailType === EMAIL_TYPE_NO_IDENTIFICADOS) {
+    rawEvents = parseNoIdentificados(bodyText);
+  } else if (sourceEmailType === EMAIL_TYPE_CONTACTO) {
+    rawEvents = parseContactoSinIdentificacion(bodyText);
+  } else {
+    // Fallback: intentar parseExcesos para compatibilidad
+    rawEvents = parseExcesos(bodyText);
+  }
+
+  const sourceEmailTypeKey =
+    sourceEmailType === EMAIL_TYPE_EXCESOS
+      ? "excesos_del_dia"
+      : sourceEmailType === EMAIL_TYPE_NO_IDENTIFICADOS
+        ? "no_identificados_del_dia"
+        : sourceEmailType === EMAIL_TYPE_CONTACTO
+          ? "contacto_sin_identificacion"
+          : "excesos_del_dia";
+
+  const events = rawEvents.map((raw) => normalizarEvento(raw, sourceEmailTypeKey));
+  return { events, sourceEmailType };
 }
 
 module.exports = {
   parseLine,
   parseVehicleEventsFromBody,
+  parseExcesos,
+  parseNoIdentificados,
+  parseContactoSinIdentificacion,
+  parseVehicleEventsFromEmail,
+  normalizarEvento,
+  detectEmailType,
   DEFAULT_TIMEZONE,
+  EMAIL_TYPE_EXCESOS,
+  EMAIL_TYPE_NO_IDENTIFICADOS,
+  EMAIL_TYPE_CONTACTO,
 };
