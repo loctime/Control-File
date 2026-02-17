@@ -9,7 +9,7 @@
 const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
-const { formatDateKey } = require("../services/vehicleEventService");
+const { formatDateKey, getVehicle } = require("../services/vehicleEventService");
 const { logger } = require("../utils/logger");
 
 if (!admin.apps.length) {
@@ -140,21 +140,26 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     const dateKey = formatDateKey(new Date());
     const docs = await getPendingAlerts(dateKey);
 
-    const alerts = docs.map((doc) => {
-      const plate = doc.plate || doc.id;
-      const alertId = `${dateKey}_${plate}`;
-      const responsables = Array.isArray(doc.responsables)
-        ? doc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-        : [];
+    const alerts = await Promise.all(
+      docs.map(async (doc) => {
+        const plate = doc.plate || doc.id;
+        const alertId = `${dateKey}_${plate}`;
+        
+        // Obtener responsables desde el vehículo
+        const vehicle = await getVehicle(plate);
+        const responsables = Array.isArray(vehicle?.responsables)
+          ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+          : [];
 
-      return {
-        alertId,
-        plate,
-        responsables,
-        subject: buildSubject(doc, dateKey),
-        body: buildBody(doc),
-      };
-    });
+        return {
+          alertId,
+          plate,
+          responsables,
+          subject: buildSubject(doc, dateKey),
+          body: buildBody(doc),
+        };
+      })
+    );
 
     return res.status(200).json({ ok: true, alerts });
   } catch (err) {
