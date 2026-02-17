@@ -47,7 +47,28 @@ async function getPendingAlerts(dateKey) {
  * Construye el asunto del email.
  */
 function buildSubject(doc, dateKey) {
-  return `[ControlFile] Alertas vehículo ${doc.plate} - ${dateKey}`;
+  return `🚗 ${doc.plate} – Alertas del ${dateKey}`;
+}
+
+/**
+ * Formatea fecha/hora en formato argentino.
+ */
+function formatDateTimeArgentina(timestamp) {
+  if (!timestamp) return "-";
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleString("es-AR", {
+      day: "2-digit",
+      month: "2-digit", 
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).replace(/,/g, "");
+  } catch {
+    return "-";
+  }
 }
 
 /**
@@ -56,38 +77,135 @@ function buildSubject(doc, dateKey) {
  */
 function buildBody(doc) {
   const { plate, brand, model, eventCount, events } = doc;
-  const eventRows = (events || [])
-    .map((e) => {
-      const hasSpeed = e.hasSpeed === true;
-      const speedCell = hasSpeed ? `${e.speed} km/h` : "-";
-      const typeLabel =
-        e.type === "no_identificado" ? "No identificado" : e.type === "contacto" ? "Contacto" : "Exceso";
-      return `<tr><td>${speedCell}</td><td>${e.eventTimestamp || "-"}</td><td>${e.location || "-"}</td><td>${typeLabel}</td><td>${e.severity || "info"}</td></tr>`;
-    })
-    .join("");
-
+  
+  // Ordenar eventos por fecha descendente (más recientes primero)
+  const sortedEvents = (events || [])
+    .filter(e => e && e.eventTimestamp)
+    .sort((a, b) => {
+      const dateA = new Date(a.eventTimestamp || 0);
+      const dateB = new Date(b.eventTimestamp || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+  
+  // Calcular conteo por severidad
+  const severityCount = {
+    critico: 0,
+    advertencia: 0, 
+    info: 0
+  };
+  
+  sortedEvents.forEach(e => {
+    const severity = e.severity || "info";
+    if (severityCount.hasOwnProperty(severity)) {
+      severityCount[severity]++;
+    }
+  });
+  
+  // Determinar si hay críticos
+  const hasCritical = severityCount.critico > 0;
+  
+  // Generar filas de eventos
+  const eventRows = sortedEvents.map((e) => {
+    const hasSpeed = e.hasSpeed === true;
+    const speedValue = typeof e.speed === "number" ? e.speed : null;
+    const speedCell = hasSpeed && speedValue !== null ? `${speedValue} km/h` : "-";
+    
+    // Estilo para velocidad alta
+    const speedStyle = hasSpeed && speedValue >= 120 
+      ? "color: #d32f2f; font-weight: bold;" 
+      : "";
+    
+    // Estilo por severidad
+    let severityStyle = "color: #666;";
+    let typeLabel = e.type === "no_identificado" ? "No identificado" : 
+                    e.type === "contacto" ? "Contacto" : "Exceso";
+    
+    if (e.severity === "critico") {
+      severityStyle = "color: #d32f2f; font-weight: bold;";
+    } else if (e.severity === "advertencia") {
+      severityStyle = "color: #f57c00; font-weight: bold;";
+    }
+    
+    return `<tr>
+      <td style="${speedStyle}">${speedCell}</td>
+      <td>${formatDateTimeArgentina(e.eventTimestamp)}</td>
+      <td>${e.location || "-"}</td>
+      <td>${typeLabel}</td>
+      <td style="${severityStyle}">${e.severity || "info"}</td>
+    </tr>`;
+  }).join("");
+  
+  // Banner de críticos
+  const criticalBanner = hasCritical 
+    ? `<div style="background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
+        <strong style="color: #d32f2f;">⚠️ Se detectaron eventos críticos.</strong>
+      </div>`
+    : "";
+  
+  // Resumen visual
+  const summarySection = `<div style="margin-bottom: 20px; padding: 16px; background-color: #f8f9fa; border-radius: 4px;">
+    <div style="font-size: 16px; margin-bottom: 8px;">
+      <span style="color: #d32f2f; font-weight: bold;">🔴 Críticos: ${severityCount.critico}</span>
+      <span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 Advertencias: ${severityCount.advertencia}</span>
+      <span style="margin-left: 20px; color: #666;">⚪ Informativos: ${severityCount.info}</span>
+    </div>
+  </div>`;
+  
+  // Fecha actual para footer
+  const today = new Date().toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+  
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Alertas de vehículo ${plate}</title></head>
-<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-  <h2>🚗 Alertas diarias - ${plate}</h2>
-  <p><strong>Vehículo:</strong> ${brand || "-"} ${model || "-"}</p>
-  <p><strong>Total de eventos:</strong> ${eventCount || 0}</p>
-  <table border="1" cellpadding="8" cellspacing="0" style="width:100%; border-collapse: collapse;">
+<head>
+  <meta charset="utf-8">
+  <title>Alertas de vehículo ${plate}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+  
+  <!-- Cabecera profesional -->
+  <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+    <h1 style="margin: 0; font-size: 24px; color: #333; font-weight: 600;">🚗 ${plate}</h1>
+    <p style="margin: 8px 0 0 0; font-size: 16px; color: #666;">Alertas del día</p>
+    <p style="margin: 4px 0 0 0; font-size: 14px; color: #999;">
+      ${brand || "-"} ${model || "-"}
+    </p>
+  </div>
+  
+  <!-- Total de eventos destacado -->
+  <div style="background-color: #e3f2fd; padding: 12px; border-radius: 4px; margin-bottom: 20px; text-align: center;">
+    <strong style="font-size: 18px; color: #1976d2;">Total de eventos: ${eventCount || 0}</strong>
+  </div>
+  
+  ${criticalBanner}
+  ${summarySection}
+  
+  <!-- Tabla moderna -->
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
     <thead>
-      <tr style="background: #f0f0f0;">
-        <th>Velocidad</th>
-        <th>Fecha/Hora</th>
-        <th>Ubicación</th>
-        <th>Tipo</th>
-        <th>Severidad</th>
+      <tr style="background-color: #f5f5f5;">
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Velocidad</th>
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Fecha/Hora</th>
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Ubicación</th>
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Tipo</th>
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Severidad</th>
       </tr>
     </thead>
-    <tbody>${eventRows}</tbody>
+    <tbody>
+      ${eventRows}
+    </tbody>
   </table>
-  <p style="margin-top: 20px; color: #666; font-size: 12px;">
-    Este es un resumen automático del día ${new Date().toLocaleDateString("es-AR")}.
-  </p>
+  
+  <!-- Footer -->
+  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+    <p style="margin: 0; color: #666; font-size: 12px;">
+      Resumen automático generado el ${today}
+    </p>
+  </div>
+  
 </body>
 </html>`.trim();
 }
