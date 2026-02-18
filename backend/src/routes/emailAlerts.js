@@ -28,6 +28,19 @@ function validateLocalToken(req) {
 }
 
 /**
+ * Parsea y valida ?date=YYYY-MM-DD. Retorna el string dateKey o null si es inválido.
+ */
+function parseDateQuery(queryDate) {
+  if (!queryDate || typeof queryDate !== "string") return null;
+  const trimmed = queryDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const [y, m, d] = trimmed.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime()) || date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return trimmed;
+}
+
+/**
  * Obtiene alertas pendientes (alertSent === false) para una fecha.
  */
 async function getPendingAlerts(dateKey) {
@@ -48,7 +61,7 @@ async function getPendingAlerts(dateKey) {
  * Si hay eventos críticos, destaca cantidad en el asunto.
  */
 function buildSubject(doc, dateKey) {
-  const criticos = (doc.events || []).filter(e => e.severity === "critico").length;
+  const criticos = (doc.events || []).filter(e => e && e.severity === "critico").length;
   return criticos > 0
     ? `🚨 ${doc.plate} – ${criticos} evento(s) crítico(s) – ${dateKey}`
     : `🚗 ${doc.plate} – Alertas del ${dateKey}`;
@@ -263,8 +276,9 @@ async function markAlertAsSent(dateKey, plate) {
  * GET /email/get-pending-daily-alerts
  *
  * Requiere: x-local-token
- * Usa fecha actual (YYYY-MM-DD).
- * Devuelve alertas con alertSent === false.
+ * Query opcional: ?date=YYYY-MM-DD (si no se pasa, usa hoy).
+ * Devuelve alertas con alertSent === false para esa fecha.
+ * Útil para recuperar alertas de días en que no se ejecutó el script.
  */
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
   try {
@@ -273,7 +287,8 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const dateKey = formatDateKey(new Date());
+    // Si viene ?date=YYYY-MM-DD, usarlo; si no, fecha de hoy (permite recuperar alertas de días no ejecutados)
+    const dateKey = parseDateQuery(req.query.date) || formatDateKey(new Date());
     const docs = await getPendingAlerts(dateKey);
 
     const alerts = await Promise.all(
