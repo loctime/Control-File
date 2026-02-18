@@ -189,46 +189,207 @@ function parseVehicleEventsFromBody(bodyText, subject = "") {
 
 /**
  * Parsea body_text para emails tipo "Excesos del día".
+ * Clasificación: exceso, sin_llave, llave_no_registrada, conductor_inactivo.
  * @param {string} bodyText - Cuerpo del email en texto plano
- * @returns {Array<object>} Eventos con type "exceso"
+ * @returns {Array<object>} Eventos con type y severity según contenido
  */
 function parseExcesos(bodyText) {
   if (!bodyText || typeof bodyText !== "string") return [];
+
   const lines = bodyText.split(/\r?\n/);
   const events = [];
+
   for (const line of lines) {
-    try {
-      const event = parseLine(line);
-      if (event) events.push(event);
-    } catch (err) {
-      if (isDev) console.log("[VEHICLE-PARSER] Error parseando línea (ignorada):", err.message);
+    const trimmed = line.trim();
+    if (!trimmed.toLowerCase().includes("km/h")) continue;
+
+    const regex =
+      /(\d+)\s+km\/h\s+(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([A-Z0-9\-\s]+?)\s+-\s+(.+)/i;
+
+    const match = trimmed.match(regex);
+    if (!match) continue;
+
+    const [, speedStr, fechaStr, horaStr, plateRaw, rest] = match;
+
+    const speed = parseInt(speedStr, 10);
+    const [dd, mm, yy] = fechaStr.split("/");
+    const fullYear = 2000 + parseInt(yy, 10);
+
+    const eventTimestamp = formatLocalTimestamp(
+      fullYear,
+      parseInt(mm, 10),
+      parseInt(dd, 10),
+      ...horaStr.split(":").map(n => parseInt(n, 10))
+    );
+
+    const plate = plateRaw.replace(/\s+/g, "").toUpperCase();
+    const { brand, model, location } = parseBrandModelLocation(rest);
+
+    // ---- CLASIFICACIÓN INTELIGENTE ----
+    let type = "exceso";
+    let severity = "info";
+    let reason = null;
+
+    if (/\(sin llave\)/i.test(rest)) {
+      type = "sin_llave";
+      severity = "critico";
+      reason = "SIN_LLAVE";
+    } else if (/\(llave sin cargar/i.test(rest)) {
+      type = "llave_no_registrada";
+      severity = "advertencia";
+      reason = "LLAVE_NO_REGISTRADA";
+    } else if (/\(conductor inactivo/i.test(rest)) {
+      type = "conductor_inactivo";
+      severity = "advertencia";
+      reason = "CONDUCTOR_INACTIVO";
     }
+
+    // Si sigue siendo exceso normal, severidad por velocidad
+    if (type === "exceso") {
+      if (speed >= 130) severity = "critico";
+      else if (speed >= 110) severity = "advertencia";
+    }
+
+    events.push({
+      type,
+      eventCategory: "exceso_velocidad",
+      speed,
+      hasSpeed: true,
+      plate,
+      brand,
+      model,
+      location,
+      eventTimestamp,
+      severity,
+      rawLine: trimmed,
+      reason
+    });
   }
+
   return events;
 }
 
 /**
  * Parsea body_text para emails tipo "No identificados del día".
- * Stub: retorna [] hasta tener muestras reales.
+ * Clasificación por razón: no_identificado, llave_no_registrada, conductor_inactivo.
  * @param {string} bodyText - Cuerpo del email en texto plano
- * @returns {Array<object>} Eventos con type "no_identificado"
+ * @returns {Array<object>} Eventos con type y severity según razón
  */
 function parseNoIdentificados(bodyText) {
   if (!bodyText || typeof bodyText !== "string") return [];
-  // TODO: Implementar cuando se tengan muestras reales
-  return [];
+
+  const lines = bodyText.split(/\r?\n/);
+  const events = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.match(/\d{2}\/\d{2}\/\d{2}/)) continue;
+
+    const regex =
+      /(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([A-Z0-9\-]+)\s+-\s+(.+)\((.+)\)/i;
+
+    const match = trimmed.match(regex);
+    if (!match) continue;
+
+    const [, fechaStr, horaStr, plateRaw, brandModel, reasonRaw] = match;
+
+    const [dd, mm, yy] = fechaStr.split("/");
+    const fullYear = 2000 + parseInt(yy, 10);
+
+    const eventTimestamp = formatLocalTimestamp(
+      fullYear,
+      parseInt(mm, 10),
+      parseInt(dd, 10),
+      ...horaStr.split(":").map(n => parseInt(n, 10))
+    );
+
+    const plate = plateRaw.trim().toUpperCase();
+    const parts = brandModel.trim().split(" ");
+    const brand = parts[0] || "";
+    const model = parts.slice(1).join(" ");
+
+    const reason = reasonRaw.trim();
+
+    let type = "no_identificado";
+    let severity = "critico";
+
+    if (/llave sin cargar/i.test(reason)) {
+      type = "llave_no_registrada";
+      severity = "advertencia";
+    } else if (/conductor inactivo/i.test(reason)) {
+      type = "conductor_inactivo";
+      severity = "advertencia";
+    }
+
+    events.push({
+      type,
+      eventCategory: "no_identificado",
+      speed: null,
+      hasSpeed: false,
+      plate,
+      brand,
+      model,
+      location: "",
+      eventTimestamp,
+      severity,
+      rawLine: trimmed,
+      reason
+    });
+  }
+
+  return events;
 }
 
 /**
  * Parsea body_text para emails tipo "Contacto sin identificación del día".
- * Stub: retorna [] hasta tener muestras reales.
  * @param {string} bodyText - Cuerpo del email en texto plano
  * @returns {Array<object>} Eventos con type "contacto"
  */
 function parseContactoSinIdentificacion(bodyText) {
   if (!bodyText || typeof bodyText !== "string") return [];
-  // TODO: Implementar cuando se tengan muestras reales
-  return [];
+
+  const lines = bodyText.split(/\r?\n/);
+  const events = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.match(/\d{2}-\d{2}-\d{4}/)) continue;
+
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 4) continue;
+
+    const brand = parts[0];
+    const model = parts[1];
+    const plate = parts[2];
+    const fechaHora = parts.slice(3).join(" ");
+
+    const [datePart, timePart] = fechaHora.split(" ");
+    const [dd, mm, yyyy] = datePart.split("-");
+
+    const eventTimestamp = formatLocalTimestamp(
+      parseInt(yyyy, 10),
+      parseInt(mm, 10),
+      parseInt(dd, 10),
+      ...timePart.split(":").map(n => parseInt(n, 10))
+    );
+
+    events.push({
+      type: "contacto",
+      eventCategory: "contacto",
+      speed: null,
+      hasSpeed: false,
+      plate: plate.toUpperCase(),
+      brand,
+      model,
+      location: "",
+      eventTimestamp,
+      severity: "advertencia",
+      rawLine: trimmed,
+      reason: "CONTACTO_SIN_IDENTIFICACION"
+    });
+  }
+
+  return events;
 }
 
 /**
@@ -238,7 +399,7 @@ function parseContactoSinIdentificacion(bodyText) {
  * @returns {object} Evento normalizado
  */
 function normalizarEvento(raw, sourceEmailType) {
-  const type = raw.type || (raw.eventCategory === "exceso_velocidad" ? "exceso" : "exceso");
+  const type = raw.type || "info";
   return {
     type,
     sourceEmailType: sourceEmailType || "excesos_del_dia",
