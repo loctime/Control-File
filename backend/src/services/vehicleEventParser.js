@@ -399,25 +399,25 @@ function parseContactoSinIdentificacion(bodyText) {
  * @returns {object} Evento normalizado
  */
 function normalizarEvento(raw, sourceEmailType) {
-  const type = raw.type || "info";
   return {
-    type,
-    sourceEmailType: sourceEmailType || "excesos_del_dia",
-    reason: raw.reason || null,
+    type: raw.type ?? "info",
+    sourceEmailType: sourceEmailType ?? "excesos_del_dia",
+    reason: raw.reason ?? null,
     speed: raw.speed ?? null,
-    eventTimestamp: raw.eventTimestamp || null,
+    hasSpeed: raw.hasSpeed ?? false,
+    eventTimestamp: raw.eventTimestamp ?? null,
     location: raw.location ?? null,
-    plate: raw.plate || "",
+    plate: raw.plate ?? "",
     brand: raw.brand ?? "",
     model: raw.model ?? "",
-    rawLine: raw.rawLine || "",
-    severity: raw.severity || "info",
-    timezone: raw.timezone || DEFAULT_TIMEZONE,
-    eventCategory: raw.eventCategory || "exceso_velocidad",
-    fecha: raw.fecha,
-    hora: raw.hora,
-    eventDate: raw.eventDate,
-    eventTime: raw.eventTime,
+    rawLine: raw.rawLine ?? "",
+    severity: raw.severity ?? "info",
+    timezone: raw.timezone ?? DEFAULT_TIMEZONE,
+    eventCategory: raw.eventCategory ?? "exceso_velocidad",
+    fecha: raw.fecha ?? null,
+    hora: raw.hora ?? null,
+    eventDate: raw.eventDate ?? null,
+    eventTime: raw.eventTime ?? null,
   };
 }
 
