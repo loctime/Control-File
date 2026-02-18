@@ -45,9 +45,13 @@ async function getPendingAlerts(dateKey) {
 
 /**
  * Construye el asunto del email.
+ * Si hay eventos críticos, destaca cantidad en el asunto.
  */
 function buildSubject(doc, dateKey) {
-  return `🚗 ${doc.plate} – Alertas del ${dateKey}`;
+  const criticos = (doc.events || []).filter(e => e.severity === "critico").length;
+  return criticos > 0
+    ? `🚨 ${doc.plate} – ${criticos} evento(s) crítico(s) – ${dateKey}`
+    : `🚗 ${doc.plate} – Alertas del ${dateKey}`;
 }
 
 /**
@@ -60,7 +64,7 @@ function formatDateTimeArgentina(timestamp) {
     if (isNaN(date.getTime())) return "-";
     return date.toLocaleString("es-AR", {
       day: "2-digit",
-      month: "2-digit", 
+      month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
@@ -72,82 +76,97 @@ function formatDateTimeArgentina(timestamp) {
 }
 
 /**
+ * Mapea type del evento a etiqueta legible para el email.
+ */
+function getTypeLabel(e) {
+  switch (e.type) {
+    case "sin_llave":
+      return "SIN LLAVE";
+    case "llave_no_registrada":
+      return "Llave no registrada";
+    case "conductor_inactivo":
+      return "Conductor inactivo";
+    case "no_identificado":
+      return "No identificado";
+    case "contacto":
+      return "Contacto sin identificación";
+    default:
+      return "Exceso de velocidad";
+  }
+}
+
+/**
+ * Mapea severidad a color para jerarquía visual en el email.
+ */
+function getSeverityColor(e) {
+  switch (e.severity) {
+    case "critico":
+      return "#d32f2f"; // rojo
+    case "advertencia":
+      return "#f57c00"; // naranja
+    default:
+      return "#1976d2"; // azul
+  }
+}
+
+/**
  * Construye el cuerpo del email (HTML).
  * Soporta eventSummary con estructura fija: hasSpeed, speed, type.
  */
 function buildBody(doc) {
   const { plate, brand, model, eventCount, events } = doc;
-  
-  // Ordenar eventos por fecha descendente (más recientes primero)
+
+  if (!Array.isArray(events) || events.length === 0) {
+    return `<p>No se encontraron eventos.</p>`;
+  }
+
+  // Ordenar eventos por fecha (más recientes primero)
   const sortedEvents = (events || [])
     .filter(e => e && e.eventTimestamp)
-    .sort((a, b) => {
-      const dateA = new Date(a.eventTimestamp || 0);
-      const dateB = new Date(b.eventTimestamp || 0);
-      return dateB.getTime() - dateA.getTime();
-    });
-  
-  // Calcular conteo por severidad
-  const severityCount = {
-    critico: 0,
-    advertencia: 0, 
-    info: 0
+    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
+
+  // Resumen por severidad (críticos y advertencias)
+  const resumen = {
+    critico: sortedEvents.filter(e => e.severity === "critico").length,
+    advertencia: sortedEvents.filter(e => e.severity === "advertencia").length,
   };
-  
-  sortedEvents.forEach(e => {
-    const severity = e.severity || "info";
-    if (severityCount.hasOwnProperty(severity)) {
-      severityCount[severity]++;
-    }
-  });
-  
-  // Determinar si hay críticos
-  const hasCritical = severityCount.critico > 0;
-  
-  // Generar filas de eventos
-  const eventRows = sortedEvents.map((e) => {
-    const hasSpeed = e.hasSpeed === true;
-    const speedValue = typeof e.speed === "number" ? e.speed : null;
-    const speedCell = hasSpeed && speedValue !== null ? `${speedValue} km/h` : "-";
-    
-    // Estilo para velocidad alta
-    const speedStyle = hasSpeed && speedValue >= 120 
-      ? "color: #d32f2f; font-weight: bold;" 
-      : "";
-    
-    // Estilo por severidad
-    let severityStyle = "color: #666;";
-    let typeLabel = e.type === "no_identificado" ? "No identificado" : 
-                    e.type === "contacto" ? "Contacto" : "Exceso";
-    
-    if (e.severity === "critico") {
-      severityStyle = "color: #d32f2f; font-weight: bold;";
-    } else if (e.severity === "advertencia") {
-      severityStyle = "color: #f57c00; font-weight: bold;";
-    }
-    
-    return `<tr>
-      <td style="${speedStyle}">${speedCell}</td>
-      <td>${formatDateTimeArgentina(e.eventTimestamp)}</td>
-      <td>${e.location || "-"}</td>
-      <td>${typeLabel}</td>
-      <td style="${severityStyle}">${e.severity || "info"}</td>
-    </tr>`;
+
+  // Filas HTML: tipo (con color), velocidad, fecha/hora, ubicación
+  const rowsHtml = sortedEvents.map((e) => {
+    const color = getSeverityColor(e);
+    const typeLabel = getTypeLabel(e);
+    return `
+    <tr>
+      <td style="padding:8px; font-weight:bold; color:${color};">
+        ${typeLabel}
+      </td>
+      <td style="padding:8px;">
+        ${e.speed != null ? e.speed + " km/h" : "-"}
+      </td>
+      <td style="padding:8px;">
+        ${formatDateTimeArgentina(e.eventTimestamp)}
+      </td>
+      <td style="padding:8px;">
+        ${e.location || "Sin ubicación"}
+      </td>
+    </tr>
+  `;
   }).join("");
-  
+
+  const hasCritical = resumen.critico > 0;
+
   // Banner de críticos
-  const criticalBanner = hasCritical 
+  const criticalBanner = hasCritical
     ? `<div style="background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
         <strong style="color: #d32f2f;">⚠️ Se detectaron eventos críticos.</strong>
       </div>`
     : "";
-  
-  // Resumen visual
+
+  // Resumen automático: críticos y advertencias
   const summarySection = `<div style="margin-bottom: 20px; padding: 16px; background-color: #f8f9fa; border-radius: 4px;">
-    <div style="font-size: 16px; margin-bottom: 8px;">
-      <span style="color: #d32f2f; font-weight: bold;">🔴 Críticos: ${severityCount.critico}</span>
-      <span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 Advertencias: ${severityCount.advertencia}</span>
-      <span style="margin-left: 20px; color: #666;">⚪ Informativos: ${severityCount.info}</span>
+    <div style="font-size: 16px;">
+      <span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>
+      <span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 ${resumen.advertencia} advertencias</span>
     </div>
   </div>`;
   
@@ -183,19 +202,18 @@ function buildBody(doc) {
   ${criticalBanner}
   ${summarySection}
   
-  <!-- Tabla moderna -->
+  <!-- Tabla con jerarquía visual por tipo y severidad -->
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
     <thead>
       <tr style="background-color: #f5f5f5;">
+        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Tipo</th>
         <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Velocidad</th>
         <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Fecha/Hora</th>
         <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Ubicación</th>
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Tipo</th>
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Severidad</th>
       </tr>
     </thead>
     <tbody>
-      ${eventRows}
+      ${rowsHtml}
     </tbody>
   </table>
   
