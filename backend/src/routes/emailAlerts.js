@@ -211,10 +211,19 @@ function buildBody(doc) {
   // Filas HTML: tipo (con color), velocidad, fecha/hora, ubicación
   const rowsHtml = sortedEvents.map((e) => {
     const color = getSeverityColor(e);
-    // Priorizar reason (texto original del proveedor) sobre type label
-    const typeLabel = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0
-      ? e.reason
-      : getTypeLabel(e);
+    
+    // Construir typeLabel: si hay reason Y speed, mostrar ambos
+    let typeLabel = "";
+    if (e.reason && typeof e.reason === "string" && e.reason.trim().length > 0) {
+      typeLabel = e.reason;
+      // Si además tiene velocidad, indicar que también es exceso
+      if (e.speed != null && e.hasSpeed) {
+        typeLabel += ` - Exceso de velocidad`;
+      }
+    } else {
+      typeLabel = getTypeLabel(e);
+    }
+    
     return `
     <tr>
       <td style="padding:8px; font-weight:bold; color:${color};">

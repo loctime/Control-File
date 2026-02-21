@@ -223,19 +223,22 @@ function parseExcesos(bodyText) {
     );
 
     const plate = plateRaw.replace(/\s+/g, "").toUpperCase();
-    const { brand, model, location } = parseBrandModelLocation(rest);
-
-    // ---- CLASIFICACIÓN INTELIGENTE ----
-    let type = "exceso";
-    let severity = "info";
+    
+    // Extraer reason ANTES de parsear ubicación para que la ubicación no incluya el texto del paréntesis
     let reason = null;
-
-    // Extraer texto EXACTO entre paréntesis del rest como reason (texto original del proveedor)
-    // Captura el primer paréntesis completo, incluyendo contenido con dos puntos, espacios, etc.
     const reasonMatch = rest.match(/\(([^)]+)\)/);
     if (reasonMatch && reasonMatch[1]) {
       reason = reasonMatch[1].trim();
     }
+    
+    // Remover el paréntesis del rest para parsear ubicación limpia
+    const restForLocation = rest.replace(/\([^)]+\)/, "").trim();
+    const { brand, model, location } = parseBrandModelLocation(restForLocation);
+
+    // ---- CLASIFICACIÓN INTELIGENTE ----
+    // Usar rest original (con paréntesis) para la clasificación
+    let type = "exceso";
+    let severity = "info";
 
     // Clasificación interna por type (no modifica reason)
     if (/\(sin llave\)/i.test(rest)) {
