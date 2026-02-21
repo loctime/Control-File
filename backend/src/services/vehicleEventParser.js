@@ -230,18 +230,23 @@ function parseExcesos(bodyText) {
     let severity = "info";
     let reason = null;
 
+    // Extraer texto EXACTO entre paréntesis del rest como reason (texto original del proveedor)
+    // Captura el primer paréntesis completo, incluyendo contenido con dos puntos, espacios, etc.
+    const reasonMatch = rest.match(/\(([^)]+)\)/);
+    if (reasonMatch && reasonMatch[1]) {
+      reason = reasonMatch[1].trim();
+    }
+
+    // Clasificación interna por type (no modifica reason)
     if (/\(sin llave\)/i.test(rest)) {
       type = "sin_llave";
       severity = "critico";
-      reason = "SIN_LLAVE";
     } else if (/\(llave sin cargar/i.test(rest)) {
       type = "llave_no_registrada";
       severity = "advertencia";
-      reason = "LLAVE_NO_REGISTRADA";
     } else if (/\(conductor inactivo/i.test(rest)) {
       type = "conductor_inactivo";
       severity = "advertencia";
-      reason = "CONDUCTOR_INACTIVO";
     }
 
     // Si sigue siendo exceso normal, severidad por velocidad
@@ -385,7 +390,7 @@ function parseContactoSinIdentificacion(bodyText) {
       eventTimestamp,
       severity: "advertencia",
       rawLine: trimmed,
-      reason: "CONTACTO_SIN_IDENTIFICACION"
+      reason: null
     });
   }
 

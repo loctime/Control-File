@@ -118,9 +118,32 @@ router.post("/email-local-ingest", async (req, res) => {
     );
 
     const isDev = process.env.NODE_ENV !== "production";
+    
+    // Contar líneas que parecen eventos pero no se parsearon
+    let unparsedLinesCount = 0;
+    if (bodyText && sourceEmailType) {
+      const lines = bodyText.split(/\r?\n/);
+      const eventPatterns = {
+        excesos: /km\/h/i,
+        no_identificados: /\d{2}\/\d{2}\/\d{2}/,
+        contacto: /\d{2}-\d{2}-\d{4}/
+      };
+      const pattern = eventPatterns[sourceEmailType];
+      if (pattern) {
+        const linesWithPattern = lines.filter(line => {
+          const trimmed = line.trim();
+          return trimmed.length > 0 && pattern.test(trimmed);
+        });
+        unparsedLinesCount = Math.max(0, linesWithPattern.length - rawEvents.length);
+      }
+    }
+    
     if (isDev) {
       console.log("📊 [EMAIL-LOCAL] Tipo detectado:", sourceEmailType);
       console.log("📊 [EMAIL-LOCAL] Eventos parseados:", rawEvents.length);
+      if (unparsedLinesCount > 0) {
+        console.warn("⚠️ [EMAIL-LOCAL] Líneas no parseadas:", unparsedLinesCount, "tipo:", sourceEmailType);
+      }
     }
 
     // Si no se detectó tipo por subject, guardar en unclassifiedEmails para visibilidad
@@ -227,14 +250,31 @@ router.post("/email-local-ingest", async (req, res) => {
       // Agrupar por plate y ejecutar un solo upsertVehicle y upsertDailyAlert por patente
       // para mejorar performance cuando haya muchos eventos en un mismo email.
       for (const event of registeredEvents) {
-        await upsertVehicle(event);
-        const vehicle = vehicleCache.get(event.plate);
-        if (vehicle) {
-          const eventDateKey = event.eventTimestamp
-            ? event.eventTimestamp.slice(0, 10)
-            : formatDateKey(new Date());
-          await upsertDailyAlert(eventDateKey, event.plate, vehicle, event);
-          updatedPlates.add(event.plate);
+        try {
+          await upsertVehicle(event);
+          const vehicle = vehicleCache.get(event.plate);
+          if (vehicle) {
+            const eventDateKey =
+              event.eventTimestamp &&
+              /^\d{4}-\d{2}-\d{2}/.test(event.eventTimestamp)
+                ? event.eventTimestamp.slice(0, 10)
+                : formatDateKey(new Date());
+
+            await upsertDailyAlert(
+              eventDateKey,
+              event.plate,
+              vehicle,
+              event
+            );
+
+            updatedPlates.add(event.plate);
+          }
+        } catch (err) {
+          console.error(
+            `[EMAIL-LOCAL] Error procesando evento ${event.eventId}:`,
+            err.message
+          );
+          continue;
         }
       }
       vehiclesUpdated = updatedPlates.size;

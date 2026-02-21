@@ -123,6 +123,21 @@ function getSeverityColor(e) {
 }
 
 /**
+ * Escapa caracteres HTML para prevenir inyección.
+ */
+function escapeHtml(text) {
+  if (!text || typeof text !== "string") return "";
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
+/**
  * Construye el cuerpo del email (HTML).
  * Soporta eventSummary con estructura fija: hasSpeed, speed, type.
  */
@@ -138,6 +153,9 @@ function buildBody(doc) {
     .filter(e => e && e.eventTimestamp)
     .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
 
+  // Calcular cantidad real de eventos (usar sortedEvents.length en lugar de eventCount)
+  const actualEventCount = sortedEvents.length;
+
   // Resumen por severidad (críticos y advertencias)
   const resumen = {
     critico: sortedEvents.filter(e => e.severity === "critico").length,
@@ -147,11 +165,14 @@ function buildBody(doc) {
   // Filas HTML: tipo (con color), velocidad, fecha/hora, ubicación
   const rowsHtml = sortedEvents.map((e) => {
     const color = getSeverityColor(e);
-    const typeLabel = getTypeLabel(e);
+    // Priorizar reason (texto original del proveedor) sobre type label
+    const typeLabel = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0
+      ? e.reason
+      : getTypeLabel(e);
     return `
     <tr>
       <td style="padding:8px; font-weight:bold; color:${color};">
-        ${typeLabel}
+        ${escapeHtml(typeLabel)}
       </td>
       <td style="padding:8px;">
         ${e.speed != null ? e.speed + " km/h" : "-"}
@@ -160,7 +181,7 @@ function buildBody(doc) {
         ${formatDateTimeArgentina(e.eventTimestamp)}
       </td>
       <td style="padding:8px;">
-        ${e.location || "Sin ubicación"}
+        ${escapeHtml(e.location || "Sin ubicación")}
       </td>
     </tr>
   `;
@@ -209,7 +230,7 @@ function buildBody(doc) {
   
   <!-- Total de eventos destacado -->
   <div style="background-color: #e3f2fd; padding: 12px; border-radius: 4px; margin-bottom: 20px; text-align: center;">
-    <strong style="font-size: 18px; color: #1976d2;">Total de eventos: ${eventCount || 0}</strong>
+    <strong style="font-size: 18px; color: #1976d2;">Total de eventos: ${actualEventCount}</strong>
   </div>
   
   ${criticalBanner}

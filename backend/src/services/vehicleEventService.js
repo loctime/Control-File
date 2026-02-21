@@ -237,9 +237,16 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
 
   const speedVal = event.speed;
+  // eventId debe ser estable para deduplicación en arrayUnion
+  const eventId = event.eventId || generateDeterministicEventId(
+    event.plate,
+    event.eventTimestamp,
+    event.rawLine || ""
+  );
   const eventSummary = {
-    eventId: event.eventId,
+    eventId,
     type: event.type || "exceso",
+    reason: event.reason || null,
     speed: typeof speedVal === "number" ? speedVal : null,
     hasSpeed: typeof speedVal === "number",
     eventTimestamp: event.eventTimestamp || "",
@@ -259,6 +266,20 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
       createdAt: now,
     });
   } else {
+    const existingData = docSnap.data();
+    const existingEvents = existingData.events || [];
+
+    const alreadyExists = existingEvents.some(
+      (e) => e.eventId === eventSummary.eventId
+    );
+
+    if (alreadyExists) {
+      console.warn(
+        `[DAILY-ALERT] Evento duplicado evitado: ${eventSummary.eventId}`
+      );
+      return;
+    }
+
     await vehiclesRef.update({
       eventCount: admin.firestore.FieldValue.increment(1),
       events: admin.firestore.FieldValue.arrayUnion(eventSummary),
