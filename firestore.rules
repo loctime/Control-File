@@ -402,11 +402,12 @@ service cloud.firestore {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     /* ===============================
@@ -417,22 +418,24 @@ service cloud.firestore {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     match /apps/horarios/pedidos/{docId}/{sub=**} {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     /* ===============================
@@ -443,11 +446,12 @@ service cloud.firestore {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     /* ===============================
@@ -458,11 +462,12 @@ service cloud.firestore {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     /* ===============================
@@ -554,11 +559,12 @@ service cloud.firestore {
       allow read: if true;
     
       allow create: if horariosCanActFor(request.resource.data.ownerId);
-      allow update, delete: if horariosCanActFor(
+      allow update: if horariosCanActFor(
         resource.data.ownerId != null
           ? resource.data.ownerId
           : request.resource.data.ownerId
       );
+      allow delete: if horariosCanActFor(resource.data.ownerId);
     }
     
     /* ===============================

@@ -53,25 +53,60 @@ async function getPendingAlerts() {
   // Obtener todos los documentos de fechas (dateKeys)
   const dateKeysSnap = await dailyAlertsRef.get();
   
+  logger.info(`[GET-PENDING-ALERTS] Encontradas ${dateKeysSnap.docs.length} fechas en dailyAlerts`);
+  
   const allAlerts = [];
   
-  // Para cada fecha, obtener vehículos con alertSent == false
+  // Para cada fecha, obtener vehículos y filtrar los que tienen alertSent == false o no tienen el campo
   for (const dateDoc of dateKeysSnap.docs) {
     const dateKey = dateDoc.id;
-    const vehiclesSnap = await dateDoc.ref
-      .collection("vehicles")
-      .where("alertSent", "==", false)
-      .get();
-    
-    // Agregar cada documento con su dateKey
-    for (const vehicleDoc of vehiclesSnap.docs) {
-      allAlerts.push({
-        id: vehicleDoc.id,
-        dateKey, // Incluir dateKey en el documento
-        ...vehicleDoc.data()
+    try {
+      logger.info(`[GET-PENDING-ALERTS] Procesando fecha: ${dateKey}`);
+      
+      // Obtener TODOS los vehículos (no filtrar por alertSent porque puede no existir)
+      const vehiclesSnap = await dateDoc.ref
+        .collection("vehicles")
+        .get();
+      
+      logger.info(`[GET-PENDING-ALERTS] Fecha ${dateKey}: Encontrados ${vehiclesSnap.docs.length} documentos de vehículos`);
+      
+      // Filtrar en memoria: alertSent debe ser false o no existir
+      const pendingVehicles = vehiclesSnap.docs.filter(doc => {
+        const data = doc.data();
+        const alertSent = data.alertSent;
+        
+        // Manejar diferentes tipos: boolean false, string "false", undefined, null
+        const isPending = alertSent === false 
+          || alertSent === "false" 
+          || alertSent === undefined 
+          || alertSent === null;
+        
+        // Log detallado para debugging
+        if (vehiclesSnap.docs.length <= 5) {
+          logger.info(`[GET-PENDING-ALERTS] Vehículo ${doc.id}: alertSent=${alertSent} (tipo: ${typeof alertSent}), isPending=${isPending}`);
+        }
+        
+        return isPending;
       });
+      
+      logger.info(`[GET-PENDING-ALERTS] Fecha ${dateKey}: ${pendingVehicles.length} alertas pendientes (de ${vehiclesSnap.docs.length} totales)`);
+      
+      // Agregar cada documento con su dateKey
+      for (const vehicleDoc of pendingVehicles) {
+        const vehicleData = vehicleDoc.data();
+        allAlerts.push({
+          id: vehicleDoc.id,
+          dateKey, // Incluir dateKey en el documento
+          ...vehicleData
+        });
+        logger.info(`[GET-PENDING-ALERTS] Agregada alerta: ${dateKey}/${vehicleDoc.id} (plate: ${vehicleData.plate || 'N/A'})`);
+      }
+    } catch (err) {
+      logger.error(`[GET-PENDING-ALERTS] Error procesando fecha ${dateKey}:`, err.message, err.stack);
     }
   }
+  
+  logger.info(`[GET-PENDING-ALERTS] Total de alertas pendientes: ${allAlerts.length}`);
   
   return allAlerts;
 }
@@ -330,29 +365,96 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     // Obtener TODAS las alertas pendientes de todas las fechas
     const docs = await getPendingAlerts();
 
-    const alerts = await Promise.all(
-      docs.map(async (doc) => {
-        const plate = doc.plate || doc.id;
-        const dateKey = doc.dateKey; // dateKey viene incluido en el documento
-        const alertId = `${dateKey}_${plate}`;
-        
-        // Obtener responsables desde el vehículo
-        const vehicle = await getVehicle(plate);
-        const responsables = Array.isArray(vehicle?.responsables)
-          ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-          : [];
+    logger.info(`[GET-PENDING-ALERTS] Procesando ${docs.length} documentos`);
 
-        return {
-          alertId,
-          plate,
-          responsables,
-          subject: buildSubject(doc, dateKey),
-          body: buildBody(doc),
+    if (docs.length === 0) {
+      // Debug: obtener información sobre qué hay en Firestore
+      const dailyAlertsRef = db
+        .collection("apps")
+        .doc("emails")
+        .collection("dailyAlerts");
+      const dateKeysSnap = await dailyAlertsRef.get();
+      
+      const debugInfo = {
+        totalDateKeys: dateKeysSnap.docs.length,
+        dateKeys: dateKeysSnap.docs.map(d => d.id),
+        vehiclesByDate: {}
+      };
+
+      for (const dateDoc of dateKeysSnap.docs.slice(0, 5)) { // Solo primeras 5 fechas para debug
+        const dateKey = dateDoc.id;
+        const vehiclesSnap = await dateDoc.ref.collection("vehicles").get();
+        debugInfo.vehiclesByDate[dateKey] = {
+          total: vehiclesSnap.docs.length,
+          vehicles: vehiclesSnap.docs.slice(0, 3).map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              plate: data.plate || doc.id,
+              alertSent: data.alertSent,
+              alertSentType: typeof data.alertSent
+            };
+          })
         };
+      }
+
+      logger.info("[GET-PENDING-ALERTS] No hay alertas pendientes. Debug:", JSON.stringify(debugInfo));
+      return res.status(200).json({ 
+        ok: true, 
+        alerts: [],
+        debug: debugInfo // Incluir debug en respuesta
+      });
+    }
+
+    const alerts = await Promise.all(
+      docs.map(async (doc, index) => {
+        try {
+          logger.info(`[GET-PENDING-ALERTS] Procesando documento ${index + 1}/${docs.length}`);
+          
+          const plate = doc.plate || doc.id;
+          const dateKey = doc.dateKey; // dateKey viene incluido en el documento
+          
+          logger.info(`[GET-PENDING-ALERTS] Documento: plate=${plate}, dateKey=${dateKey}`);
+          
+          if (!dateKey) {
+            logger.warn(`[GET-PENDING-ALERTS] Documento sin dateKey: ${plate}`);
+            return null;
+          }
+          
+          const alertId = `${dateKey}_${plate}`;
+          
+          // Obtener responsables desde el vehículo
+          const vehicle = await getVehicle(plate);
+          const responsables = Array.isArray(vehicle?.responsables)
+            ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+            : [];
+
+          logger.info(`[GET-PENDING-ALERTS] Construyendo alerta para ${alertId}, responsables: ${responsables.length}`);
+
+          const alert = {
+            alertId,
+            plate,
+            responsables,
+            subject: buildSubject(doc, dateKey),
+            body: buildBody(doc),
+          };
+          
+          logger.info(`[GET-PENDING-ALERTS] Alerta construida exitosamente para ${alertId}`);
+          
+          return alert;
+        } catch (err) {
+          logger.error(`[GET-PENDING-ALERTS] Error procesando documento:`, err.message, err.stack);
+          return null;
+        }
       })
     );
 
-    return res.status(200).json({ ok: true, alerts });
+    // Filtrar nulls (documentos que fallaron al procesar)
+    const validAlerts = alerts.filter(a => a !== null);
+
+    logger.info(`[GET-PENDING-ALERTS] Retornando ${validAlerts.length} alertas válidas`);
+
+    return res.status(200).json({ ok: true, alerts: validAlerts });
   } catch (err) {
     logger.error("[GET-PENDING-ALERTS] Error:", err.message, err.stack);
     return res.status(500).json({
@@ -398,6 +500,62 @@ router.post("/email/mark-alert-sent", async (req, res) => {
     return res.status(500).json({
       error: "error interno",
       message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+});
+
+/**
+ * GET /email/debug-pending-alerts
+ * Endpoint temporal de debug para verificar qué está pasando
+ */
+router.get("/email/debug-pending-alerts", async (req, res) => {
+  try {
+    if (!validateLocalToken(req)) {
+      return res.status(401).json({ error: "no autorizado" });
+    }
+
+    const dailyAlertsRef = db
+      .collection("apps")
+      .doc("emails")
+      .collection("dailyAlerts");
+
+    const dateKeysSnap = await dailyAlertsRef.get();
+    
+    const debugInfo = {
+      totalDateKeys: dateKeysSnap.docs.length,
+      dateKeys: dateKeysSnap.docs.map(d => d.id),
+      vehiclesByDate: {}
+    };
+
+    for (const dateDoc of dateKeysSnap.docs) {
+      const dateKey = dateDoc.id;
+      const vehiclesSnap = await dateDoc.ref.collection("vehicles").get();
+      
+      const vehicles = vehiclesSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          plate: data.plate || doc.id,
+          alertSent: data.alertSent,
+          alertSentType: typeof data.alertSent,
+          eventCount: data.eventCount || 0,
+          eventsLength: Array.isArray(data.events) ? data.events.length : 0
+        };
+      });
+      
+      debugInfo.vehiclesByDate[dateKey] = {
+        total: vehiclesSnap.docs.length,
+        pending: vehicles.filter(v => v.alertSent === false || v.alertSent === undefined || v.alertSent === null).length,
+        vehicles: vehicles
+      };
+    }
+
+    return res.status(200).json({ ok: true, debug: debugInfo });
+  } catch (err) {
+    logger.error("[DEBUG-PENDING-ALERTS] Error:", err.message, err.stack);
+    return res.status(500).json({
+      error: "error interno",
+      message: err.message
     });
   }
 });
