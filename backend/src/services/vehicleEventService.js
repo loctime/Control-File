@@ -247,6 +247,7 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
     eventId,
     type: event.type || "exceso",
     reason: event.reason || null,
+    sourceEmailType: event.sourceEmailType || null,
     speed: typeof speedVal === "number" ? speedVal : null,
     hasSpeed: typeof speedVal === "number",
     eventTimestamp: event.eventTimestamp || "",

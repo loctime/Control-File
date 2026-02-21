@@ -41,19 +41,39 @@ function parseDateQuery(queryDate) {
 }
 
 /**
- * Obtiene alertas pendientes (alertSent === false) para una fecha.
+ * Obtiene TODAS las alertas pendientes (alertSent === false) de todas las fechas.
+ * Recorre todas las subcolecciones de dailyAlerts.
  */
-async function getPendingAlerts(dateKey) {
-  const snap = await db
+async function getPendingAlerts() {
+  const dailyAlertsRef = db
     .collection("apps")
     .doc("emails")
-    .collection("dailyAlerts")
-    .doc(dateKey)
-    .collection("vehicles")
-    .where("alertSent", "==", false)
-    .get();
+    .collection("dailyAlerts");
 
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Obtener todos los documentos de fechas (dateKeys)
+  const dateKeysSnap = await dailyAlertsRef.get();
+  
+  const allAlerts = [];
+  
+  // Para cada fecha, obtener vehículos con alertSent == false
+  for (const dateDoc of dateKeysSnap.docs) {
+    const dateKey = dateDoc.id;
+    const vehiclesSnap = await dateDoc.ref
+      .collection("vehicles")
+      .where("alertSent", "==", false)
+      .get();
+    
+    // Agregar cada documento con su dateKey
+    for (const vehicleDoc of vehiclesSnap.docs) {
+      allAlerts.push({
+        id: vehicleDoc.id,
+        dateKey, // Incluir dateKey en el documento
+        ...vehicleDoc.data()
+      });
+    }
+  }
+  
+  return allAlerts;
 }
 
 /**
@@ -297,9 +317,8 @@ async function markAlertAsSent(dateKey, plate) {
  * GET /email/get-pending-daily-alerts
  *
  * Requiere: x-local-token
- * Query opcional: ?date=YYYY-MM-DD (si no se pasa, usa hoy).
- * Devuelve alertas con alertSent === false para esa fecha.
- * Útil para recuperar alertas de días en que no se ejecutó el script.
+ * Devuelve TODAS las alertas con alertSent === false de todas las fechas.
+ * Ignora completamente el query param date si se proporciona.
  */
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
   try {
@@ -308,13 +327,13 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    // Si viene ?date=YYYY-MM-DD, usarlo; si no, fecha de hoy (permite recuperar alertas de días no ejecutados)
-    const dateKey = parseDateQuery(req.query.date) || formatDateKey(new Date());
-    const docs = await getPendingAlerts(dateKey);
+    // Obtener TODAS las alertas pendientes de todas las fechas
+    const docs = await getPendingAlerts();
 
     const alerts = await Promise.all(
       docs.map(async (doc) => {
         const plate = doc.plate || doc.id;
+        const dateKey = doc.dateKey; // dateKey viene incluido en el documento
         const alertId = `${dateKey}_${plate}`;
         
         // Obtener responsables desde el vehículo
