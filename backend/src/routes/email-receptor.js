@@ -159,7 +159,6 @@ router.post("/email-local-ingest", async (req, res) => {
     let createdThisEmail = 0;
 
     if (rawEvents.length > 0) {
-      const dateKey = formatDateKey(new Date());
       const vehicleCache = new Map();
       const allEvents = [];
 
@@ -231,7 +230,10 @@ router.post("/email-local-ingest", async (req, res) => {
         await upsertVehicle(event);
         const vehicle = vehicleCache.get(event.plate);
         if (vehicle) {
-          await upsertDailyAlert(dateKey, event.plate, vehicle, event);
+          const eventDateKey = event.eventTimestamp
+            ? event.eventTimestamp.slice(0, 10)
+            : formatDateKey(new Date());
+          await upsertDailyAlert(eventDateKey, event.plate, vehicle, event);
           updatedPlates.add(event.plate);
         }
       }
