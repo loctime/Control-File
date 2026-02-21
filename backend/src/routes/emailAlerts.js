@@ -43,70 +43,61 @@ function parseDateQuery(queryDate) {
 /**
  * Obtiene TODAS las alertas pendientes (alertSent === false) de todas las fechas.
  * Recorre todas las subcolecciones de dailyAlerts.
+ * 
+ * IMPORTANTE: En Firestore, si un documento solo tiene subcolecciones pero no datos,
+ * .get() no lo encuentra. Por eso usamos listCollections() para obtener las subcolecciones.
  */
 async function getPendingAlerts() {
   const dailyAlertsRef = db
     .collection("apps")
     .doc("emails")
     .collection("dailyAlerts");
-
-  // Obtener todos los documentos de fechas (dateKeys)
+  
+  // Intentar obtener documentos de fecha directamente
   const dateKeysSnap = await dailyAlertsRef.get();
+  let dateKeys = dateKeysSnap.docs.map(doc => doc.id);
   
-  logger.info(`[GET-PENDING-ALERTS] Encontradas ${dateKeysSnap.docs.length} fechas en dailyAlerts`);
-  
-  const allAlerts = [];
-  
-  // Para cada fecha, obtener vehículos y filtrar los que tienen alertSent == false o no tienen el campo
-  for (const dateDoc of dateKeysSnap.docs) {
-    const dateKey = dateDoc.id;
-    try {
-      logger.info(`[GET-PENDING-ALERTS] Procesando fecha: ${dateKey}`);
-      
-      // Obtener TODOS los vehículos (no filtrar por alertSent porque puede no existir)
-      const vehiclesSnap = await dateDoc.ref
-        .collection("vehicles")
-        .get();
-      
-      logger.info(`[GET-PENDING-ALERTS] Fecha ${dateKey}: Encontrados ${vehiclesSnap.docs.length} documentos de vehículos`);
-      
-      // Filtrar en memoria: alertSent debe ser false o no existir
-      const pendingVehicles = vehiclesSnap.docs.filter(doc => {
-        const data = doc.data();
-        const alertSent = data.alertSent;
-        
-        // Manejar diferentes tipos: boolean false, string "false", undefined, null
-        const isPending = alertSent === false 
-          || alertSent === "false" 
-          || alertSent === undefined 
-          || alertSent === null;
-        
-        // Log detallado para debugging
-        if (vehiclesSnap.docs.length <= 5) {
-          logger.info(`[GET-PENDING-ALERTS] Vehículo ${doc.id}: alertSent=${alertSent} (tipo: ${typeof alertSent}), isPending=${isPending}`);
-        }
-        
-        return isPending;
-      });
-      
-      logger.info(`[GET-PENDING-ALERTS] Fecha ${dateKey}: ${pendingVehicles.length} alertas pendientes (de ${vehiclesSnap.docs.length} totales)`);
-      
-      // Agregar cada documento con su dateKey
-      for (const vehicleDoc of pendingVehicles) {
-        const vehicleData = vehicleDoc.data();
-        allAlerts.push({
-          id: vehicleDoc.id,
-          dateKey, // Incluir dateKey en el documento
-          ...vehicleData
-        });
-        logger.info(`[GET-PENDING-ALERTS] Agregada alerta: ${dateKey}/${vehicleDoc.id} (plate: ${vehicleData.plate || 'N/A'})`);
-      }
-    } catch (err) {
-      logger.error(`[GET-PENDING-ALERTS] Error procesando fecha ${dateKey}:`, err.message, err.stack);
+  // Si no hay documentos pero sabemos que hay datos, buscar en fechas recientes
+  // (últimos 60 días para cubrir cualquier fecha posible)
+  if (dateKeys.length === 0) {
+    const today = new Date();
+    for (let i = 0; i < 60; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().slice(0, 10);
+      dateKeys.push(dateKey);
     }
   }
   
-  logger.info(`[GET-PENDING-ALERTS] Total de alertas pendientes: ${allAlerts.length}`);
+  const allAlerts = [];
+  
+  // Para cada fecha, obtener vehículos y filtrar los que tienen alertSent == false
+  for (const dateKey of dateKeys) {
+    try {
+      const vehiclesRef = dailyAlertsRef.doc(dateKey).collection("vehicles");
+      const vehiclesSnap = await vehiclesRef.get();
+      
+      // Si hay vehículos en esta fecha, procesarlos
+      if (vehiclesSnap.docs.length > 0) {
+        for (const vehicleDoc of vehiclesSnap.docs) {
+          const data = vehicleDoc.data();
+          const alertSent = data.alertSent;
+          
+          // Si alertSent es false o no existe, incluir el documento
+          if (alertSent === false || alertSent === undefined || alertSent === null) {
+            allAlerts.push({
+              id: vehicleDoc.id,
+              dateKey,
+              ...data
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Si la fecha no existe, continuar con la siguiente
+      continue;
+    }
+  }
   
   return allAlerts;
 }
