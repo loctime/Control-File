@@ -163,8 +163,10 @@ function getSeverityColor(e) {
       return "#d32f2f"; // rojo
     case "advertencia":
       return "#f57c00"; // naranja
-    default:
+    case "administrativo":
       return "#1976d2"; // azul
+    default:
+      return "#1976d2"; // azul (info)
   }
 }
 
@@ -186,9 +188,10 @@ function escapeHtml(text) {
 /**
  * Construye el cuerpo del email (HTML).
  * Soporta eventSummary con estructura fija: hasSpeed, speed, type.
+ * Ahora también muestra resumen por tipo de evento usando el campo summary.
  */
 function buildBody(doc) {
-  const { plate, brand, model, eventCount, events } = doc;
+  const { plate, brand, model, eventCount, events, summary } = doc;
 
   if (!Array.isArray(events) || events.length === 0) {
     return `<p>No se encontraron eventos.</p>`;
@@ -202,11 +205,15 @@ function buildBody(doc) {
   // Calcular cantidad real de eventos (usar sortedEvents.length en lugar de eventCount)
   const actualEventCount = sortedEvents.length;
 
-  // Resumen por severidad (críticos y advertencias)
+  // Resumen por severidad (críticos, advertencias y administrativos)
   const resumen = {
     critico: sortedEvents.filter(e => e.severity === "critico").length,
     advertencia: sortedEvents.filter(e => e.severity === "advertencia").length,
+    administrativo: sortedEvents.filter(e => e.severity === "administrativo").length,
   };
+
+  // Resumen por tipo de evento (si existe el campo summary)
+  const summaryByType = summary || {};
 
   // Filas HTML: tipo (con color), velocidad, fecha/hora, ubicación
   const rowsHtml = sortedEvents.map((e) => {
@@ -251,11 +258,26 @@ function buildBody(doc) {
       </div>`
     : "";
 
-  // Resumen automático: críticos y advertencias
+  // Resumen por tipo de evento (si existe summary)
+  const typeSummaryHtml = summaryByType && Object.keys(summaryByType).length > 0
+    ? `<div style="margin-bottom: 20px; padding: 16px; background-color: #f0f4f8; border-radius: 4px; border-left: 4px solid #1976d2;">
+        <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #333;">Resumen por tipo:</div>
+        <div style="font-size: 13px; line-height: 1.8;">
+          ${summaryByType.excesos > 0 ? `<span style="margin-right: 16px;">🚨 Excesos: <strong>${summaryByType.excesos}</strong></span>` : ""}
+          ${summaryByType.no_identificados > 0 ? `<span style="margin-right: 16px;">❓ No identificados: <strong>${summaryByType.no_identificados}</strong></span>` : ""}
+          ${summaryByType.contactos > 0 ? `<span style="margin-right: 16px;">📞 Contactos: <strong>${summaryByType.contactos}</strong></span>` : ""}
+          ${summaryByType.llave_sin_cargar > 0 ? `<span style="margin-right: 16px;">🔑 Llave sin cargar: <strong>${summaryByType.llave_sin_cargar}</strong></span>` : ""}
+          ${summaryByType.conductor_inactivo > 0 ? `<span style="margin-right: 16px;">👤 Conductor inactivo: <strong>${summaryByType.conductor_inactivo}</strong></span>` : ""}
+        </div>
+      </div>`
+    : "";
+
+  // Resumen automático: críticos, advertencias y administrativos
   const summarySection = `<div style="margin-bottom: 20px; padding: 16px; background-color: #f8f9fa; border-radius: 4px;">
     <div style="font-size: 16px;">
-      <span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>
-      <span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 ${resumen.advertencia} advertencias</span>
+      ${resumen.critico > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>` : ""}
+      ${resumen.advertencia > 0 ? `<span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 ${resumen.advertencia} advertencias</span>` : ""}
+      ${resumen.administrativo > 0 ? `<span style="margin-left: 20px; color: #1976d2; font-weight: bold;">ℹ️ ${resumen.administrativo} administrativos</span>` : ""}
     </div>
   </div>`;
   
@@ -290,6 +312,7 @@ function buildBody(doc) {
   
   ${criticalBanner}
   ${summarySection}
+  ${typeSummaryHtml}
   
   <!-- Tabla con jerarquía visual por tipo y severidad -->
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">

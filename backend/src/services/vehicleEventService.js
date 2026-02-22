@@ -214,8 +214,43 @@ function formatDateKey(d) {
 }
 
 /**
+ * Determina la severidad según el tipo de evento.
+ * @param {string} eventType - Tipo de evento
+ * @returns {string} "critico" | "administrativo"
+ */
+function getSeverityByType(eventType) {
+  if (eventType === "exceso") {
+    return "critico";
+  }
+  // Todos los demás tipos son administrativos
+  return "administrativo";
+}
+
+/**
+ * Normaliza el tipo de evento para el summary.
+ * Mapea tipos específicos a claves del summary.
+ * @param {string} eventType - Tipo de evento original
+ * @returns {string} Clave para el summary
+ */
+function normalizeEventTypeForSummary(eventType) {
+  const typeMap = {
+    exceso: "excesos",
+    no_identificado: "no_identificados",
+    contacto: "contactos",
+    llave_no_registrada: "llave_sin_cargar",
+    sin_llave: "llave_sin_cargar",
+    conductor_inactivo: "conductor_inactivo",
+  };
+  return typeMap[eventType] || "excesos"; // Fallback a excesos si no se reconoce
+}
+
+/**
  * Crea o actualiza el documento diario en
  * /apps/emails/dailyAlerts/{YYYY-MM-DD}/vehicles/{plate}
+ * 
+ * IMPORTANTE: Genera alertas para TODOS los tipos de eventos.
+ * No filtra por tipo. Todos los eventos deben generar alertas.
+ * 
  * @param {string} dateKey - Fecha en formato YYYY-MM-DD
  * @param {string} plate - Patente normalizada
  * @param {object} vehicle - Datos del vehículo (plate, brand, model, responsables)
@@ -236,55 +271,110 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
 
+  // Determinar tipo de evento y severidad
+  const eventType = event.type || "exceso";
+  const severity = event.severity || getSeverityByType(eventType);
   const speedVal = event.speed;
+
   // eventId debe ser estable para deduplicación en arrayUnion
   const eventId = event.eventId || generateDeterministicEventId(
     event.plate,
     event.eventTimestamp,
     event.rawLine || ""
   );
+
+  // Construir objeto de evento completo
   const eventSummary = {
     eventId,
-    type: event.type || "exceso",
+    type: eventType,
     reason: event.reason || null,
     sourceEmailType: event.sourceEmailType || null,
     speed: typeof speedVal === "number" ? speedVal : null,
     hasSpeed: typeof speedVal === "number",
     eventTimestamp: event.eventTimestamp || "",
     location: event.location || "",
-    severity: event.severity || "info",
+    severity: severity,
+    rawData: {
+      brand: event.brand || null,
+      model: event.model || null,
+      timezone: event.timezone || null,
+      eventCategory: event.eventCategory || null,
+    },
   };
 
   if (!docSnap.exists) {
-    await vehiclesRef.set({
+    // Crear nuevo documento con estructura completa
+    const summaryKey = normalizeEventTypeForSummary(eventType);
+    const initialSummary = {
+      excesos: 0,
+      no_identificados: 0,
+      contactos: 0,
+      llave_sin_cargar: 0,
+      conductor_inactivo: 0,
+    };
+    initialSummary[summaryKey] = 1;
+
+    const newDoc = {
       plate: normalized,
+      dateKey: dateKey,
       brand: vehicle.brand || "",
       model: vehicle.model || "",
       responsables,
-      eventCount: 1,
-      events: [eventSummary],
       alertSent: false,
+      lastEventAt: now,
+      summary: initialSummary,
+      events: [eventSummary],
       createdAt: now,
-    });
+    };
+
+    await vehiclesRef.set(newDoc);
+    
+    console.log(
+      `[DAILY-ALERT] ✅ Alerta creada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity})`
+    );
   } else {
+    // Actualizar documento existente
     const existingData = docSnap.data();
     const existingEvents = existingData.events || [];
 
+    // Verificar si el evento ya existe (deduplicación)
     const alreadyExists = existingEvents.some(
       (e) => e.eventId === eventSummary.eventId
     );
 
     if (alreadyExists) {
       console.warn(
-        `[DAILY-ALERT] Evento duplicado evitado: ${eventSummary.eventId}`
+        `[DAILY-ALERT] ⚠️ Evento duplicado evitado: ${eventSummary.eventId} (${dateKey}/${normalized})`
       );
       return;
     }
 
+    // Actualizar summary
+    const summaryKey = normalizeEventTypeForSummary(eventType);
+    const currentSummary = existingData.summary || {
+      excesos: 0,
+      no_identificados: 0,
+      contactos: 0,
+      llave_sin_cargar: 0,
+      conductor_inactivo: 0,
+    };
+
+    // Incrementar contador del tipo de evento
+    const updatedSummary = {
+      ...currentSummary,
+      [summaryKey]: (currentSummary[summaryKey] || 0) + 1,
+    };
+
+    // Actualizar documento
     await vehiclesRef.update({
-      eventCount: admin.firestore.FieldValue.increment(1),
+      summary: updatedSummary,
       events: admin.firestore.FieldValue.arrayUnion(eventSummary),
+      lastEventAt: now,
     });
+
+    console.log(
+      `[DAILY-ALERT] 🔄 Alerta actualizada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity}) - Total ${summaryKey}: ${updatedSummary[summaryKey]}`
+    );
   }
 }
 
