@@ -119,6 +119,12 @@ router.post("/email-local-ingest", async (req, res) => {
 
     const isDev = process.env.NODE_ENV !== "production";
     
+    // Logs críticos después del parseo
+    console.log("🔍 [EMAIL-LOCAL] ========== DESPUÉS DEL PARSEO ==========");
+    console.log("🔍 [EMAIL-LOCAL] TOTAL EVENTS PARSED:", rawEvents.length);
+    console.log("🔍 [EMAIL-LOCAL] PLATES:", rawEvents.map(e => e.plate));
+    console.log("🔍 [EMAIL-LOCAL] Source Email Type:", sourceEmailType);
+    
     // Contar líneas que parecen eventos pero no se parsearon
     let unparsedLinesCount = 0;
     if (bodyText && sourceEmailType) {
@@ -135,6 +141,7 @@ router.post("/email-local-ingest", async (req, res) => {
           return trimmed.length > 0 && pattern.test(trimmed);
         });
         unparsedLinesCount = Math.max(0, linesWithPattern.length - rawEvents.length);
+        console.log(`🔍 [EMAIL-LOCAL] Líneas con patrón detectado: ${linesWithPattern.length}`);
       }
     }
     
@@ -182,12 +189,20 @@ router.post("/email-local-ingest", async (req, res) => {
     let createdThisEmail = 0;
 
     if (rawEvents.length > 0) {
+      console.log("🔍 [EMAIL-LOCAL] ========== INICIANDO PROCESAMIENTO ==========");
+      console.log(`🔍 [EMAIL-LOCAL] Total eventos a procesar: ${rawEvents.length}`);
+      
       const vehicleCache = new Map();
       const allEvents = [];
 
       for (const event of rawEvents) {
         const plate = event.plate;
-        if (!plate) continue;
+        if (!plate) {
+          console.warn("⚠️ [EMAIL-LOCAL] Evento sin patente, saltando:", event);
+          continue;
+        }
+        
+        console.log(`🔍 [EMAIL-LOCAL] Procesando evento para patente: ${plate}`);
 
         let vehicle = vehicleCache.get(plate);
         if (!vehicle) {
@@ -245,12 +260,22 @@ router.post("/email-local-ingest", async (req, res) => {
       // Si en el futuro se activa AUTO_CREATE_VEHICLES,
       // estos eventos no se reprocesan automáticamente.
       const registeredEvents = allEvents.filter((e) => e.vehicleRegistered === true);
+      
+      console.log("🔍 [EMAIL-LOCAL] ========== EVENTOS REGISTRADOS ==========");
+      console.log(`🔍 [EMAIL-LOCAL] Total eventos registrados: ${registeredEvents.length}`);
+      console.log(`🔍 [EMAIL-LOCAL] Patentes registradas:`, registeredEvents.map(e => e.plate).join(", "));
+      console.log(`🔍 [EMAIL-LOCAL] Eventos sin registrar: ${allEvents.length - registeredEvents.length}`);
+      
       const updatedPlates = new Set();
       // TODO (optimización futura):
       // Agrupar por plate y ejecutar un solo upsertVehicle y upsertDailyAlert por patente
       // para mejorar performance cuando haya muchos eventos en un mismo email.
+      
+      console.log("🔍 [EMAIL-LOCAL] ========== ACTUALIZANDO VEHÍCULOS Y ALERTAS ==========");
       for (const event of registeredEvents) {
         try {
+          console.log(`🔍 [EMAIL-LOCAL] → Procesando evento para ${event.plate} (${event.type})`);
+          
           await upsertVehicle(event);
           const vehicle = vehicleCache.get(event.plate);
           if (vehicle) {
@@ -260,6 +285,7 @@ router.post("/email-local-ingest", async (req, res) => {
                 ? event.eventTimestamp.slice(0, 10)
                 : formatDateKey(new Date());
 
+            console.log(`🔍 [EMAIL-LOCAL] → Llamando upsertDailyAlert para ${event.plate} en fecha ${eventDateKey}`);
             await upsertDailyAlert(
               eventDateKey,
               event.plate,
@@ -268,15 +294,23 @@ router.post("/email-local-ingest", async (req, res) => {
             );
 
             updatedPlates.add(event.plate);
+            console.log(`🔍 [EMAIL-LOCAL] ✅ Completado para ${event.plate}`);
+          } else {
+            console.warn(`⚠️ [EMAIL-LOCAL] Vehículo no encontrado en cache para ${event.plate}`);
           }
         } catch (err) {
           console.error(
-            `[EMAIL-LOCAL] Error procesando evento ${event.eventId}:`,
+            `❌ [EMAIL-LOCAL] Error procesando evento ${event.eventId} (${event.plate}):`,
             err.message
           );
+          console.error("Stack:", err.stack);
           continue;
         }
       }
+      
+      console.log("🔍 [EMAIL-LOCAL] ========== RESUMEN FINAL ==========");
+      console.log(`🔍 [EMAIL-LOCAL] Patentes actualizadas: ${updatedPlates.size}`);
+      console.log(`🔍 [EMAIL-LOCAL] Lista de patentes:`, Array.from(updatedPlates).join(", "));
       vehiclesUpdated = updatedPlates.size;
       dailyAlertsUpdated = updatedPlates.size;
       if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);

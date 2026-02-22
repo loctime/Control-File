@@ -199,15 +199,40 @@ function parseExcesos(bodyText) {
   const lines = bodyText.split(/\r?\n/);
   const events = [];
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.toLowerCase().includes("km/h")) continue;
+  if (isDev) {
+    console.log(`[PARSE-EXCESOS] Total de líneas en email: ${lines.length}`);
+  }
 
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    const trimmed = line.trim();
+    
+    if (isDev && trimmed.length > 0) {
+      console.log(`[PARSE-EXCESOS] Línea ${lineIndex + 1}: ${trimmed.slice(0, 100)}`);
+    }
+    
+    if (!trimmed.toLowerCase().includes("km/h")) {
+      if (isDev && trimmed.length > 0) {
+        console.log(`[PARSE-EXCESOS] Línea ${lineIndex + 1} no contiene km/h, saltando`);
+      }
+      continue;
+    }
+
+    // Regex mejorado: captura patente con espacios y guiones, más flexible
     const regex =
       /(\d+)\s+km\/h\s+(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([A-Z0-9\-\s]+?)\s+-\s+(.+)/i;
 
     const match = trimmed.match(regex);
-    if (!match) continue;
+    if (!match) {
+      if (isDev) {
+        console.warn(`[PARSE-EXCESOS] Línea ${lineIndex + 1} no coincide con regex: ${trimmed.slice(0, 100)}`);
+      }
+      continue;
+    }
+    
+    if (isDev) {
+      console.log(`[PARSE-EXCESOS] ✅ Match encontrado en línea ${lineIndex + 1}`);
+    }
 
     const [, speedStr, fechaStr, horaStr, plateRaw, rest] = match;
 
@@ -223,6 +248,10 @@ function parseExcesos(bodyText) {
     );
 
     const plate = plateRaw.replace(/\s+/g, "").toUpperCase();
+    
+    if (isDev) {
+      console.log(`[PARSE-EXCESOS] Patente extraída: "${plateRaw}" → "${plate}"`);
+    }
     
     // Extraer reason ANTES de parsear ubicación para que la ubicación no incluya el texto del paréntesis
     let reason = null;
@@ -272,6 +301,15 @@ function parseExcesos(bodyText) {
       rawLine: trimmed,
       reason
     });
+
+    if (isDev) {
+      console.log(`[PARSE-EXCESOS] ✅ Evento parseado: ${plate} - ${speed} km/h - Tipo: ${type}`);
+    }
+  }
+
+  if (isDev) {
+    console.log(`[PARSE-EXCESOS] Total eventos parseados: ${events.length}`);
+    console.log(`[PARSE-EXCESOS] Patentes encontradas:`, events.map(e => e.plate).join(", "));
   }
 
   return events;
@@ -288,6 +326,10 @@ function parseNoIdentificados(bodyText) {
 
   const lines = bodyText.split(/\r?\n/);
   const events = [];
+
+  if (isDev) {
+    console.log(`[PARSE-NO-ID] Total de líneas en email: ${lines.length}`);
+  }
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -343,6 +385,15 @@ function parseNoIdentificados(bodyText) {
       rawLine: trimmed,
       reason
     });
+
+    if (isDev) {
+      console.log(`[PARSE-NO-ID] ✅ Evento parseado: ${plate} - Tipo: ${type}`);
+    }
+  }
+
+  if (isDev) {
+    console.log(`[PARSE-NO-ID] Total eventos parseados: ${events.length}`);
+    console.log(`[PARSE-NO-ID] Patentes encontradas:`, events.map(e => e.plate).join(", "));
   }
 
   return events;
@@ -358,6 +409,10 @@ function parseContactoSinIdentificacion(bodyText) {
 
   const lines = bodyText.split(/\r?\n/);
   const events = [];
+
+  if (isDev) {
+    console.log(`[PARSE-CONTACTO] Total de líneas en email: ${lines.length}`);
+  }
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -395,6 +450,15 @@ function parseContactoSinIdentificacion(bodyText) {
       rawLine: trimmed,
       reason: null
     });
+
+    if (isDev) {
+      console.log(`[PARSE-CONTACTO] ✅ Evento parseado: ${plate.toUpperCase()} - Tipo: contacto`);
+    }
+  }
+
+  if (isDev) {
+    console.log(`[PARSE-CONTACTO] Total eventos parseados: ${events.length}`);
+    console.log(`[PARSE-CONTACTO] Patentes encontradas:`, events.map(e => e.plate).join(", "));
   }
 
   return events;
@@ -460,6 +524,12 @@ function parseVehicleEventsFromEmail(subject, bodyText) {
           : "excesos_del_dia";
 
   const events = rawEvents.map((raw) => normalizarEvento(raw, sourceEmailTypeKey));
+  
+  // Logs críticos para debugging
+  console.log("🔍 [PARSE-VEHICLE-EVENTS] TOTAL EVENTS PARSED:", events.length);
+  console.log("🔍 [PARSE-VEHICLE-EVENTS] PLATES:", events.map(e => e.plate));
+  console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type:", sourceEmailType);
+  
   return { events, sourceEmailType };
 }
 
