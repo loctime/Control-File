@@ -9,7 +9,7 @@
 const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
-const { formatDateKey, getVehicle } = require("../services/vehicleEventService");
+const { formatDateKey, getVehicle, normalizePlate } = require("../services/vehicleEventService");
 const { logger } = require("../utils/logger");
 
 if (!admin.apps.length) {
@@ -342,28 +342,32 @@ function buildBody(doc) {
 
 /**
  * Parsea alertId (formato: YYYY-MM-DD_PLATE) en { dateKey, plate }.
+ * Normaliza la patente para garantizar consistencia.
  */
 function parseAlertId(alertId) {
   if (!alertId || typeof alertId !== "string") return null;
   const idx = alertId.indexOf("_");
   if (idx <= 0 || idx >= alertId.length - 1) return null;
+  const rawPlate = alertId.slice(idx + 1).trim();
   return {
     dateKey: alertId.slice(0, idx),
-    plate: alertId.slice(idx + 1).trim(),
+    plate: normalizePlate(rawPlate), // Normalizar patente
   };
 }
 
 /**
  * Marca una alerta como enviada.
+ * Normaliza la patente antes de escribir en Firestore para garantizar consistencia.
  */
 async function markAlertAsSent(dateKey, plate) {
+  const normalizedPlate = normalizePlate(plate);
   const docRef = db
     .collection("apps")
     .doc("emails")
     .collection("dailyAlerts")
     .doc(dateKey)
     .collection("vehicles")
-    .doc(plate);
+    .doc(normalizedPlate);
 
   await docRef.update({
     alertSent: true,
@@ -434,10 +438,13 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         try {
           logger.info(`[GET-PENDING-ALERTS] Procesando documento ${index + 1}/${docs.length}`);
           
-          const plate = doc.plate || doc.id;
+          const rawPlate = doc.plate || doc.id;
           const dateKey = doc.dateKey; // dateKey viene incluido en el documento
           
-          logger.info(`[GET-PENDING-ALERTS] Documento: plate=${plate}, dateKey=${dateKey}`);
+          // Normalizar patente para garantizar consistencia
+          const plate = normalizePlate(rawPlate);
+          
+          logger.info(`[GET-PENDING-ALERTS] Documento: plate=${plate} (raw: ${rawPlate}), dateKey=${dateKey}`);
           
           if (!dateKey) {
             logger.warn(`[GET-PENDING-ALERTS] Documento sin dateKey: ${plate}`);
@@ -446,7 +453,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
           
           const alertId = `${dateKey}_${plate}`;
           
-          // Obtener responsables desde el vehículo
+          // Obtener responsables desde el vehículo (getVehicle normaliza internamente)
           const vehicle = await getVehicle(plate);
           const responsables = Array.isArray(vehicle?.responsables)
             ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))

@@ -15,11 +15,21 @@ function getDb() {
 }
 
 /**
- * Normaliza patente: sin espacios, uppercase.
+ * Normaliza patente: elimina espacios, guiones y caracteres especiales, convierte a uppercase.
+ * Garantiza consistencia para evitar documentos duplicados en Firestore.
+ * 
+ * Ejemplos:
+ * - "af-999-ef" → "AF999EF"
+ * - "AF 999 EF" → "AF999EF"
+ * - "af 999 ef" → "AF999EF"
+ * - "AB-123-CD" → "AB123CD"
  */
 function normalizePlate(plate) {
   if (!plate || typeof plate !== "string") return "";
-  return plate.replace(/\s+/g, "").toUpperCase();
+  return plate
+    .replace(/[^a-zA-Z0-9]/g, "") // Elimina espacios, guiones y caracteres especiales
+    .toUpperCase()
+    .trim();
 }
 
 /**

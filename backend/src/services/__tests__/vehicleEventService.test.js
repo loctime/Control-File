@@ -21,14 +21,18 @@ describe("vehicleEventService", () => {
   });
 
   describe("normalizePlate", () => {
-    it("normaliza patente a mayúsculas sin espacios", () => {
+    it("normaliza patente eliminando espacios, guiones y caracteres especiales, convierte a mayúsculas", () => {
       expect(normalizePlate("af 999 ef")).toBe("AF999EF");
-      expect(normalizePlate("  AB-123-CD  ")).toBe("AB-123-CD");
+      expect(normalizePlate("  AB-123-CD  ")).toBe("AB123CD");
+      expect(normalizePlate("af-999-ef")).toBe("AF999EF");
+      expect(normalizePlate("AF 999 EF")).toBe("AF999EF");
+      expect(normalizePlate("ab.123.cd")).toBe("AB123CD");
     });
 
     it("retorna string vacío para input inválido", () => {
       expect(normalizePlate("")).toBe("");
       expect(normalizePlate(null)).toBe("");
+      expect(normalizePlate(undefined)).toBe("");
     });
   });
 

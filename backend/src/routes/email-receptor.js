@@ -14,6 +14,7 @@ const {
   formatDateKey,
   generateDeterministicEventId,
   isFromAllowedDomain,
+  normalizePlate,
 } = require("../services/vehicleEventService");
 
 if (!admin.apps.length) {
@@ -196,13 +197,18 @@ router.post("/email-local-ingest", async (req, res) => {
       const allEvents = [];
 
       for (const event of rawEvents) {
-        const plate = event.plate;
-        if (!plate) {
+        const rawPlate = event.plate;
+        if (!rawPlate) {
           console.warn("⚠️ [EMAIL-LOCAL] Evento sin patente, saltando:", event);
           continue;
         }
         
-        console.log(`🔍 [EMAIL-LOCAL] Procesando evento para patente: ${plate}`);
+        // Normalizar patente ANTES de cualquier operación para garantizar consistencia
+        const plate = normalizePlate(rawPlate);
+        console.log(`🔍 [EMAIL-LOCAL] Procesando evento para patente: ${plate} (raw: ${rawPlate})`);
+
+        // Actualizar event.plate con la patente normalizada para consistencia
+        event.plate = plate;
 
         let vehicle = vehicleCache.get(plate);
         if (!vehicle) {
