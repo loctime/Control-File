@@ -87,6 +87,7 @@ function parseBrandModelLocation(rest) {
 
 /**
  * Detecta el tipo de email según subject (y opcionalmente body).
+ * Maneja caracteres corruptos y hace búsquedas más flexibles.
  * @param {string} subject - Asunto del email
  * @param {string} [bodyText] - Cuerpo en texto plano (opcional)
  * @returns {string|null} "excesos" | "no_identificados" | "contacto" | null
@@ -95,9 +96,53 @@ function detectEmailType(subject, bodyText) {
   if (!subject || typeof subject !== "string") return null;
   const s = subject.trim();
   if (s.length === 0) return null;
-  if (SUBJECT_PATTERNS.excesos.test(s)) return EMAIL_TYPE_EXCESOS;
-  if (SUBJECT_PATTERNS.no_identificados.test(s)) return EMAIL_TYPE_NO_IDENTIFICADOS;
-  if (SUBJECT_PATTERNS.contacto.test(s)) return EMAIL_TYPE_CONTACTO;
+  
+  // Normalizar para manejar caracteres corruptos (ej: "Identificaci�n" -> buscar "identificacion")
+  const normalized = s.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remover acentos
+    .replace(/[^\w\s]/g, "") // Remover caracteres especiales excepto espacios
+    .replace(/\s+/g, " "); // Normalizar espacios
+  
+  console.log(`[DETECT-EMAIL-TYPE] Subject original: "${s}"`);
+  console.log(`[DETECT-EMAIL-TYPE] Subject normalizado: "${normalized}"`);
+  
+  // Patrones más flexibles que manejan variaciones y caracteres corruptos
+  // Excesos: "exceso", "excesos", "velocidad"
+  if (/exceso/i.test(normalized) || /velocidad/i.test(normalized)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: EXCESOS`);
+    return EMAIL_TYPE_EXCESOS;
+  }
+  
+  // No identificados: "no identificado", "falta identificacion", "sin identificacion"
+  if (/no\s+identific/i.test(normalized) || 
+      /falta\s+identific/i.test(normalized) || 
+      /sin\s+identific/i.test(normalized)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: NO_IDENTIFICADOS`);
+    return EMAIL_TYPE_NO_IDENTIFICADOS;
+  }
+  
+  // Contacto: "contacto", "contacto sin identificacion"
+  if (/contacto/i.test(normalized)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: CONTACTO`);
+    return EMAIL_TYPE_CONTACTO;
+  }
+  
+  // Intentar con los patrones originales también
+  if (SUBJECT_PATTERNS.excesos.test(s)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): EXCESOS`);
+    return EMAIL_TYPE_EXCESOS;
+  }
+  if (SUBJECT_PATTERNS.no_identificados.test(s)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): NO_IDENTIFICADOS`);
+    return EMAIL_TYPE_NO_IDENTIFICADOS;
+  }
+  if (SUBJECT_PATTERNS.contacto.test(s)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): CONTACTO`);
+    return EMAIL_TYPE_CONTACTO;
+  }
+  
+  console.log(`[DETECT-EMAIL-TYPE] ⚠️ No se pudo detectar tipo de email`);
   return null;
 }
 
@@ -331,15 +376,35 @@ function parseNoIdentificados(bodyText) {
     console.log(`[PARSE-NO-ID] Total de líneas en email: ${lines.length}`);
   }
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
-    if (!trimmed.match(/\d{2}\/\d{2}\/\d{2}/)) continue;
+    
+    if (isDev && trimmed.length > 0) {
+      console.log(`[PARSE-NO-ID] Línea ${lineIndex + 1}: ${trimmed.slice(0, 100)}`);
+    }
+    
+    if (!trimmed.match(/\d{2}\/\d{2}\/\d{2}/)) {
+      if (isDev && trimmed.length > 0) {
+        console.log(`[PARSE-NO-ID] Línea ${lineIndex + 1} no contiene fecha DD/MM/YY, saltando`);
+      }
+      continue;
+    }
 
     const regex =
       /(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([A-Z0-9\-]+)\s+-\s+(.+)\((.+)\)/i;
 
     const match = trimmed.match(regex);
-    if (!match) continue;
+    if (!match) {
+      if (isDev) {
+        console.warn(`[PARSE-NO-ID] Línea ${lineIndex + 1} no coincide con regex: ${trimmed.slice(0, 100)}`);
+      }
+      continue;
+    }
+    
+    if (isDev) {
+      console.log(`[PARSE-NO-ID] ✅ Match encontrado en línea ${lineIndex + 1}`);
+    }
 
     const [, fechaStr, horaStr, plateRaw, brandModel, reasonRaw] = match;
 
@@ -354,6 +419,11 @@ function parseNoIdentificados(bodyText) {
     );
 
     const plate = plateRaw.trim().toUpperCase();
+    
+    if (isDev) {
+      console.log(`[PARSE-NO-ID] Patente extraída: "${plateRaw}" → "${plate}"`);
+    }
+    
     const parts = brandModel.trim().split(" ");
     const brand = parts[0] || "";
     const model = parts.slice(1).join(" ");
@@ -414,12 +484,32 @@ function parseContactoSinIdentificacion(bodyText) {
     console.log(`[PARSE-CONTACTO] Total de líneas en email: ${lines.length}`);
   }
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
-    if (!trimmed.match(/\d{2}-\d{2}-\d{4}/)) continue;
+    
+    if (isDev && trimmed.length > 0) {
+      console.log(`[PARSE-CONTACTO] Línea ${lineIndex + 1}: ${trimmed.slice(0, 100)}`);
+    }
+    
+    if (!trimmed.match(/\d{2}-\d{2}-\d{4}/)) {
+      if (isDev && trimmed.length > 0) {
+        console.log(`[PARSE-CONTACTO] Línea ${lineIndex + 1} no contiene fecha DD-MM-YYYY, saltando`);
+      }
+      continue;
+    }
 
     const parts = trimmed.split(/\s+/);
-    if (parts.length < 4) continue;
+    if (parts.length < 4) {
+      if (isDev) {
+        console.warn(`[PARSE-CONTACTO] Línea ${lineIndex + 1} tiene menos de 4 partes, saltando: ${trimmed.slice(0, 100)}`);
+      }
+      continue;
+    }
+    
+    if (isDev) {
+      console.log(`[PARSE-CONTACTO] ✅ Procesando línea ${lineIndex + 1}`);
+    }
 
     const brand = parts[0];
     const model = parts[1];
@@ -495,6 +585,7 @@ function normalizarEvento(raw, sourceEmailType) {
 
 /**
  * Orquesta el parseo según tipo de email detectado.
+ * Si no se detecta tipo, intenta todos los parsers y usa el que devuelva más eventos.
  * @param {string} subject - Asunto del email
  * @param {string} bodyText - Cuerpo en texto plano
  * @returns {{ events: Array<object>, sourceEmailType: string|null }}
@@ -502,6 +593,7 @@ function normalizarEvento(raw, sourceEmailType) {
 function parseVehicleEventsFromEmail(subject, bodyText) {
   const sourceEmailType = detectEmailType(subject, bodyText);
   let rawEvents = [];
+  let detectedType = sourceEmailType;
 
   if (sourceEmailType === EMAIL_TYPE_EXCESOS) {
     rawEvents = parseExcesos(bodyText);
@@ -510,16 +602,41 @@ function parseVehicleEventsFromEmail(subject, bodyText) {
   } else if (sourceEmailType === EMAIL_TYPE_CONTACTO) {
     rawEvents = parseContactoSinIdentificacion(bodyText);
   } else {
-    // Fallback: intentar parseExcesos para compatibilidad
-    rawEvents = parseExcesos(bodyText);
+    // Fallback: intentar todos los parsers y usar el que devuelva más eventos
+    console.log(`[PARSE-VEHICLE-EVENTS] ⚠️ Tipo no detectado, intentando todos los parsers...`);
+    
+    const excesosEvents = parseExcesos(bodyText);
+    const noIdEvents = parseNoIdentificados(bodyText);
+    const contactoEvents = parseContactoSinIdentificacion(bodyText);
+    
+    console.log(`[PARSE-VEHICLE-EVENTS] Resultados del fallback:`);
+    console.log(`  - Excesos: ${excesosEvents.length} eventos`);
+    console.log(`  - No identificados: ${noIdEvents.length} eventos`);
+    console.log(`  - Contacto: ${contactoEvents.length} eventos`);
+    
+    // Usar el parser que devolvió más eventos
+    if (excesosEvents.length >= noIdEvents.length && excesosEvents.length >= contactoEvents.length) {
+      rawEvents = excesosEvents;
+      detectedType = EMAIL_TYPE_EXCESOS;
+      console.log(`[PARSE-VEHICLE-EVENTS] ✅ Usando parser: EXCESOS (${excesosEvents.length} eventos)`);
+    } else if (noIdEvents.length >= contactoEvents.length) {
+      rawEvents = noIdEvents;
+      detectedType = EMAIL_TYPE_NO_IDENTIFICADOS;
+      console.log(`[PARSE-VEHICLE-EVENTS] ✅ Usando parser: NO_IDENTIFICADOS (${noIdEvents.length} eventos)`);
+    } else {
+      rawEvents = contactoEvents;
+      detectedType = EMAIL_TYPE_CONTACTO;
+      console.log(`[PARSE-VEHICLE-EVENTS] ✅ Usando parser: CONTACTO (${contactoEvents.length} eventos)`);
+    }
   }
 
+  // Usar detectedType en lugar de sourceEmailType para el fallback
   const sourceEmailTypeKey =
-    sourceEmailType === EMAIL_TYPE_EXCESOS
+    detectedType === EMAIL_TYPE_EXCESOS
       ? "excesos_del_dia"
-      : sourceEmailType === EMAIL_TYPE_NO_IDENTIFICADOS
+      : detectedType === EMAIL_TYPE_NO_IDENTIFICADOS
         ? "no_identificados_del_dia"
-        : sourceEmailType === EMAIL_TYPE_CONTACTO
+        : detectedType === EMAIL_TYPE_CONTACTO
           ? "contacto_sin_identificacion"
           : "excesos_del_dia";
 
@@ -528,9 +645,10 @@ function parseVehicleEventsFromEmail(subject, bodyText) {
   // Logs críticos para debugging
   console.log("🔍 [PARSE-VEHICLE-EVENTS] TOTAL EVENTS PARSED:", events.length);
   console.log("🔍 [PARSE-VEHICLE-EVENTS] PLATES:", events.map(e => e.plate));
-  console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type:", sourceEmailType);
+  console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type (detectado):", detectedType);
+  console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type (original):", sourceEmailType);
   
-  return { events, sourceEmailType };
+  return { events, sourceEmailType: detectedType };
 }
 
 module.exports = {
