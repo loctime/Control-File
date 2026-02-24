@@ -1,9 +1,10 @@
 /**
  * Rutas para alertas diarias.
  * El backend NO envía emails. Solo expone pendientes y permite marcarlas como enviadas.
+ * Un solo email por responsable por día, consolidando todas las patentes en un resumen.
  *
- * GET  /api/email/get-pending-daily-alerts
- * POST /api/email/mark-alert-sent
+ * GET  /api/email/get-pending-daily-alerts → [{ responsableEmail, subject, body, alertIds }]
+ * POST /api/email/mark-alert-sent → body: { alertIds: string[] }
  */
 
 const express = require("express");
@@ -17,6 +18,11 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+const DAILY_ALERTS_REF = db
+  .collection("apps")
+  .doc("emails")
+  .collection("dailyAlerts");
 
 /**
  * Valida x-local-token. Retorna true si válido.
@@ -48,69 +54,81 @@ function parseDateQuery(queryDate) {
  * .get() no lo encuentra. Por eso usamos listCollections() para obtener las subcolecciones.
  */
 async function getPendingAlerts() {
-  const dailyAlertsRef = db
-    .collection("apps")
-    .doc("emails")
-    .collection("dailyAlerts");
-  
-  // Intentar obtener documentos de fecha directamente
-  const dateKeysSnap = await dailyAlertsRef.get();
-  let dateKeys = dateKeysSnap.docs.map(doc => doc.id);
-  
-  // Si no hay documentos pero sabemos que hay datos, buscar en fechas recientes
-  // (últimos 60 días para cubrir cualquier fecha posible)
+  const dateKeysSnap = await DAILY_ALERTS_REF.get();
+  let dateKeys = dateKeysSnap.docs.map((doc) => doc.id);
+
   if (dateKeys.length === 0) {
     const today = new Date();
     for (let i = 0; i < 60; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      const dateKey = date.toISOString().slice(0, 10);
-      dateKeys.push(dateKey);
+      dateKeys.push(date.toISOString().slice(0, 10));
     }
   }
-  
+
   const allAlerts = [];
-  
-  // Para cada fecha, obtener vehículos y filtrar los que tienen alertSent == false
   for (const dateKey of dateKeys) {
     try {
-      const vehiclesRef = dailyAlertsRef.doc(dateKey).collection("vehicles");
-      const vehiclesSnap = await vehiclesRef.get();
-      
-      // Si hay vehículos en esta fecha, procesarlos
-      if (vehiclesSnap.docs.length > 0) {
-        for (const vehicleDoc of vehiclesSnap.docs) {
-          const data = vehicleDoc.data();
-          const alertSent = data.alertSent;
-          
-          // Si alertSent es false o no existe, incluir el documento
-          if (alertSent === false || alertSent === undefined || alertSent === null) {
-            allAlerts.push({
-              id: vehicleDoc.id,
-              dateKey,
-              ...data
-            });
-          }
+      const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
+      for (const vehicleDoc of vehiclesSnap.docs) {
+        const data = vehicleDoc.data();
+        if (data.alertSent === false || data.alertSent === undefined || data.alertSent === null) {
+          allAlerts.push({ id: vehicleDoc.id, dateKey, ...data });
         }
       }
-    } catch (err) {
-      // Si la fecha no existe, continuar con la siguiente
+    } catch {
       continue;
     }
   }
-  
   return allAlerts;
 }
 
 /**
- * Construye el asunto del email.
- * Si hay eventos críticos, destaca cantidad en el asunto.
+ * Obtiene el documento meta del día (apps/emails/dailyAlerts/{dateKey}/meta/meta).
+ * Retorna null si no existe; los contadores se tratan como 0.
  */
-function buildSubject(doc, dateKey) {
-  const criticos = (doc.events || []).filter(e => e && e.severity === "critico").length;
-  return criticos > 0
-    ? `🚨 ${doc.plate} – ${criticos} evento(s) crítico(s) – ${dateKey}`
-    : `🚗 ${doc.plate} – Alertas del ${dateKey}`;
+async function getDailyMeta(dateKey) {
+  const metaSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("meta").doc("meta").get();
+  if (!metaSnap.exists) return null;
+  return metaSnap.data();
+}
+
+/**
+ * Agrupa alertas pendientes por responsable (email).
+ * Una patente puede estar en varios responsables; dentro del mismo responsable no se duplica patente.
+ * Retorna: Array<{ dateKey, responsableEmail, docs: vehicleDoc[] }>
+ */
+function groupAlertsByResponsable(pendingDocs) {
+  const byKey = new Map();
+
+  for (const doc of pendingDocs) {
+    const plate = normalizePlate(doc.plate || doc.id);
+    const dateKey = doc.dateKey;
+    const responsables = Array.isArray(doc.responsables)
+      ? doc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+      : [];
+
+    for (const email of responsables) {
+      const key = `${dateKey}|${email.trim().toLowerCase()}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, { dateKey, responsableEmail: email.trim(), plates: new Set(), docs: [] });
+      }
+      const group = byKey.get(key);
+      if (!group.plates.has(plate)) {
+        group.plates.add(plate);
+        group.docs.push(doc);
+      }
+    }
+  }
+
+  return Array.from(byKey.values()).map((g) => ({ dateKey: g.dateKey, responsableEmail: g.responsableEmail, docs: g.docs }));
+}
+
+/**
+ * Asunto del email consolidado por responsable/día.
+ */
+function buildConsolidatedSubject(dateKey) {
+  return `🚨 Resumen diario de flota – ${dateKey}`;
 }
 
 /**
@@ -186,156 +204,128 @@ function escapeHtml(text) {
 }
 
 /**
- * Construye el cuerpo del email (HTML).
- * Soporta eventSummary con estructura fija: hasSpeed, speed, type.
- * Ahora también muestra resumen por tipo de evento usando el campo summary.
+ * Encabezado global del email usando meta del día.
  */
-function buildBody(doc) {
-  const { plate, brand, model, eventCount, events, summary } = doc;
+function buildGlobalSummaryHeader(meta, dateKey) {
+  const totalVehicles = meta ? (meta.totalVehicles ?? 0) : 0;
+  const totalEvents = meta ? (meta.totalEvents ?? 0) : 0;
+  const totalCriticos = meta ? (meta.totalCriticos ?? 0) : 0;
+  const totalAdvertencias = meta ? (meta.totalAdvertencias ?? 0) : 0;
+  const totalAdministrativos = meta ? (meta.totalAdministrativos ?? 0) : 0;
+  const vehiclesWithCritical = meta ? (meta.vehiclesWithCritical ?? 0) : 0;
 
-  if (!Array.isArray(events) || events.length === 0) {
-    return `<p>No se encontraron eventos.</p>`;
-  }
-
-  // Ordenar eventos por fecha (más recientes primero)
-  const sortedEvents = (events || [])
-    .filter(e => e && e.eventTimestamp)
-    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
-
-  // Calcular cantidad real de eventos (usar sortedEvents.length en lugar de eventCount)
-  const actualEventCount = sortedEvents.length;
-
-  // Resumen por severidad (críticos, advertencias y administrativos)
-  const resumen = {
-    critico: sortedEvents.filter(e => e.severity === "critico").length,
-    advertencia: sortedEvents.filter(e => e.severity === "advertencia").length,
-    administrativo: sortedEvents.filter(e => e.severity === "administrativo").length,
-  };
-
-  // Resumen por tipo de evento (si existe el campo summary)
-  const summaryByType = summary || {};
-
-  // Filas HTML: tipo (con color), velocidad, fecha/hora, ubicación
-  const rowsHtml = sortedEvents.map((e) => {
-    const color = getSeverityColor(e);
-    
-    // Construir typeLabel: si hay reason Y speed, mostrar ambos
-    let typeLabel = "";
-    if (e.reason && typeof e.reason === "string" && e.reason.trim().length > 0) {
-      typeLabel = e.reason;
-      // Si además tiene velocidad, indicar que también es exceso
-      if (e.speed != null && e.hasSpeed) {
-        typeLabel += ` - Exceso de velocidad`;
-      }
-    } else {
-      typeLabel = getTypeLabel(e);
-    }
-    
-    return `
-    <tr>
-      <td style="padding:8px; font-weight:bold; color:${color};">
-        ${escapeHtml(typeLabel)}
-      </td>
-      <td style="padding:8px;">
-        ${e.speed != null ? e.speed + " km/h" : "-"}
-      </td>
-      <td style="padding:8px;">
-        ${formatDateTimeArgentina(e.eventTimestamp)}
-      </td>
-      <td style="padding:8px;">
-        ${escapeHtml(e.location || "Sin ubicación")}
-      </td>
-    </tr>
-  `;
-  }).join("");
-
-  const hasCritical = resumen.critico > 0;
-
-  // Banner de críticos
-  const criticalBanner = hasCritical
-    ? `<div style="background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
-        <strong style="color: #d32f2f;">⚠️ Se detectaron eventos críticos.</strong>
-      </div>`
-    : "";
-
-  // Resumen por tipo de evento (si existe summary)
-  const typeSummaryHtml = summaryByType && Object.keys(summaryByType).length > 0
-    ? `<div style="margin-bottom: 20px; padding: 16px; background-color: #f0f4f8; border-radius: 4px; border-left: 4px solid #1976d2;">
-        <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #333;">Resumen por tipo:</div>
-        <div style="font-size: 13px; line-height: 1.8;">
-          ${summaryByType.excesos > 0 ? `<span style="margin-right: 16px;">🚨 Excesos: <strong>${summaryByType.excesos}</strong></span>` : ""}
-          ${summaryByType.no_identificados > 0 ? `<span style="margin-right: 16px;">❓ No identificados: <strong>${summaryByType.no_identificados}</strong></span>` : ""}
-          ${summaryByType.contactos > 0 ? `<span style="margin-right: 16px;">📞 Contactos: <strong>${summaryByType.contactos}</strong></span>` : ""}
-          ${summaryByType.llave_sin_cargar > 0 ? `<span style="margin-right: 16px;">🔑 Llave sin cargar: <strong>${summaryByType.llave_sin_cargar}</strong></span>` : ""}
-          ${summaryByType.conductor_inactivo > 0 ? `<span style="margin-right: 16px;">👤 Conductor inactivo: <strong>${summaryByType.conductor_inactivo}</strong></span>` : ""}
-        </div>
-      </div>`
-    : "";
-
-  // Resumen automático: críticos, advertencias y administrativos
-  const summarySection = `<div style="margin-bottom: 20px; padding: 16px; background-color: #f8f9fa; border-radius: 4px;">
-    <div style="font-size: 16px;">
-      ${resumen.critico > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>` : ""}
-      ${resumen.advertencia > 0 ? `<span style="margin-left: 20px; color: #f57c00; font-weight: bold;">🟠 ${resumen.advertencia} advertencias</span>` : ""}
-      ${resumen.administrativo > 0 ? `<span style="margin-left: 20px; color: #1976d2; font-weight: bold;">ℹ️ ${resumen.administrativo} administrativos</span>` : ""}
+  return `
+  <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #eee;">
+    <h1 style="margin: 0; font-size: 22px; color: #333; font-weight: 600;">Resumen diario de flota</h1>
+    <p style="margin: 8px 0 0 0; font-size: 16px; color: #666;">${dateKey}</p>
+  </div>
+  <div style="background-color: #e3f2fd; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
+    <div style="font-size: 14px; line-height: 1.8;">
+      <strong>Vehículos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
+      <strong>Total eventos:</strong> ${totalEvents}
+      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">Vehículos con críticos: ${vehiclesWithCritical}</span>` : ""}
+    </div>
+    <div style="font-size: 14px; margin-top: 8px;">
+      ${totalCriticos > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${totalCriticos} críticos</span>` : ""}
+      ${totalAdvertencias > 0 ? ` <span style="color: #f57c00; font-weight: bold;">🟠 ${totalAdvertencias} advertencias</span>` : ""}
+      ${totalAdministrativos > 0 ? ` <span style="color: #1976d2; font-weight: bold;">ℹ️ ${totalAdministrativos} administrativos</span>` : ""}
     </div>
   </div>`;
-  
-  // Fecha actual para footer
+}
+
+/**
+ * Sección HTML por vehículo (patente, resumen por severidad, tabla de eventos).
+ */
+function buildVehicleSection(doc) {
+  const { plate, brand, model, events, summary } = doc;
+  if (!Array.isArray(events) || events.length === 0) {
+    return `<section style="margin-bottom: 28px;"><h2 style="font-size: 18px; color: #333;">${escapeHtml(plate)}</h2><p>Sin eventos.</p></section>`;
+  }
+
+  const sortedEvents = events
+    .filter((e) => e && e.eventTimestamp)
+    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
+  const resumen = {
+    critico: sortedEvents.filter((e) => e.severity === "critico").length,
+    advertencia: sortedEvents.filter((e) => e.severity === "advertencia").length,
+    administrativo: sortedEvents.filter((e) => e.severity === "administrativo").length,
+  };
+  const summaryByType = summary || {};
+
+  const rowsHtml = sortedEvents
+    .map((e) => {
+      const color = getSeverityColor(e);
+      let typeLabel =
+        e.reason && typeof e.reason === "string" && e.reason.trim().length > 0
+          ? e.reason + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "")
+          : getTypeLabel(e);
+      return `
+    <tr>
+      <td style="padding:8px; font-weight:bold; color:${color};">${escapeHtml(typeLabel)}</td>
+      <td style="padding:8px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
+      <td style="padding:8px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
+      <td style="padding:8px;">${escapeHtml(e.location || "Sin ubicación")}</td>
+    </tr>`;
+    })
+    .join("");
+
+  const typeSummaryHtml =
+    Object.keys(summaryByType).length > 0
+      ? `<div style="font-size: 12px; margin-bottom: 8px; color: #555;">
+          ${summaryByType.excesos > 0 ? `Excesos: ${summaryByType.excesos}` : ""}
+          ${summaryByType.no_identificados > 0 ? ` | No identificados: ${summaryByType.no_identificados}` : ""}
+          ${summaryByType.contactos > 0 ? ` | Contactos: ${summaryByType.contactos}` : ""}
+          ${summaryByType.llave_sin_cargar > 0 ? ` | Llave sin cargar: ${summaryByType.llave_sin_cargar}` : ""}
+          ${summaryByType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${summaryByType.conductor_inactivo}` : ""}
+        </div>`
+      : "";
+
+  return `
+  <section style="margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+    <h2 style="font-size: 18px; color: #333; margin: 0 0 8px 0;">🚗 ${escapeHtml(plate)}</h2>
+    <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">${escapeHtml(brand || "")} ${escapeHtml(model || "")}</p>
+    <div style="margin-bottom: 12px; font-size: 14px;">
+      ${resumen.critico > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>` : ""}
+      ${resumen.advertencia > 0 ? ` <span style="color: #f57c00;">🟠 ${resumen.advertencia} advertencias</span>` : ""}
+      ${resumen.administrativo > 0 ? ` <span style="color: #1976d2;">ℹ️ ${resumen.administrativo} administrativos</span>` : ""}
+    </div>
+    ${typeSummaryHtml}
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr style="background-color: #f5f5f5;">
+          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Tipo</th>
+          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Velocidad</th>
+          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Fecha/Hora</th>
+          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Ubicación</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </section>`;
+}
+
+/**
+ * Cuerpo consolidado: encabezado global + sección por vehículo.
+ */
+function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
+  const sections = vehicleDocs.map((doc) => buildVehicleSection(doc)).join("");
   const today = new Date().toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
-    year: "numeric"
+    year: "numeric",
   });
-  
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Alertas de vehículo ${plate}</title>
+  <title>Resumen diario de flota – ${dateKey}</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-  
-  <!-- Cabecera profesional -->
-  <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
-    <h1 style="margin: 0; font-size: 24px; color: #333; font-weight: 600;">🚗 ${plate}</h1>
-    <p style="margin: 8px 0 0 0; font-size: 16px; color: #666;">Alertas del día</p>
-    <p style="margin: 4px 0 0 0; font-size: 14px; color: #999;">
-      ${brand || "-"} ${model || "-"}
-    </p>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+  ${buildGlobalSummaryHeader(meta, dateKey)}
+  ${sections}
+  <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; text-align: center;">
+    <p style="margin: 0; color: #666; font-size: 12px;">Resumen generado el ${today}</p>
   </div>
-  
-  <!-- Total de eventos destacado -->
-  <div style="background-color: #e3f2fd; padding: 12px; border-radius: 4px; margin-bottom: 20px; text-align: center;">
-    <strong style="font-size: 18px; color: #1976d2;">Total de eventos: ${actualEventCount}</strong>
-  </div>
-  
-  ${criticalBanner}
-  ${summarySection}
-  ${typeSummaryHtml}
-  
-  <!-- Tabla con jerarquía visual por tipo y severidad -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-    <thead>
-      <tr style="background-color: #f5f5f5;">
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Tipo</th>
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Velocidad</th>
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Fecha/Hora</th>
-        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd;">Ubicación</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rowsHtml}
-    </tbody>
-  </table>
-  
-  <!-- Footer -->
-  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-    <p style="margin: 0; color: #666; font-size: 12px;">
-      Resumen automático generado el ${today}
-    </p>
-  </div>
-  
 </body>
 </html>`.trim();
 }
@@ -356,19 +346,11 @@ function parseAlertId(alertId) {
 }
 
 /**
- * Marca una alerta como enviada.
- * Normaliza la patente antes de escribir en Firestore para garantizar consistencia.
+ * Marca una alerta como enviada (un documento vehicle).
  */
 async function markAlertAsSent(dateKey, plate) {
   const normalizedPlate = normalizePlate(plate);
-  const docRef = db
-    .collection("apps")
-    .doc("emails")
-    .collection("dailyAlerts")
-    .doc(dateKey)
-    .collection("vehicles")
-    .doc(normalizedPlate);
-
+  const docRef = DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").doc(normalizedPlate);
   await docRef.update({
     alertSent: true,
     sentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -376,11 +358,39 @@ async function markAlertAsSent(dateKey, plate) {
 }
 
 /**
+ * Marca múltiples alertas como enviadas en batch (máx 500 por batch).
+ */
+async function markAlertsAsSentBatch(alertIds) {
+  const parsed = alertIds
+    .map((id) => parseAlertId(id))
+    .filter(Boolean);
+  const uniqueKeys = new Map();
+  for (const { dateKey, plate } of parsed) {
+    uniqueKeys.set(`${dateKey}|${plate}`, { dateKey, plate });
+  }
+  const toUpdate = Array.from(uniqueKeys.values());
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    const chunk = toUpdate.slice(i, i + BATCH_SIZE);
+    for (const { dateKey, plate } of chunk) {
+      const ref = DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").doc(plate);
+      batch.update(ref, {
+        alertSent: true,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+  return toUpdate.length;
+}
+
+/**
  * GET /email/get-pending-daily-alerts
  *
- * Requiere: x-local-token
- * Devuelve TODAS las alertas con alertSent === false de todas las fechas.
- * Ignora completamente el query param date si se proporciona.
+ * Requiere: x-local-token.
+ * Agrupa por responsable (email): un solo email por responsable por día.
+ * Respuesta: [{ responsableEmail, subject, body, alertIds }].
  */
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
   try {
@@ -389,102 +399,55 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    // Obtener TODAS las alertas pendientes de todas las fechas
     const docs = await getPendingAlerts();
-
-    logger.info(`[GET-PENDING-ALERTS] Procesando ${docs.length} documentos`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
 
     if (docs.length === 0) {
-      // Debug: obtener información sobre qué hay en Firestore
-      const dailyAlertsRef = db
-        .collection("apps")
-        .doc("emails")
-        .collection("dailyAlerts");
-      const dateKeysSnap = await dailyAlertsRef.get();
-      
-      const debugInfo = {
-        totalDateKeys: dateKeysSnap.docs.length,
-        dateKeys: dateKeysSnap.docs.map(d => d.id),
-        vehiclesByDate: {}
-      };
-
-      for (const dateDoc of dateKeysSnap.docs.slice(0, 5)) { // Solo primeras 5 fechas para debug
-        const dateKey = dateDoc.id;
-        const vehiclesSnap = await dateDoc.ref.collection("vehicles").get();
-        debugInfo.vehiclesByDate[dateKey] = {
-          total: vehiclesSnap.docs.length,
-          vehicles: vehiclesSnap.docs.slice(0, 3).map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              plate: data.plate || doc.id,
-              alertSent: data.alertSent,
-              alertSentType: typeof data.alertSent
-            };
-          })
-        };
-      }
-
-      logger.info("[GET-PENDING-ALERTS] No hay alertas pendientes. Debug:", JSON.stringify(debugInfo));
-      return res.status(200).json({ 
-        ok: true, 
-        alerts: [],
-        debug: debugInfo // Incluir debug en respuesta
-      });
+      return res.status(200).json({ ok: true, alerts: [] });
     }
 
-    const alerts = await Promise.all(
-      docs.map(async (doc, index) => {
-        try {
-          logger.info(`[GET-PENDING-ALERTS] Procesando documento ${index + 1}/${docs.length}`);
-          
-          const rawPlate = doc.plate || doc.id;
-          const dateKey = doc.dateKey; // dateKey viene incluido en el documento
-          
-          // Normalizar patente para garantizar consistencia
-          const plate = normalizePlate(rawPlate);
-          
-          logger.info(`[GET-PENDING-ALERTS] Documento: plate=${plate} (raw: ${rawPlate}), dateKey=${dateKey}`);
-          
-          if (!dateKey) {
-            logger.warn(`[GET-PENDING-ALERTS] Documento sin dateKey: ${plate}`);
-            return null;
-          }
-          
-          const alertId = `${dateKey}_${plate}`;
-          
-          // Obtener responsables desde el vehículo (getVehicle normaliza internamente)
-          const vehicle = await getVehicle(plate);
-          const responsables = Array.isArray(vehicle?.responsables)
-            ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-            : [];
-
-          logger.info(`[GET-PENDING-ALERTS] Construyendo alerta para ${alertId}, responsables: ${responsables.length}`);
-
-          const alert = {
-            alertId,
-            plate,
-            responsables,
-            subject: buildSubject(doc, dateKey),
-            body: buildBody(doc),
-          };
-          
-          logger.info(`[GET-PENDING-ALERTS] Alerta construida exitosamente para ${alertId}`);
-          
-          return alert;
-        } catch (err) {
-          logger.error(`[GET-PENDING-ALERTS] Error procesando documento:`, err.message, err.stack);
-          return null;
+    // Enriquecer con responsables actuales desde vehicles si faltan
+    const enriched = await Promise.all(
+      docs.map(async (doc) => {
+        const plate = normalizePlate(doc.plate || doc.id);
+        const fromDoc = Array.isArray(doc.responsables) ? doc.responsables : [];
+        if (fromDoc.filter((e) => typeof e === "string" && e.includes("@")).length > 0) {
+          return { ...doc, plate, responsables: fromDoc };
         }
+        const vehicle = await getVehicle(plate);
+        const responsables = Array.isArray(vehicle?.responsables)
+          ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+          : [];
+        return { ...doc, plate, responsables };
       })
     );
 
-    // Filtrar nulls (documentos que fallaron al procesar)
-    const validAlerts = alerts.filter(a => a !== null);
+    const groups = groupAlertsByResponsable(enriched);
+    logger.info(`[GET-PENDING-ALERTS] Agrupamiento por responsable: ${groups.length} responsable(s)`);
+    groups.forEach((g, i) => {
+      logger.info(`[GET-PENDING-ALERTS] Responsable ${i + 1}: ${g.responsableEmail}, patentes: ${g.docs.length}`);
+    });
 
-    logger.info(`[GET-PENDING-ALERTS] Retornando ${validAlerts.length} alertas válidas`);
+    const dateKeysNeeded = [...new Set(groups.map((g) => g.dateKey))];
+    const metaByDate = new Map();
+    for (const dateKey of dateKeysNeeded) {
+      const meta = await getDailyMeta(dateKey);
+      metaByDate.set(dateKey, meta);
+    }
 
-    return res.status(200).json({ ok: true, alerts: validAlerts });
+    const alerts = groups.map((group) => {
+      const meta = metaByDate.get(group.dateKey) || null;
+      const alertIds = group.docs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
+      return {
+        responsableEmail: group.responsableEmail,
+        subject: buildConsolidatedSubject(group.dateKey),
+        body: buildConsolidatedBody(meta, group.docs, group.dateKey),
+        alertIds,
+      };
+    });
+
+    logger.info(`[GET-PENDING-ALERTS] Respuesta: ${alerts.length} email(s) consolidado(s)`);
+    return res.status(200).json({ ok: true, alerts });
   } catch (err) {
     logger.error("[GET-PENDING-ALERTS] Error:", err.message, err.stack);
     return res.status(500).json({
@@ -497,8 +460,8 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
 /**
  * POST /email/mark-alert-sent
  *
- * Requiere: x-local-token
- * Body: { alertId: string }
+ * Requiere: x-local-token.
+ * Body: { alertIds: string[] } o { alertId: string } (compatibilidad).
  */
 router.post("/email/mark-alert-sent", async (req, res) => {
   try {
@@ -507,23 +470,25 @@ router.post("/email/mark-alert-sent", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const { alertId } = req.body || {};
-    const parsed = parseAlertId(alertId);
+    const body = req.body || {};
+    let ids = Array.isArray(body.alertIds) ? body.alertIds : [];
+    if (ids.length === 0 && body.alertId) {
+      ids = [String(body.alertId)];
+    }
 
-    if (!parsed) {
+    if (ids.length === 0) {
       return res.status(400).json({
-        error: "alertId inválido",
-        expected: "YYYY-MM-DD_PLATE (ej: 2026-02-12_AF-999-EF)",
+        error: "Se requiere alertIds (array) o alertId (string)",
+        expected: "alertIds: ['YYYY-MM-DD_PLATE', ...] o alertId: 'YYYY-MM-DD_PLATE'",
       });
     }
 
-    await markAlertAsSent(parsed.dateKey, parsed.plate);
-
+    const count = await markAlertsAsSentBatch(ids);
+    logger.info(`[MARK-ALERT-SENT] Marcadas ${count} alerta(s) como enviadas`);
     return res.status(200).json({
       ok: true,
-      alertId,
-      dateKey: parsed.dateKey,
-      plate: parsed.plate,
+      alertIds: ids,
+      marked: count,
     });
   } catch (err) {
     logger.error("[MARK-ALERT-SENT] Error:", err.message, err.stack);
@@ -544,17 +509,11 @@ router.get("/email/debug-pending-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const dailyAlertsRef = db
-      .collection("apps")
-      .doc("emails")
-      .collection("dailyAlerts");
-
-    const dateKeysSnap = await dailyAlertsRef.get();
-    
+    const dateKeysSnap = await DAILY_ALERTS_REF.get();
     const debugInfo = {
       totalDateKeys: dateKeysSnap.docs.length,
-      dateKeys: dateKeysSnap.docs.map(d => d.id),
-      vehiclesByDate: {}
+      dateKeys: dateKeysSnap.docs.map((d) => d.id),
+      vehiclesByDate: {},
     };
 
     for (const dateDoc of dateKeysSnap.docs) {

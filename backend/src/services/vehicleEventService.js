@@ -237,6 +237,56 @@ function getSeverityByType(eventType) {
 }
 
 /**
+ * Actualiza el documento meta del día usando FieldValue.increment.
+ * Idempotente: solo debe llamarse cuando isNewEvent === true.
+ *
+ * Estructura meta: dateKey, totalVehicles, totalEvents, totalCriticos,
+ * totalAdvertencias, totalAdministrativos, vehiclesWithCritical, lastUpdatedAt.
+ *
+ * @param {string} dateKey - Fecha YYYY-MM-DD
+ * @param {object} eventSummary - Evento con severity
+ * @param {object} opts - { isNewEvent: boolean, isNewVehicle: boolean, hadCriticalBefore: boolean }
+ */
+async function updateDailyMeta(dateKey, eventSummary, opts) {
+  if (!opts || opts.isNewEvent !== true) return;
+
+  const db = getDb();
+  const metaRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("dailyAlerts")
+    .doc(dateKey)
+    .collection("meta")
+    .doc("meta");
+
+  const severity = eventSummary.severity || "administrativo";
+  const FieldValue = admin.firestore.FieldValue;
+
+  const update = {
+    dateKey,
+    lastUpdatedAt: FieldValue.serverTimestamp(),
+    totalEvents: FieldValue.increment(1),
+  };
+
+  if (opts.isNewVehicle) {
+    update.totalVehicles = FieldValue.increment(1);
+  }
+
+  if (severity === "critico") {
+    update.totalCriticos = FieldValue.increment(1);
+    if (opts.isNewVehicle || !opts.hadCriticalBefore) {
+      update.vehiclesWithCritical = FieldValue.increment(1);
+    }
+  } else if (severity === "advertencia") {
+    update.totalAdvertencias = FieldValue.increment(1);
+  } else {
+    update.totalAdministrativos = FieldValue.increment(1);
+  }
+
+  await metaRef.set(update, { merge: true });
+}
+
+/**
  * Normaliza el tipo de evento para el summary.
  * Mapea tipos específicos a claves del summary.
  * @param {string} eventType - Tipo de evento original
@@ -338,10 +388,15 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
     };
 
     await vehiclesRef.set(newDoc);
-    
+    await updateDailyMeta(dateKey, eventSummary, {
+      isNewEvent: true,
+      isNewVehicle: true,
+      hadCriticalBefore: false,
+    });
     console.log(
       `[DAILY-ALERT] ✅ Alerta creada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity})`
     );
+    console.log(`[DAILY-ALERT] Meta actualizada para ${dateKey} (nuevo vehículo, nuevo evento)`);
   } else {
     // Actualizar documento existente
     const existingData = docSnap.data();
@@ -358,6 +413,8 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
       );
       return;
     }
+
+    const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
 
     // Actualizar summary
     const summaryKey = normalizeEventTypeForSummary(eventType);
@@ -382,9 +439,15 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
       lastEventAt: now,
     });
 
+    await updateDailyMeta(dateKey, eventSummary, {
+      isNewEvent: true,
+      isNewVehicle: false,
+      hadCriticalBefore,
+    });
     console.log(
       `[DAILY-ALERT] 🔄 Alerta actualizada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity}) - Total ${summaryKey}: ${updatedSummary[summaryKey]}`
     );
+    console.log(`[DAILY-ALERT] Meta actualizada para ${dateKey} (evento nuevo)`);
   }
 }
 

@@ -83,18 +83,18 @@ try {
         exit
     }
 
-    Write-Host "Procesando $($alerts.Count) alertas..."
+    Write-Host "Procesando $($alerts.Count) email(s) consolidado(s) (uno por responsable)..."
 
     foreach ($alert in $alerts) {
 
-        Write-Host "Enviando alerta para patente $($alert.plate)"
+        Write-Host "Enviando resumen a $($alert.responsableEmail) ($($alert.alertIds.Count) patente(s))"
 
         $mail = $outlook.CreateItem(0)
 
         # FORZAR cuenta de envío
         $mail.SendUsingAccount = $accountToUse
 
-        $mail.To = ($alert.responsables -join ";")
+        $mail.To = $alert.responsableEmail
         $mail.Subject = $alert.subject
         $mail.HTMLBody = $alert.body
 
@@ -102,15 +102,16 @@ try {
             $mail.Send()
             Write-Host "Email enviado correctamente desde $SEND_FROM."
 
-            # Marcar como enviada
+            # Marcar todas las alertas de este responsable como enviadas (batch)
+            $markBody = @{ alertIds = $alert.alertIds } | ConvertTo-Json
             $markResponse = Invoke-RestMethod `
                 -Uri $BACKEND_MARK_URL `
                 -Method POST `
                 -Headers @{ "x-local-token" = $LOCAL_TOKEN } `
-                -Body (@{ alertId = $alert.alertId } | ConvertTo-Json) `
+                -Body $markBody `
                 -ContentType "application/json"
 
-            Write-Host "Alerta marcada como enviada: $($alert.alertId)"
+            Write-Host "Alertas marcadas como enviadas: $($alert.alertIds -join ', ')"
 
         } catch {
             Write-Host "Error enviando email:"

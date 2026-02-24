@@ -629,6 +629,44 @@ service cloud.firestore {
     
     
     /* ===============================
+       DAILY ACTIONS
+       =============================== */
+    
+    match /apps/horarios/dailyActions/{ownerId} {
+      allow read: if true;
+    
+      allow create: if horariosCanActFor(ownerId);
+    
+      allow update: if horariosCanActFor(ownerId);
+    
+      allow delete: if horariosCanActFor(ownerId);
+    }
+    
+    /* ===============================
+       DAILY ACTION STATUS
+       =============================== */
+    
+    match /apps/horarios/dailyActionStatus/{docId} {
+      allow read: if true;
+    
+      allow create, update: if true;
+    
+      allow delete: if false;
+    }
+    
+    /* ===============================
+       DAILY TASK STATUS
+       =============================== */
+    
+    match /apps/horarios/dailyTaskStatus/{docId} {
+      allow read: if true;
+    
+      allow create, update: if true;
+    
+      allow delete: if false;
+    }
+    
+    /* ===============================
        ENLACES PUBLICOS
        =============================== */
     
@@ -638,6 +676,22 @@ service cloud.firestore {
       allow create, update: if isAuth() && horariosCanActFor(ownerId);
     
       allow delete: if isAuth() && horariosCanActFor(ownerId);
+    }
+    
+    /* ===============================
+       TASKS
+       =============================== */
+    
+    match /apps/horarios/tasks/{taskId} {
+      allow read: if true;
+    
+      allow create: if horariosCanActFor(request.resource.data.ownerId);
+    
+      allow update, delete: if horariosCanActFor(
+        resource.data.ownerId != null
+          ? resource.data.ownerId
+          : request.resource.data.ownerId
+      );
     }
     
     /* ===============================
