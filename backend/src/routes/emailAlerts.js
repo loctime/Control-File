@@ -11,6 +11,7 @@ const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
 const { formatDateKey, getVehicle, normalizePlate } = require("../services/vehicleEventService");
+const { getDailyTotalsByType } = require("../services/dailyMetricsService");
 const { logger } = require("../utils/logger");
 
 if (!admin.apps.length) {
@@ -204,7 +205,46 @@ function escapeHtml(text) {
 }
 
 /**
- * Encabezado global del email usando meta del día.
+ * Ordena documentos de vehículos por mayor criticidad (riskScore desc, luego patente).
+ * Documentos sin riskScore se tratan como 0.
+ */
+function sortVehiclesByCriticity(docs) {
+  if (!Array.isArray(docs) || docs.length <= 1) return docs;
+  return [...docs].sort((a, b) => {
+    const scoreA = typeof a.riskScore === "number" ? a.riskScore : 0;
+    const scoreB = typeof b.riskScore === "number" ? b.riskScore : 0;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    const plateA = (a.plate || a.id || "").toString();
+    const plateB = (b.plate || b.id || "").toString();
+    return plateA.localeCompare(plateB);
+  });
+}
+
+/**
+ * Métricas por tipo desde meta del día (v2).
+ * Devuelve objeto con totales por tipo para el resumen ejecutivo.
+ */
+function getMetricsByTypeFromMeta(meta) {
+  if (!meta) {
+    return {
+      excesos: 0,
+      no_identificados: 0,
+      contactos: 0,
+      llave_sin_cargar: 0,
+      conductor_inactivo: 0,
+    };
+  }
+  return {
+    excesos: meta.totalExcesos ?? 0,
+    no_identificados: meta.totalNoIdentificados ?? 0,
+    contactos: meta.totalContactos ?? 0,
+    llave_sin_cargar: meta.totalLlaveSinCargar ?? 0,
+    conductor_inactivo: meta.totalConductorInactivo ?? 0,
+  };
+}
+
+/**
+ * Encabezado global del email usando meta del día (resumen ejecutivo con métricas por tipo).
  */
 function buildGlobalSummaryHeader(meta, dateKey) {
   const totalVehicles = meta ? (meta.totalVehicles ?? 0) : 0;
@@ -213,6 +253,20 @@ function buildGlobalSummaryHeader(meta, dateKey) {
   const totalAdvertencias = meta ? (meta.totalAdvertencias ?? 0) : 0;
   const totalAdministrativos = meta ? (meta.totalAdministrativos ?? 0) : 0;
   const vehiclesWithCritical = meta ? (meta.vehiclesWithCritical ?? 0) : 0;
+  const byType = getMetricsByTypeFromMeta(meta);
+
+  const metricsByTypeHtml =
+    byType.excesos > 0 || byType.no_identificados > 0 || byType.contactos > 0 ||
+    byType.llave_sin_cargar > 0 || byType.conductor_inactivo > 0
+      ? `<div style="font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #bbdefb;">
+          <strong>Por tipo:</strong>
+          ${byType.excesos > 0 ? ` Excesos de velocidad: ${byType.excesos}` : ""}
+          ${byType.no_identificados > 0 ? ` | No identificados: ${byType.no_identificados}` : ""}
+          ${byType.contactos > 0 ? ` | Contacto sin identificación: ${byType.contactos}` : ""}
+          ${byType.llave_sin_cargar > 0 ? ` | Llave sin cargar: ${byType.llave_sin_cargar}` : ""}
+          ${byType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${byType.conductor_inactivo}` : ""}
+        </div>`
+      : "";
 
   return `
   <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #eee;">
@@ -230,6 +284,7 @@ function buildGlobalSummaryHeader(meta, dateKey) {
       ${totalAdvertencias > 0 ? ` <span style="color: #f57c00; font-weight: bold;">🟠 ${totalAdvertencias} advertencias</span>` : ""}
       ${totalAdministrativos > 0 ? ` <span style="color: #1976d2; font-weight: bold;">ℹ️ ${totalAdministrativos} administrativos</span>` : ""}
     </div>
+    ${metricsByTypeHtml}
   </div>`;
 }
 
@@ -242,9 +297,15 @@ function buildVehicleSection(doc) {
     return `<section style="margin-bottom: 28px;"><h2 style="font-size: 18px; color: #333;">${escapeHtml(plate)}</h2><p>Sin eventos.</p></section>`;
   }
 
+  const severityOrder = { critico: 0, advertencia: 1, administrativo: 2, info: 3 };
   const sortedEvents = events
     .filter((e) => e && e.eventTimestamp)
-    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
+    .sort((a, b) => {
+      const orderA = severityOrder[a.severity] ?? 3;
+      const orderB = severityOrder[b.severity] ?? 3;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(b.eventTimestamp) - new Date(a.eventTimestamp);
+    });
   const resumen = {
     critico: sortedEvents.filter((e) => e.severity === "critico").length,
     advertencia: sortedEvents.filter((e) => e.severity === "advertencia").length,
@@ -437,11 +498,12 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
 
     const alerts = groups.map((group) => {
       const meta = metaByDate.get(group.dateKey) || null;
-      const alertIds = group.docs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
+      const sortedDocs = sortVehiclesByCriticity(group.docs);
+      const alertIds = sortedDocs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
       return {
         responsableEmail: group.responsableEmail,
         subject: buildConsolidatedSubject(group.dateKey),
-        body: buildConsolidatedBody(meta, group.docs, group.dateKey),
+        body: buildConsolidatedBody(meta, sortedDocs, group.dateKey),
         alertIds,
       };
     });
@@ -492,6 +554,81 @@ router.post("/email/mark-alert-sent", async (req, res) => {
     });
   } catch (err) {
     logger.error("[MARK-ALERT-SENT] Error:", err.message, err.stack);
+    return res.status(500).json({
+      error: "error interno",
+      message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+});
+
+/**
+ * Compara total de eventos en meta del día con la suma de events en cada vehicle.
+ * Útil para detectar posibles pérdidas o inconsistencias (v2).
+ * @param {string} dateKey - YYYY-MM-DD
+ * @returns {{ ok: boolean, totalInMeta: number, totalInAlerts: number, diff: number }}
+ */
+async function getDailyConsistency(dateKey) {
+  const meta = await getDailyMeta(dateKey);
+  const totalInMeta = meta ? (meta.totalEvents ?? 0) : 0;
+
+  const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
+  let totalInAlerts = 0;
+  for (const doc of vehiclesSnap.docs) {
+    const data = doc.data();
+    const events = Array.isArray(data.events) ? data.events : [];
+    totalInAlerts += events.length;
+  }
+
+  const diff = totalInMeta - totalInAlerts;
+  return {
+    ok: diff === 0,
+    totalInMeta,
+    totalInAlerts,
+    diff,
+  };
+}
+
+/**
+ * GET /email/daily-metrics?date=YYYY-MM-DD
+ * Métricas del día (totales por tipo y por severidad) para dashboard o scripts (v2).
+ */
+router.get("/email/daily-metrics", async (req, res) => {
+  try {
+    if (!validateLocalToken(req)) {
+      return res.status(401).json({ error: "no autorizado" });
+    }
+    const dateKey = parseDateQuery(req.query.date);
+    if (!dateKey) {
+      return res.status(400).json({ error: "Query date requerido en formato YYYY-MM-DD" });
+    }
+    const metrics = await getDailyTotalsByType(dateKey);
+    return res.status(200).json({ ok: true, dateKey, metrics });
+  } catch (err) {
+    logger.error("[DAILY-METRICS] Error:", err.message, err.stack);
+    return res.status(500).json({
+      error: "error interno",
+      message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+});
+
+/**
+ * GET /email/daily-consistency?date=YYYY-MM-DD
+ * Sanity check: compara totalEvents en meta con suma de events por vehicle ese día.
+ */
+router.get("/email/daily-consistency", async (req, res) => {
+  try {
+    if (!validateLocalToken(req)) {
+      return res.status(401).json({ error: "no autorizado" });
+    }
+    const dateKey = parseDateQuery(req.query.date);
+    if (!dateKey) {
+      return res.status(400).json({ error: "Query date requerido en formato YYYY-MM-DD" });
+    }
+    const result = await getDailyConsistency(dateKey);
+    return res.status(200).json({ ok: true, dateKey, ...result });
+  } catch (err) {
+    logger.error("[DAILY-CONSISTENCY] Error:", err.message, err.stack);
     return res.status(500).json({
       error: "error interno",
       message: process.env.NODE_ENV === "development" ? err.message : undefined,

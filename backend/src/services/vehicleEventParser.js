@@ -106,40 +106,27 @@ function detectEmailType(subject, bodyText) {
   
   console.log(`[DETECT-EMAIL-TYPE] Subject original: "${s}"`);
   console.log(`[DETECT-EMAIL-TYPE] Subject normalizado: "${normalized}"`);
-  
-  // Patrones más flexibles que manejan variaciones y caracteres corruptos
-  // Excesos: "exceso", "excesos", "velocidad"
-  if (/exceso/i.test(normalized) || /velocidad/i.test(normalized)) {
-    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: EXCESOS`);
-    return EMAIL_TYPE_EXCESOS;
+
+  // Prioridad 1: Contacto sin identificación (debe ir ANTES de "no identificados"
+  // para que "Contacto sin identificación del día" no matchee como no_identificados)
+  if (SUBJECT_PATTERNS.contacto.test(s) || /contacto\s+sin\s+identific/i.test(normalized)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: CONTACTO`);
+    return EMAIL_TYPE_CONTACTO;
   }
-  
-  // No identificados: "no identificado", "falta identificacion", "sin identificacion"
-  if (/no\s+identific/i.test(normalized) || 
-      /falta\s+identific/i.test(normalized) || 
+  // Prioridad 2: No identificados del día
+  if (SUBJECT_PATTERNS.no_identificados.test(s) ||
+      /no\s+identific/i.test(normalized) ||
+      /falta\s+identific/i.test(normalized) ||
       /sin\s+identific/i.test(normalized)) {
     console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: NO_IDENTIFICADOS`);
     return EMAIL_TYPE_NO_IDENTIFICADOS;
   }
-  
-  // Contacto: "contacto", "contacto sin identificacion"
-  if (/contacto/i.test(normalized)) {
-    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: CONTACTO`);
-    return EMAIL_TYPE_CONTACTO;
-  }
-  
-  // Intentar con los patrones originales también
-  if (SUBJECT_PATTERNS.excesos.test(s)) {
-    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): EXCESOS`);
+  // Prioridad 3: Excesos del día
+  if (SUBJECT_PATTERNS.excesos.test(s) ||
+      /exceso/i.test(normalized) ||
+      /velocidad/i.test(normalized)) {
+    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: EXCESOS`);
     return EMAIL_TYPE_EXCESOS;
-  }
-  if (SUBJECT_PATTERNS.no_identificados.test(s)) {
-    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): NO_IDENTIFICADOS`);
-    return EMAIL_TYPE_NO_IDENTIFICADOS;
-  }
-  if (SUBJECT_PATTERNS.contacto.test(s)) {
-    console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado (patrón original): CONTACTO`);
-    return EMAIL_TYPE_CONTACTO;
   }
   
   console.log(`[DETECT-EMAIL-TYPE] ⚠️ No se pudo detectar tipo de email`);
@@ -641,14 +628,40 @@ function parseVehicleEventsFromEmail(subject, bodyText) {
           : "excesos_del_dia";
 
   const events = rawEvents.map((raw) => normalizarEvento(raw, sourceEmailTypeKey));
-  
+
+  // Validación: coherencia entre sourceEmailType y tipos de eventos
+  const expectedTypes = {
+    [EMAIL_TYPE_CONTACTO]: ["contacto"],
+    [EMAIL_TYPE_NO_IDENTIFICADOS]: ["no_identificado"],
+    [EMAIL_TYPE_EXCESOS]: ["exceso", "sin_llave", "llave_no_registrada", "conductor_inactivo"],
+  };
+  if (detectedType && expectedTypes[detectedType]) {
+    const allowed = new Set(expectedTypes[detectedType]);
+    const incoherent = events.filter((e) => !e.type || !allowed.has(e.type));
+    if (incoherent.length > 0) {
+      console.warn(
+        `[PARSE-VEHICLE-EVENTS] ⚠️ Incoherencia: email tipo ${detectedType} pero ${incoherent.length} evento(s) con type no esperado:`,
+        incoherent.map((e) => e.type)
+      );
+    }
+  }
+
   // Logs críticos para debugging
   console.log("🔍 [PARSE-VEHICLE-EVENTS] TOTAL EVENTS PARSED:", events.length);
   console.log("🔍 [PARSE-VEHICLE-EVENTS] PLATES:", events.map(e => e.plate));
   console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type (detectado):", detectedType);
   console.log("🔍 [PARSE-VEHICLE-EVENTS] Source Email Type (original):", sourceEmailType);
-  
+
   return { events, sourceEmailType: detectedType };
+}
+
+/**
+ * Devuelve los patrones de asunto usados para detectar tipo de email.
+ * Útil para tests y documentación de variantes (acentos, "día"/"dia").
+ * @returns {{ excesos: RegExp, no_identificados: RegExp, contacto: RegExp }}
+ */
+function getSubjectPatterns() {
+  return { ...SUBJECT_PATTERNS };
 }
 
 module.exports = {
@@ -660,6 +673,7 @@ module.exports = {
   parseVehicleEventsFromEmail,
   normalizarEvento,
   detectEmailType,
+  getSubjectPatterns,
   DEFAULT_TIMEZONE,
   EMAIL_TYPE_EXCESOS,
   EMAIL_TYPE_NO_IDENTIFICADOS,

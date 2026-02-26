@@ -78,9 +78,8 @@ async function saveVehicleEvents(events, messageId, source) {
   const db = getDb();
   const baseRef = db.collection("apps").doc("emails").collection("vehicleEvents");
 
-  const batches = [];
-  let currentBatch = db.batch();
-  let opCount = 0;
+  const toWrite = [];
+  let skipped = 0;
 
   for (const event of events) {
     const eventId = event.eventId || generateDeterministicEventId(
@@ -88,6 +87,18 @@ async function saveVehicleEvents(events, messageId, source) {
       event.eventTimestamp,
       event.rawLine
     );
+
+    const docRef = baseRef.doc(eventId);
+    const existing = await docRef.get();
+    if (existing.exists) {
+      skipped++;
+      continue;
+    }
+
+    const dateKey =
+      event.eventTimestamp && /^\d{4}-\d{2}-\d{2}/.test(String(event.eventTimestamp))
+        ? String(event.eventTimestamp).slice(0, 10)
+        : formatDateKey(new Date());
 
     const docData = {
       ...event,
@@ -98,13 +109,20 @@ async function saveVehicleEvents(events, messageId, source) {
       messageId: messageId || null,
       source: source || "outlook-local",
       eventId,
+      dateKey,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    const docRef = baseRef.doc(eventId);
-    currentBatch.set(docRef, docData);
-    opCount++;
+    toWrite.push({ ref: docRef, data: docData });
+  }
 
+  const batches = [];
+  let currentBatch = db.batch();
+  let opCount = 0;
+
+  for (const { ref, data } of toWrite) {
+    currentBatch.set(ref, data);
+    opCount++;
     if (opCount >= MAX_BATCH_SIZE) {
       batches.push(currentBatch);
       currentBatch = db.batch();
@@ -118,7 +136,7 @@ async function saveVehicleEvents(events, messageId, source) {
     await batch.commit();
   }
 
-  return { created: events.length, skipped: 0 };
+  return { created: toWrite.length, skipped };
 }
 
 /**
@@ -261,11 +279,15 @@ async function updateDailyMeta(dateKey, eventSummary, opts) {
 
   const severity = eventSummary.severity || "administrativo";
   const FieldValue = admin.firestore.FieldValue;
+  const eventType = eventSummary.type || "exceso";
+  const summaryKey = normalizeEventTypeForSummary(eventType);
+  const metaTypeField = getMetaFieldForType(summaryKey);
 
   const update = {
     dateKey,
     lastUpdatedAt: FieldValue.serverTimestamp(),
     totalEvents: FieldValue.increment(1),
+    [metaTypeField]: FieldValue.increment(1),
   };
 
   if (opts.isNewVehicle) {
@@ -286,9 +308,18 @@ async function updateDailyMeta(dateKey, eventSummary, opts) {
   await metaRef.set(update, { merge: true });
 }
 
+/** Tipos de evento permitidos para summary y meta. */
+const SUMMARY_EVENT_TYPES = new Set([
+  "excesos",
+  "no_identificados",
+  "contactos",
+  "llave_sin_cargar",
+  "conductor_inactivo",
+]);
+
 /**
  * Normaliza el tipo de evento para el summary.
- * Mapea tipos específicos a claves del summary.
+ * Mapea tipos específicos a claves del summary (siempre uno de los 5 tipos).
  * @param {string} eventType - Tipo de evento original
  * @returns {string} Clave para el summary
  */
@@ -301,7 +332,65 @@ function normalizeEventTypeForSummary(eventType) {
     sin_llave: "llave_sin_cargar",
     conductor_inactivo: "conductor_inactivo",
   };
-  return typeMap[eventType] || "excesos"; // Fallback a excesos si no se reconoce
+  return typeMap[eventType] || "no_identificados";
+}
+
+/**
+ * Nombre del campo en meta del día para totales por tipo.
+ * @param {string} summaryKey - excesos | no_identificados | contactos | llave_sin_cargar | conductor_inactivo
+ * @returns {string}
+ */
+function getMetaFieldForType(summaryKey) {
+  const fieldMap = {
+    excesos: "totalExcesos",
+    no_identificados: "totalNoIdentificados",
+    contactos: "totalContactos",
+    llave_sin_cargar: "totalLlaveSinCargar",
+    conductor_inactivo: "totalConductorInactivo",
+  };
+  return fieldMap[summaryKey] || "totalNoIdentificados";
+}
+
+/** Pesos por tipo de evento para el score de riesgo (v2). */
+const RISK_WEIGHTS_BY_TYPE = {
+  excesos: 3,
+  no_identificados: 2,
+  contactos: 2,
+  llave_sin_cargar: 1,
+  conductor_inactivo: 1,
+};
+
+/** Pesos por severidad para el score de riesgo (v2). */
+const RISK_WEIGHTS_BY_SEVERITY = {
+  critico: 5,
+  advertencia: 2,
+  administrativo: 0,
+  info: 0,
+};
+
+/**
+ * Calcula el score de riesgo por vehículo para ordenar por criticidad.
+ * Combina conteos por tipo y severidad de los eventos.
+ * @param {object} summary - summary del documento (excesos, no_identificados, contactos, llave_sin_cargar, conductor_inactivo)
+ * @param {Array<object>} events - Array de eventSummary con severity
+ * @returns {number}
+ */
+function computeRiskScore(summary, events) {
+  if (!summary && !events) return 0;
+  let score = 0;
+  if (summary && typeof summary === "object") {
+    for (const [key, count] of Object.entries(summary)) {
+      if (typeof count === "number" && RISK_WEIGHTS_BY_TYPE[key] != null) {
+        score += RISK_WEIGHTS_BY_TYPE[key] * count;
+      }
+    }
+  }
+  const eventList = Array.isArray(events) ? events : [];
+  for (const e of eventList) {
+    const sev = e && e.severity ? e.severity : "administrativo";
+    score += RISK_WEIGHTS_BY_SEVERITY[sev] != null ? RISK_WEIGHTS_BY_SEVERITY[sev] : 0;
+  }
+  return Math.max(0, score);
 }
 
 /**
@@ -331,8 +420,21 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
 
-  // Determinar tipo de evento y severidad
-  const eventType = event.type || "exceso";
+  const ALLOWED_EVENT_TYPES = new Set([
+    "exceso",
+    "no_identificado",
+    "contacto",
+    "llave_no_registrada",
+    "sin_llave",
+    "conductor_inactivo",
+  ]);
+  let eventType = event.type || "exceso";
+  if (!ALLOWED_EVENT_TYPES.has(eventType)) {
+    console.warn(`[DAILY-ALERT] Tipo de evento no reconocido "${event.type}", mapeando a no_identificado`);
+    eventType = "no_identificado";
+  }
+
+  // Determinar severidad
   const severity = event.severity || getSeverityByType(eventType);
   const speedVal = event.speed;
 
@@ -374,6 +476,9 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
     };
     initialSummary[summaryKey] = 1;
 
+    const newEvents = [eventSummary];
+    const riskScore = computeRiskScore(initialSummary, newEvents);
+
     const newDoc = {
       plate: normalized,
       dateKey: dateKey,
@@ -383,7 +488,8 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
       alertSent: false,
       lastEventAt: now,
       summary: initialSummary,
-      events: [eventSummary],
+      events: newEvents,
+      riskScore,
       createdAt: now,
     };
 
@@ -432,10 +538,14 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
       [summaryKey]: (currentSummary[summaryKey] || 0) + 1,
     };
 
+    const updatedEvents = [...existingEvents, eventSummary];
+    const riskScore = computeRiskScore(updatedSummary, updatedEvents);
+
     // Actualizar documento
     await vehiclesRef.update({
       summary: updatedSummary,
       events: admin.firestore.FieldValue.arrayUnion(eventSummary),
+      riskScore,
       lastEventAt: now,
     });
 
@@ -477,4 +587,5 @@ module.exports = {
   formatDateKey,
   normalizePlate,
   isFromAllowedDomain,
+  computeRiskScore,
 };

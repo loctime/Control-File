@@ -6,6 +6,7 @@ const {
   parseVehicleEventsFromEmail,
   normalizarEvento,
   parseLine,
+  getSubjectPatterns,
   DEFAULT_TIMEZONE,
   EMAIL_TYPE_EXCESOS,
   EMAIL_TYPE_NO_IDENTIFICADOS,
@@ -24,8 +25,11 @@ describe("vehicleEventParser", () => {
       expect(detectEmailType("No identificado del día 16/02")).toBe(EMAIL_TYPE_NO_IDENTIFICADOS);
     });
 
-    it("detecta contacto sin identificación del día", () => {
+    it("detecta contacto sin identificación del día (y no como no_identificados)", () => {
       expect(detectEmailType("Contacto sin identificación del día")).toBe(EMAIL_TYPE_CONTACTO);
+      expect(detectEmailType("Contacto sin identificacion del dia")).toBe(EMAIL_TYPE_CONTACTO);
+      // Debe prevalecer contacto sobre "sin identificacion"
+      expect(detectEmailType("Contacto sin identificación del día 16/02")).toBe(EMAIL_TYPE_CONTACTO);
     });
 
     it("retorna null para subject vacío o no reconocido", () => {
@@ -84,6 +88,7 @@ describe("vehicleEventParser", () => {
   describe("normalizarEvento", () => {
     it("normaliza evento de exceso con sourceEmailType", () => {
       const raw = {
+        type: "exceso",
         speed: 120,
         plate: "AF-999-EF",
         brand: "RENAULT",
@@ -117,12 +122,34 @@ describe("vehicleEventParser", () => {
       });
     });
 
-    it("usa fallback parseExcesos cuando subject no reconocido", () => {
+    it("usa fallback y devuelve tipo elegido cuando subject no reconocido", () => {
       const subject = "Asunto desconocido";
       const body = "132 Km/h 04/02/26 19:27:54 AF-999-EF - RENAULT KANGOO";
       const { events, sourceEmailType } = parseVehicleEventsFromEmail(subject, body);
-      expect(sourceEmailType).toBe(null);
+      expect(sourceEmailType).toBe(EMAIL_TYPE_EXCESOS);
       expect(events).toHaveLength(1);
+    });
+
+    it("con asunto Contacto sin identificación devuelve solo eventos tipo contacto", () => {
+      const subject = "Contacto sin identificación del día";
+      const body = "RENAULT KANGOO AF999EF 26-02-2026 14:30:00";
+      const { events, sourceEmailType } = parseVehicleEventsFromEmail(subject, body);
+      expect(sourceEmailType).toBe(EMAIL_TYPE_CONTACTO);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe("contacto");
+      expect(events[0].sourceEmailType).toBe("contacto_sin_identificacion");
+    });
+  });
+
+  describe("getSubjectPatterns", () => {
+    it("devuelve patrones de asunto con excesos, no_identificados y contacto", () => {
+      const patterns = getSubjectPatterns();
+      expect(patterns.excesos).toBeInstanceOf(RegExp);
+      expect(patterns.no_identificados).toBeInstanceOf(RegExp);
+      expect(patterns.contacto).toBeInstanceOf(RegExp);
+      expect("Excesos del día").toMatch(patterns.excesos);
+      expect("No identificados del día").toMatch(patterns.no_identificados);
+      expect("Contacto sin identificación del día").toMatch(patterns.contacto);
     });
   });
 

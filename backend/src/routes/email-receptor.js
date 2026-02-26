@@ -126,8 +126,9 @@ router.post("/email-local-ingest", async (req, res) => {
     console.log("🔍 [EMAIL-LOCAL] PLATES:", rawEvents.map(e => e.plate));
     console.log("🔍 [EMAIL-LOCAL] Source Email Type:", sourceEmailType);
     
-    // Contar líneas que parecen eventos pero no se parsearon
+    // Contar líneas que parecen eventos pero no se parsearon (v2: registrar para auditoría)
     let unparsedLinesCount = 0;
+    let linesWithPatternCount = 0;
     if (bodyText && sourceEmailType) {
       const lines = bodyText.split(/\r?\n/);
       const eventPatterns = {
@@ -141,11 +142,25 @@ router.post("/email-local-ingest", async (req, res) => {
           const trimmed = line.trim();
           return trimmed.length > 0 && pattern.test(trimmed);
         });
-        unparsedLinesCount = Math.max(0, linesWithPattern.length - rawEvents.length);
-        console.log(`🔍 [EMAIL-LOCAL] Líneas con patrón detectado: ${linesWithPattern.length}`);
+        linesWithPatternCount = linesWithPattern.length;
+        unparsedLinesCount = Math.max(0, linesWithPatternCount - rawEvents.length);
+        console.log(`🔍 [EMAIL-LOCAL] Líneas con patrón detectado: ${linesWithPatternCount}`);
       }
     }
-    
+
+    if (unparsedLinesCount > 0) {
+      const inboxRef = db.collection("apps").doc("emails").collection("inbox").doc(docId);
+      await inboxRef.update({
+        unparsedSummary: {
+          sourceEmailType: sourceEmailType || null,
+          linesWithPattern: linesWithPatternCount,
+          parsedCount: rawEvents.length,
+          diff: unparsedLinesCount,
+          at: new Date().toISOString(),
+        },
+      });
+    }
+
     if (isDev) {
       console.log("📊 [EMAIL-LOCAL] Tipo detectado:", sourceEmailType);
       console.log("📊 [EMAIL-LOCAL] Eventos parseados:", rawEvents.length);
@@ -251,14 +266,17 @@ router.post("/email-local-ingest", async (req, res) => {
         allEvents.push(event);
       }
 
-      // Persistir TODOS los eventos (nunca descartar)
-      const { created } = await saveVehicleEvents(
+      // Persistir eventos (duplicados por eventId se omiten y se cuentan como skipped)
+      const { created, skipped: duplicatesSkipped } = await saveVehicleEvents(
         allEvents,
         emailData.message_id,
         "outlook-local"
       );
       eventsCreated = created;
-      if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created, "(vehicleRegistered=false:", eventsSkipped + ")");
+      if (duplicatesSkipped > 0) {
+        console.warn(`⚠️ [EMAIL-LOCAL] Eventos duplicados omitidos en vehicleEvents: ${duplicatesSkipped}`);
+      }
+      if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created, "duplicados omitidos:", duplicatesSkipped, "(vehicleRegistered=false:", eventsSkipped + ")");
 
       // IMPORTANTE:
       // Los eventos con vehicleRegistered=false se guardan en vehicleEvents

@@ -2,6 +2,7 @@ const {
   generateDeterministicEventId,
   normalizePlate,
   isFromAllowedDomain,
+  computeRiskScore,
 } = require("../vehicleEventService");
 
 describe("vehicleEventService", () => {
@@ -51,6 +52,33 @@ describe("vehicleEventService", () => {
     it("soporta múltiples dominios separados por coma", () => {
       expect(isFromAllowedDomain("a@pluspetrol.com", "pluspetrol.com,otro.com")).toBe(true);
       expect(isFromAllowedDomain("a@otro.com", "pluspetrol.com,otro.com")).toBe(true);
+    });
+  });
+
+  describe("computeRiskScore", () => {
+    it("devuelve 0 para summary y events vacíos", () => {
+      expect(computeRiskScore(null, null)).toBe(0);
+      expect(computeRiskScore({}, [])).toBe(0);
+    });
+
+    it("suma por tipo de evento (excesos 3, no_identificados/contactos 2, llave/conductor 1)", () => {
+      const summary = { excesos: 2, no_identificados: 1, contactos: 0, llave_sin_cargar: 0, conductor_inactivo: 0 };
+      expect(computeRiskScore(summary, [])).toBe(2 * 3 + 1 * 2); // 8
+    });
+
+    it("suma por severidad (critico 5, advertencia 2, administrativo 0)", () => {
+      const events = [
+        { severity: "critico" },
+        { severity: "advertencia" },
+        { severity: "administrativo" },
+      ];
+      expect(computeRiskScore(null, events)).toBe(5 + 2 + 0);
+    });
+
+    it("combina tipo y severidad", () => {
+      const summary = { excesos: 1, no_identificados: 0, contactos: 1, llave_sin_cargar: 0, conductor_inactivo: 0 };
+      const events = [{ severity: "critico" }, { severity: "advertencia" }];
+      expect(computeRiskScore(summary, events)).toBe(3 + 2 + 5 + 2); // 12
     });
   });
 });
