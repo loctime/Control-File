@@ -10,7 +10,9 @@ const {
   upsertVehicle,
   getVehicle,
   createVehicleFromEvent,
-  upsertDailyAlert,
+  upsertDailyAlertBatch,
+  updateDailyMetaBatch,
+  buildEventSummary,
   formatDateKey,
   generateDeterministicEventId,
   isFromAllowedDomain,
@@ -278,67 +280,110 @@ router.post("/email-local-ingest", async (req, res) => {
       }
       if (isDev) console.log("📊 [EMAIL-LOCAL] vehicleEvents escritos:", created, "duplicados omitidos:", duplicatesSkipped, "(vehicleRegistered=false:", eventsSkipped + ")");
 
-      // IMPORTANTE:
-      // Los eventos con vehicleRegistered=false se guardan en vehicleEvents
-      // pero NO actualizan vehicles ni dailyAlerts.
-      // Si en el futuro se activa AUTO_CREATE_VEHICLES,
-      // estos eventos no se reprocesan automáticamente.
+      // Eventos con vehicleRegistered=false no actualizan vehicles ni dailyAlerts
       const registeredEvents = allEvents.filter((e) => e.vehicleRegistered === true);
-      
+
       console.log("🔍 [EMAIL-LOCAL] ========== EVENTOS REGISTRADOS ==========");
       console.log(`🔍 [EMAIL-LOCAL] Total eventos registrados: ${registeredEvents.length}`);
-      console.log(`🔍 [EMAIL-LOCAL] Patentes registradas:`, registeredEvents.map(e => e.plate).join(", "));
-      console.log(`🔍 [EMAIL-LOCAL] Eventos sin registrar: ${allEvents.length - registeredEvents.length}`);
-      
-      const updatedPlates = new Set();
-      // TODO (optimización futura):
-      // Agrupar por plate y ejecutar un solo upsertVehicle y upsertDailyAlert por patente
-      // para mejorar performance cuando haya muchos eventos en un mismo email.
-      
-      console.log("🔍 [EMAIL-LOCAL] ========== ACTUALIZANDO VEHÍCULOS Y ALERTAS ==========");
+      console.log(`🔍 [EMAIL-LOCAL] Patentes:`, [...new Set(registeredEvents.map((e) => e.plate))].join(", "));
+
+      // Acumulador en memoria: dateKey -> plate -> { vehicle, eventIds, eventSummaries }
+      const accumulator = new Map();
+
       for (const event of registeredEvents) {
-        try {
-          console.log(`🔍 [EMAIL-LOCAL] → Procesando evento para ${event.plate} (${event.type})`);
-          
-          await upsertVehicle(event);
-          const vehicle = vehicleCache.get(event.plate);
-          if (vehicle) {
-            const eventDateKey =
-              event.eventTimestamp &&
-              /^\d{4}-\d{2}-\d{2}/.test(event.eventTimestamp)
-                ? event.eventTimestamp.slice(0, 10)
-                : formatDateKey(new Date());
+        const dateKey =
+          event.eventTimestamp && /^\d{4}-\d{2}-\d{2}/.test(String(event.eventTimestamp))
+            ? String(event.eventTimestamp).slice(0, 10)
+            : formatDateKey(new Date());
+        const plate = event.plate;
+        const eventSummary = buildEventSummary(event);
 
-            console.log(`🔍 [EMAIL-LOCAL] → Llamando upsertDailyAlert para ${event.plate} en fecha ${eventDateKey}`);
-            await upsertDailyAlert(
-              eventDateKey,
-              event.plate,
-              vehicle,
-              event
-            );
+        if (!accumulator.has(dateKey)) accumulator.set(dateKey, new Map());
+        const byPlate = accumulator.get(dateKey);
+        if (!byPlate.has(plate)) {
+          const vehicle = vehicleCache.get(plate);
+          if (!vehicle) continue;
+          byPlate.set(plate, { vehicle, eventIds: new Set(), eventSummaries: [] });
+        }
+        const bucket = byPlate.get(plate);
+        if (bucket.eventIds.has(eventSummary.eventId)) continue;
+        bucket.eventIds.add(eventSummary.eventId);
+        bucket.eventSummaries.push(eventSummary);
+      }
 
-            updatedPlates.add(event.plate);
-            console.log(`🔍 [EMAIL-LOCAL] ✅ Completado para ${event.plate}`);
-          } else {
-            console.warn(`⚠️ [EMAIL-LOCAL] Vehículo no encontrado en cache para ${event.plate}`);
-          }
-        } catch (err) {
-          console.error(
-            `❌ [EMAIL-LOCAL] Error procesando evento ${event.eventId} (${event.plate}):`,
-            err.message
-          );
-          console.error("Stack:", err.stack);
-          continue;
+      const uniquePlates = new Set(registeredEvents.map((e) => e.plate));
+      const totalBuckets = Array.from(accumulator.values()).reduce((sum, m) => sum + m.size, 0);
+      console.log("🔍 [EMAIL-LOCAL] ========== EVENTOS AGRUPADOS ==========");
+      console.log(`🔍 [EMAIL-LOCAL] Fechas: ${accumulator.size} | Vehículos únicos (día/patente): ${totalBuckets} | Patentes: ${uniquePlates.size}`);
+      for (const [dk, byPlate] of accumulator) {
+        const plates = Array.from(byPlate.keys()).join(", ");
+        const counts = Array.from(byPlate.entries()).map(([p, b]) => `${p}:${b.eventSummaries.length}`).join(" ");
+        console.log(`🔍 [EMAIL-LOCAL]   ${dk} → ${plates} | ${counts}`);
+      }
+
+      // Una actualización de vehicle por patente (usar el evento más reciente por timestamp)
+      const plateToLatestEvent = new Map();
+      for (const event of registeredEvents) {
+        const plate = event.plate;
+        const ts = event.eventTimestamp || "";
+        if (!plateToLatestEvent.has(plate) || (plateToLatestEvent.get(plate).eventTimestamp || "") < ts) {
+          plateToLatestEvent.set(plate, event);
         }
       }
-      
+      console.log("🔍 [EMAIL-LOCAL] ========== ACTUALIZANDO VEHÍCULOS (1 por patente) ==========");
+      for (const [plate, event] of plateToLatestEvent) {
+        try {
+          await upsertVehicle(event);
+        } catch (err) {
+          console.error(`❌ [EMAIL-LOCAL] Error upsertVehicle ${plate}:`, err.message);
+        }
+      }
+
+      // Una escritura por (dateKey, plate) en dailyAlerts; meta agregada por dateKey
+      const metaByDate = new Map();
+      let dailyAlertWrites = 0;
+
+      console.log("🔍 [EMAIL-LOCAL] ========== ACTUALIZANDO DAILY ALERTS (1 por vehículo/día) ==========");
+      for (const [dateKey, byPlate] of accumulator) {
+        for (const [plate, bucket] of byPlate) {
+          if (bucket.eventSummaries.length === 0) continue;
+          try {
+            const result = await upsertDailyAlertBatch(dateKey, plate, bucket.vehicle, bucket.eventSummaries);
+            if (result.metaDeltas) {
+              dailyAlertWrites++;
+              const prev = metaByDate.get(dateKey) || {};
+              const d = result.metaDeltas;
+              metaByDate.set(dateKey, {
+                totalEvents: (prev.totalEvents || 0) + (d.totalEvents || 0),
+                totalVehicles: (prev.totalVehicles || 0) + (d.totalVehicles || 0),
+                totalExcesos: (prev.totalExcesos || 0) + (d.totalExcesos || 0),
+                totalNoIdentificados: (prev.totalNoIdentificados || 0) + (d.totalNoIdentificados || 0),
+                totalContactos: (prev.totalContactos || 0) + (d.totalContactos || 0),
+                totalLlaveSinCargar: (prev.totalLlaveSinCargar || 0) + (d.totalLlaveSinCargar || 0),
+                totalConductorInactivo: (prev.totalConductorInactivo || 0) + (d.totalConductorInactivo || 0),
+                totalCriticos: (prev.totalCriticos || 0) + (d.totalCriticos || 0),
+                totalAdvertencias: (prev.totalAdvertencias || 0) + (d.totalAdvertencias || 0),
+                totalAdministrativos: (prev.totalAdministrativos || 0) + (d.totalAdministrativos || 0),
+                vehiclesWithCritical: (prev.vehiclesWithCritical || 0) + (d.vehiclesWithCritical || 0),
+              });
+            }
+          } catch (err) {
+            console.error(`❌ [EMAIL-LOCAL] Error upsertDailyAlertBatch ${dateKey}/${plate}:`, err.message);
+          }
+        }
+      }
+
+      for (const [dateKey, deltas] of metaByDate) {
+        await updateDailyMetaBatch(dateKey, deltas);
+      }
+
+      const updatedPlates = new Set([...accumulator.values()].flatMap((m) => [...m.keys()]));
       console.log("🔍 [EMAIL-LOCAL] ========== RESUMEN FINAL ==========");
-      console.log(`🔍 [EMAIL-LOCAL] Patentes actualizadas: ${updatedPlates.size}`);
-      console.log(`🔍 [EMAIL-LOCAL] Lista de patentes:`, Array.from(updatedPlates).join(", "));
-      vehiclesUpdated = updatedPlates.size;
-      dailyAlertsUpdated = updatedPlates.size;
-      if (isDev) console.log("📊 [EMAIL-LOCAL] Vehículos actualizados:", vehiclesUpdated);
-      if (isDev) console.log("📊 [EMAIL-LOCAL] dailyAlerts actualizados:", dailyAlertsUpdated);
+      console.log(`🔍 [EMAIL-LOCAL] Vehículos actualizados (vehicles): ${plateToLatestEvent.size}`);
+      console.log(`🔍 [EMAIL-LOCAL] Escrituras dailyAlerts (1 por vehículo/día): ${dailyAlertWrites}`);
+      console.log(`🔍 [EMAIL-LOCAL] Patentes con alertas: ${updatedPlates.size} → ${Array.from(updatedPlates).join(", ")}`);
+      vehiclesUpdated = plateToLatestEvent.size;
+      dailyAlertsUpdated = dailyAlertWrites;
     }
 
     return res.status(200).json({

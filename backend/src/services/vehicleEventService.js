@@ -393,19 +393,125 @@ function computeRiskScore(summary, events) {
   return Math.max(0, score);
 }
 
+const ALLOWED_EVENT_TYPES = new Set([
+  "exceso",
+  "no_identificado",
+  "contacto",
+  "llave_no_registrada",
+  "sin_llave",
+  "conductor_inactivo",
+]);
+
 /**
- * Crea o actualiza el documento diario en
- * /apps/emails/dailyAlerts/{YYYY-MM-DD}/vehicles/{plate}
- * 
- * IMPORTANTE: Genera alertas para TODOS los tipos de eventos.
- * No filtra por tipo. Todos los eventos deben generar alertas.
- * 
- * @param {string} dateKey - Fecha en formato YYYY-MM-DD
+ * Construye el objeto eventSummary a partir de un evento crudo (para uso en batch).
+ * @param {object} event - Evento con plate, type, severity, eventId, etc.
+ * @returns {object} eventSummary para el array events del documento dailyAlerts
+ */
+function buildEventSummary(event) {
+  let eventType = event.type || "exceso";
+  if (!ALLOWED_EVENT_TYPES.has(eventType)) {
+    eventType = "no_identificado";
+  }
+  const severity = event.severity || getSeverityByType(eventType);
+  const speedVal = event.speed;
+  const eventId =
+    event.eventId ||
+    generateDeterministicEventId(event.plate, event.eventTimestamp, event.rawLine || "");
+
+  return {
+    eventId,
+    type: eventType,
+    reason: event.reason || null,
+    sourceEmailType: event.sourceEmailType || null,
+    speed: typeof speedVal === "number" ? speedVal : null,
+    hasSpeed: typeof speedVal === "number",
+    eventTimestamp: event.eventTimestamp || "",
+    location: event.location || "",
+    severity,
+    rawData: {
+      brand: event.brand || null,
+      model: event.model || null,
+      timezone: event.timezone || null,
+      eventCategory: event.eventCategory || null,
+    },
+  };
+}
+
+/**
+ * Actualiza la meta del día con incrementos en lote (evita N writes por N eventos).
+ * @param {string} dateKey - YYYY-MM-DD
+ * @param {object} deltas - { totalEvents?, totalVehicles?, totalExcesos?, totalNoIdentificados?, totalContactos?, totalLlaveSinCargar?, totalConductorInactivo?, totalCriticos?, totalAdvertencias?, totalAdministrativos?, vehiclesWithCritical? }
+ */
+async function updateDailyMetaBatch(dateKey, deltas) {
+  if (!deltas || typeof deltas !== "object") return;
+
+  const db = getDb();
+  const metaRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("dailyAlerts")
+    .doc(dateKey)
+    .collection("meta")
+    .doc("meta");
+
+  const FieldValue = admin.firestore.FieldValue;
+  const update = {
+    dateKey,
+    lastUpdatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (deltas.totalEvents != null && deltas.totalEvents > 0) {
+    update.totalEvents = FieldValue.increment(deltas.totalEvents);
+  }
+  if (deltas.totalVehicles != null && deltas.totalVehicles > 0) {
+    update.totalVehicles = FieldValue.increment(deltas.totalVehicles);
+  }
+  if (deltas.totalExcesos != null && deltas.totalExcesos > 0) {
+    update.totalExcesos = FieldValue.increment(deltas.totalExcesos);
+  }
+  if (deltas.totalNoIdentificados != null && deltas.totalNoIdentificados > 0) {
+    update.totalNoIdentificados = FieldValue.increment(deltas.totalNoIdentificados);
+  }
+  if (deltas.totalContactos != null && deltas.totalContactos > 0) {
+    update.totalContactos = FieldValue.increment(deltas.totalContactos);
+  }
+  if (deltas.totalLlaveSinCargar != null && deltas.totalLlaveSinCargar > 0) {
+    update.totalLlaveSinCargar = FieldValue.increment(deltas.totalLlaveSinCargar);
+  }
+  if (deltas.totalConductorInactivo != null && deltas.totalConductorInactivo > 0) {
+    update.totalConductorInactivo = FieldValue.increment(deltas.totalConductorInactivo);
+  }
+  if (deltas.totalCriticos != null && deltas.totalCriticos > 0) {
+    update.totalCriticos = FieldValue.increment(deltas.totalCriticos);
+  }
+  if (deltas.totalAdvertencias != null && deltas.totalAdvertencias > 0) {
+    update.totalAdvertencias = FieldValue.increment(deltas.totalAdvertencias);
+  }
+  if (deltas.totalAdministrativos != null && deltas.totalAdministrativos > 0) {
+    update.totalAdministrativos = FieldValue.increment(deltas.totalAdministrativos);
+  }
+  if (deltas.vehiclesWithCritical != null && deltas.vehiclesWithCritical > 0) {
+    update.vehiclesWithCritical = FieldValue.increment(deltas.vehiclesWithCritical);
+  }
+
+  if (Object.keys(update).length <= 2) return; // solo dateKey y lastUpdatedAt
+  await metaRef.set(update, { merge: true });
+}
+
+/**
+ * Crea o actualiza el documento diario con todos los eventos del lote en una sola escritura.
+ * Deduplica por eventId. No decrementa contadores.
+ * @param {string} dateKey - YYYY-MM-DD
  * @param {string} plate - Patente normalizada
  * @param {object} vehicle - Datos del vehículo (plate, brand, model, responsables)
- * @param {object} event - Evento a agregar
+ * @param {Array<object>} eventSummaries - Array de eventSummary (buildEventSummary) ya deduplicado por eventId en este lote
+ * @returns {{ isNewVehicle: boolean, metaDeltas: object }} para que el llamador agregue a updateDailyMetaBatch
  */
-async function upsertDailyAlert(dateKey, plate, vehicle, event) {
+async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
+  if (!eventSummaries || eventSummaries.length === 0) {
+    return { isNewVehicle: false, metaDeltas: null };
+  }
+
   const db = getDb();
   const normalized = normalizePlate(plate);
   const vehiclesRef = db
@@ -420,144 +526,99 @@ async function upsertDailyAlert(dateKey, plate, vehicle, event) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
 
-  const ALLOWED_EVENT_TYPES = new Set([
-    "exceso",
-    "no_identificado",
-    "contacto",
-    "llave_no_registrada",
-    "sin_llave",
-    "conductor_inactivo",
-  ]);
-  let eventType = event.type || "exceso";
-  if (!ALLOWED_EVENT_TYPES.has(eventType)) {
-    console.warn(`[DAILY-ALERT] Tipo de evento no reconocido "${event.type}", mapeando a no_identificado`);
-    eventType = "no_identificado";
+  const existingData = docSnap.exists ? docSnap.data() : null;
+  const existingEvents = existingData?.events || [];
+  const existingEventIds = new Set(existingEvents.map((e) => e.eventId));
+
+  const newSummaries = eventSummaries.filter((es) => !existingEventIds.has(es.eventId));
+  if (newSummaries.length === 0) {
+    return { isNewVehicle: false, metaDeltas: null };
   }
 
-  // Determinar severidad
-  const severity = event.severity || getSeverityByType(eventType);
-  const speedVal = event.speed;
-
-  // eventId debe ser estable para deduplicación en arrayUnion
-  const eventId = event.eventId || generateDeterministicEventId(
-    event.plate,
-    event.eventTimestamp,
-    event.rawLine || ""
-  );
-
-  // Construir objeto de evento completo
-  const eventSummary = {
-    eventId,
-    type: eventType,
-    reason: event.reason || null,
-    sourceEmailType: event.sourceEmailType || null,
-    speed: typeof speedVal === "number" ? speedVal : null,
-    hasSpeed: typeof speedVal === "number",
-    eventTimestamp: event.eventTimestamp || "",
-    location: event.location || "",
-    severity: severity,
-    rawData: {
-      brand: event.brand || null,
-      model: event.model || null,
-      timezone: event.timezone || null,
-      eventCategory: event.eventCategory || null,
-    },
+  const mergedEvents = [...existingEvents];
+  const summaryCounts = {
+    excesos: existingData?.summary?.excesos ?? 0,
+    no_identificados: existingData?.summary?.no_identificados ?? 0,
+    contactos: existingData?.summary?.contactos ?? 0,
+    llave_sin_cargar: existingData?.summary?.llave_sin_cargar ?? 0,
+    conductor_inactivo: existingData?.summary?.conductor_inactivo ?? 0,
   };
 
-  if (!docSnap.exists) {
-    // Crear nuevo documento con estructura completa
-    const summaryKey = normalizeEventTypeForSummary(eventType);
-    const initialSummary = {
-      excesos: 0,
-      no_identificados: 0,
-      contactos: 0,
-      llave_sin_cargar: 0,
-      conductor_inactivo: 0,
-    };
-    initialSummary[summaryKey] = 1;
+  let totalCriticos = 0;
+  let totalAdvertencias = 0;
+  let totalAdministrativos = 0;
+  let hasNewCritical = false;
+  const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
 
-    const newEvents = [eventSummary];
-    const riskScore = computeRiskScore(initialSummary, newEvents);
-
-    const newDoc = {
-      plate: normalized,
-      dateKey: dateKey,
-      brand: vehicle.brand || "",
-      model: vehicle.model || "",
-      responsables,
-      alertSent: false,
-      lastEventAt: now,
-      summary: initialSummary,
-      events: newEvents,
-      riskScore,
-      createdAt: now,
-    };
-
-    await vehiclesRef.set(newDoc);
-    await updateDailyMeta(dateKey, eventSummary, {
-      isNewEvent: true,
-      isNewVehicle: true,
-      hadCriticalBefore: false,
-    });
-    console.log(
-      `[DAILY-ALERT] ✅ Alerta creada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity})`
-    );
-    console.log(`[DAILY-ALERT] Meta actualizada para ${dateKey} (nuevo vehículo, nuevo evento)`);
-  } else {
-    // Actualizar documento existente
-    const existingData = docSnap.data();
-    const existingEvents = existingData.events || [];
-
-    // Verificar si el evento ya existe (deduplicación)
-    const alreadyExists = existingEvents.some(
-      (e) => e.eventId === eventSummary.eventId
-    );
-
-    if (alreadyExists) {
-      console.warn(
-        `[DAILY-ALERT] ⚠️ Evento duplicado evitado: ${eventSummary.eventId} (${dateKey}/${normalized})`
-      );
-      return;
+  for (const es of newSummaries) {
+    mergedEvents.push(es);
+    const key = normalizeEventTypeForSummary(es.type);
+    summaryCounts[key] = (summaryCounts[key] || 0) + 1;
+    if (es.severity === "critico") {
+      totalCriticos++;
+      hasNewCritical = true;
+    } else if (es.severity === "advertencia") {
+      totalAdvertencias++;
+    } else {
+      totalAdministrativos++;
     }
+  }
 
-    const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
+  const riskScore = computeRiskScore(summaryCounts, mergedEvents);
+  const isNewVehicle = !docSnap.exists;
 
-    // Actualizar summary
-    const summaryKey = normalizeEventTypeForSummary(eventType);
-    const currentSummary = existingData.summary || {
-      excesos: 0,
-      no_identificados: 0,
-      contactos: 0,
-      llave_sin_cargar: 0,
-      conductor_inactivo: 0,
-    };
+  const docPayload = {
+    plate: normalized,
+    dateKey,
+    brand: vehicle.brand || "",
+    model: vehicle.model || "",
+    responsables,
+    alertSent: existingData?.alertSent ?? false,
+    sentAt: existingData?.sentAt ?? null,
+    lastEventAt: now,
+    summary: summaryCounts,
+    events: mergedEvents,
+    riskScore,
+  };
 
-    // Incrementar contador del tipo de evento
-    const updatedSummary = {
-      ...currentSummary,
-      [summaryKey]: (currentSummary[summaryKey] || 0) + 1,
-    };
+  if (isNewVehicle) {
+    docPayload.createdAt = now;
+    await vehiclesRef.set(docPayload);
+  } else {
+    await vehiclesRef.update(docPayload);
+  }
 
-    const updatedEvents = [...existingEvents, eventSummary];
-    const riskScore = computeRiskScore(updatedSummary, updatedEvents);
+  const metaDeltas = {
+    totalEvents: newSummaries.length,
+    totalExcesos: summaryCounts.excesos - (existingData?.summary?.excesos ?? 0),
+    totalNoIdentificados: summaryCounts.no_identificados - (existingData?.summary?.no_identificados ?? 0),
+    totalContactos: summaryCounts.contactos - (existingData?.summary?.contactos ?? 0),
+    totalLlaveSinCargar: summaryCounts.llave_sin_cargar - (existingData?.summary?.llave_sin_cargar ?? 0),
+    totalConductorInactivo: summaryCounts.conductor_inactivo - (existingData?.summary?.conductor_inactivo ?? 0),
+    totalCriticos: totalCriticos,
+    totalAdvertencias: totalAdvertencias,
+    totalAdministrativos: totalAdministrativos,
+    totalVehicles: isNewVehicle ? 1 : 0,
+    vehiclesWithCritical: isNewVehicle && hasNewCritical ? 1 : !hadCriticalBefore && hasNewCritical ? 1 : 0,
+  };
 
-    // Actualizar documento
-    await vehiclesRef.update({
-      summary: updatedSummary,
-      events: admin.firestore.FieldValue.arrayUnion(eventSummary),
-      riskScore,
-      lastEventAt: now,
-    });
+  return { isNewVehicle, metaDeltas };
+}
 
-    await updateDailyMeta(dateKey, eventSummary, {
-      isNewEvent: true,
-      isNewVehicle: false,
-      hadCriticalBefore,
-    });
-    console.log(
-      `[DAILY-ALERT] 🔄 Alerta actualizada: ${dateKey}/${normalized} - Tipo: ${eventType} (${severity}) - Total ${summaryKey}: ${updatedSummary[summaryKey]}`
-    );
-    console.log(`[DAILY-ALERT] Meta actualizada para ${dateKey} (evento nuevo)`);
+/**
+ * Crea o actualiza el documento diario en
+ * /apps/emails/dailyAlerts/{YYYY-MM-DD}/vehicles/{plate}
+ * Un solo evento (mantener para compatibilidad; preferir upsertDailyAlertBatch).
+ * @param {string} dateKey - Fecha en formato YYYY-MM-DD
+ * @param {string} plate - Patente normalizada
+ * @param {object} vehicle - Datos del vehículo (plate, brand, model, responsables)
+ * @param {object} event - Evento a agregar
+ */
+async function upsertDailyAlert(dateKey, plate, vehicle, event) {
+  const eventSummary = buildEventSummary(event);
+  const result = await upsertDailyAlertBatch(dateKey, plate, vehicle, [eventSummary]);
+  if (result.metaDeltas) {
+    await updateDailyMetaBatch(dateKey, result.metaDeltas);
   }
 }
 
@@ -584,6 +645,9 @@ module.exports = {
   getVehicle,
   createVehicleFromEvent,
   upsertDailyAlert,
+  upsertDailyAlertBatch,
+  updateDailyMetaBatch,
+  buildEventSummary,
   formatDateKey,
   normalizePlate,
   isFromAllowedDomain,
