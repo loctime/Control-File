@@ -61,24 +61,19 @@ describe("vehicleEventService", () => {
       expect(computeRiskScore({}, [])).toBe(0);
     });
 
-    it("suma por tipo de evento (excesos 3, no_identificados/contactos 2, llave/conductor 1)", () => {
+    it("score por summary = suma de totales por tipo cuando events vacío", () => {
       const summary = { excesos: 2, no_identificados: 1, contactos: 0, llave_sin_cargar: 0, conductor_inactivo: 0 };
-      expect(computeRiskScore(summary, [])).toBe(2 * 3 + 1 * 2); // 8
+      expect(computeRiskScore(summary, [])).toBe(2 + 1); // total eventos
     });
 
-    it("suma por severidad (critico 5, advertencia 2, administrativo 0)", () => {
-      const events = [
-        { severity: "critico" },
-        { severity: "advertencia" },
-        { severity: "administrativo" },
-      ];
-      expect(computeRiskScore(null, events)).toBe(5 + 2 + 0);
+    it("score = total eventos (cantidad)", () => {
+      const events = [{ severity: "critico" }, { severity: "critico" }, {}];
+      expect(computeRiskScore(null, events)).toBe(3);
     });
 
-    it("combina tipo y severidad", () => {
+    it("usa sum de summary cuando events está vacío", () => {
       const summary = { excesos: 1, no_identificados: 0, contactos: 1, llave_sin_cargar: 0, conductor_inactivo: 0 };
-      const events = [{ severity: "critico" }, { severity: "advertencia" }];
-      expect(computeRiskScore(summary, events)).toBe(3 + 2 + 5 + 2); // 12
+      expect(computeRiskScore(summary, [])).toBe(2);
     });
   });
 });

@@ -174,19 +174,10 @@ function getTypeLabel(e) {
 }
 
 /**
- * Mapea severidad a color para jerarquía visual en el email.
+ * Color para eventos (todos críticos): siempre rojo.
  */
-function getSeverityColor(e) {
-  switch (e.severity) {
-    case "critico":
-      return "#d32f2f"; // rojo
-    case "advertencia":
-      return "#f57c00"; // naranja
-    case "administrativo":
-      return "#1976d2"; // azul
-    default:
-      return "#1976d2"; // azul (info)
-  }
+function getSeverityColor(_e) {
+  return "#d32f2f"; // rojo
 }
 
 /**
@@ -249,9 +240,6 @@ function getMetricsByTypeFromMeta(meta) {
 function buildGlobalSummaryHeader(meta, dateKey) {
   const totalVehicles = meta ? (meta.totalVehicles ?? 0) : 0;
   const totalEvents = meta ? (meta.totalEvents ?? 0) : 0;
-  const totalCriticos = meta ? (meta.totalCriticos ?? 0) : 0;
-  const totalAdvertencias = meta ? (meta.totalAdvertencias ?? 0) : 0;
-  const totalAdministrativos = meta ? (meta.totalAdministrativos ?? 0) : 0;
   const vehiclesWithCritical = meta ? (meta.vehiclesWithCritical ?? 0) : 0;
   const byType = getMetricsByTypeFromMeta(meta);
 
@@ -277,12 +265,10 @@ function buildGlobalSummaryHeader(meta, dateKey) {
     <div style="font-size: 14px; line-height: 1.8;">
       <strong>Vehículos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
       <strong>Total eventos:</strong> ${totalEvents}
-      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">Vehículos con críticos: ${vehiclesWithCritical}</span>` : ""}
+      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">Vehículos con eventos: ${vehiclesWithCritical}</span>` : ""}
     </div>
     <div style="font-size: 14px; margin-top: 8px;">
-      ${totalCriticos > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${totalCriticos} críticos</span>` : ""}
-      ${totalAdvertencias > 0 ? ` <span style="color: #f57c00; font-weight: bold;">🟠 ${totalAdvertencias} advertencias</span>` : ""}
-      ${totalAdministrativos > 0 ? ` <span style="color: #1976d2; font-weight: bold;">ℹ️ ${totalAdministrativos} administrativos</span>` : ""}
+      ${totalEvents > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${totalEvents} eventos</span>` : ""}
     </div>
     ${metricsByTypeHtml}
   </div>`;
@@ -297,20 +283,10 @@ function buildVehicleSection(doc) {
     return `<section style="margin-bottom: 28px;"><h2 style="font-size: 18px; color: #333;">${escapeHtml(plate)}</h2><p>Sin eventos.</p></section>`;
   }
 
-  const severityOrder = { critico: 0, advertencia: 1, administrativo: 2, info: 3 };
   const sortedEvents = events
     .filter((e) => e && e.eventTimestamp)
-    .sort((a, b) => {
-      const orderA = severityOrder[a.severity] ?? 3;
-      const orderB = severityOrder[b.severity] ?? 3;
-      if (orderA !== orderB) return orderA - orderB;
-      return new Date(b.eventTimestamp) - new Date(a.eventTimestamp);
-    });
-  const resumen = {
-    critico: sortedEvents.filter((e) => e.severity === "critico").length,
-    advertencia: sortedEvents.filter((e) => e.severity === "advertencia").length,
-    administrativo: sortedEvents.filter((e) => e.severity === "administrativo").length,
-  };
+    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
+  const totalEventos = sortedEvents.length;
   const summaryByType = summary || {};
 
   const rowsHtml = sortedEvents
@@ -346,9 +322,7 @@ function buildVehicleSection(doc) {
     <h2 style="font-size: 18px; color: #333; margin: 0 0 8px 0;">🚗 ${escapeHtml(plate)}</h2>
     <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">${escapeHtml(brand || "")} ${escapeHtml(model || "")}</p>
     <div style="margin-bottom: 12px; font-size: 14px;">
-      ${resumen.critico > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${resumen.critico} críticos</span>` : ""}
-      ${resumen.advertencia > 0 ? ` <span style="color: #f57c00;">🟠 ${resumen.advertencia} advertencias</span>` : ""}
-      ${resumen.administrativo > 0 ? ` <span style="color: #1976d2;">ℹ️ ${resumen.administrativo} administrativos</span>` : ""}
+      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${totalEventos} eventos</span>` : ""}
     </div>
     ${typeSummaryHtml}
     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">

@@ -242,16 +242,12 @@ function formatDateKey(d) {
 }
 
 /**
- * Determina la severidad según el tipo de evento.
- * @param {string} eventType - Tipo de evento
- * @returns {string} "critico" | "administrativo"
+ * Severidad única: todos los eventos se consideran críticos.
+ * @param {string} _eventType - Tipo de evento (no usado)
+ * @returns {string} "critico"
  */
-function getSeverityByType(eventType) {
-  if (eventType === "exceso") {
-    return "critico";
-  }
-  // Todos los demás tipos son administrativos
-  return "administrativo";
+function getSeverityByType(_eventType) {
+  return "critico";
 }
 
 /**
@@ -277,7 +273,6 @@ async function updateDailyMeta(dateKey, eventSummary, opts) {
     .collection("meta")
     .doc("meta");
 
-  const severity = eventSummary.severity || "administrativo";
   const FieldValue = admin.firestore.FieldValue;
   const eventType = eventSummary.type || "exceso";
   const summaryKey = normalizeEventTypeForSummary(eventType);
@@ -287,22 +282,15 @@ async function updateDailyMeta(dateKey, eventSummary, opts) {
     dateKey,
     lastUpdatedAt: FieldValue.serverTimestamp(),
     totalEvents: FieldValue.increment(1),
+    totalCriticos: FieldValue.increment(1),
     [metaTypeField]: FieldValue.increment(1),
   };
 
   if (opts.isNewVehicle) {
     update.totalVehicles = FieldValue.increment(1);
   }
-
-  if (severity === "critico") {
-    update.totalCriticos = FieldValue.increment(1);
-    if (opts.isNewVehicle || !opts.hadCriticalBefore) {
-      update.vehiclesWithCritical = FieldValue.increment(1);
-    }
-  } else if (severity === "advertencia") {
-    update.totalAdvertencias = FieldValue.increment(1);
-  } else {
-    update.totalAdministrativos = FieldValue.increment(1);
+  if (opts.isNewVehicle || !opts.hadCriticalBefore) {
+    update.vehiclesWithCritical = FieldValue.increment(1);
   }
 
   await metaRef.set(update, { merge: true });
@@ -351,46 +339,22 @@ function getMetaFieldForType(summaryKey) {
   return fieldMap[summaryKey] || "totalNoIdentificados";
 }
 
-/** Pesos por tipo de evento para el score de riesgo (v2). */
-const RISK_WEIGHTS_BY_TYPE = {
-  excesos: 3,
-  no_identificados: 2,
-  contactos: 2,
-  llave_sin_cargar: 1,
-  conductor_inactivo: 1,
-};
-
-/** Pesos por severidad para el score de riesgo (v2). */
-const RISK_WEIGHTS_BY_SEVERITY = {
-  critico: 5,
-  advertencia: 2,
-  administrativo: 0,
-  info: 0,
-};
-
 /**
- * Calcula el score de riesgo por vehículo para ordenar por criticidad.
- * Combina conteos por tipo y severidad de los eventos.
- * @param {object} summary - summary del documento (excesos, no_identificados, contactos, llave_sin_cargar, conductor_inactivo)
- * @param {Array<object>} events - Array de eventSummary con severity
+ * Score de riesgo = total de eventos (cantidad). Sin distinción por severidad.
+ * @param {object} summary - summary del documento (excesos, no_identificados, contactos, etc.)
+ * @param {Array<object>} events - Array de eventSummary
  * @returns {number}
  */
 function computeRiskScore(summary, events) {
-  if (!summary && !events) return 0;
-  let score = 0;
+  if (Array.isArray(events) && events.length > 0) {
+    return events.length;
+  }
   if (summary && typeof summary === "object") {
-    for (const [key, count] of Object.entries(summary)) {
-      if (typeof count === "number" && RISK_WEIGHTS_BY_TYPE[key] != null) {
-        score += RISK_WEIGHTS_BY_TYPE[key] * count;
-      }
-    }
+    const total = (summary.excesos || 0) + (summary.no_identificados || 0) + (summary.contactos || 0) +
+      (summary.llave_sin_cargar || 0) + (summary.conductor_inactivo || 0);
+    return Math.max(0, total);
   }
-  const eventList = Array.isArray(events) ? events : [];
-  for (const e of eventList) {
-    const sev = e && e.severity ? e.severity : "administrativo";
-    score += RISK_WEIGHTS_BY_SEVERITY[sev] != null ? RISK_WEIGHTS_BY_SEVERITY[sev] : 0;
-  }
-  return Math.max(0, score);
+  return 0;
 }
 
 const ALLOWED_EVENT_TYPES = new Set([
@@ -412,7 +376,7 @@ function buildEventSummary(event) {
   if (!ALLOWED_EVENT_TYPES.has(eventType)) {
     eventType = "no_identificado";
   }
-  const severity = event.severity || getSeverityByType(eventType);
+  const severity = event.severity || "critico";
   const speedVal = event.speed;
   const eventId =
     event.eventId ||
@@ -544,24 +508,13 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     conductor_inactivo: existingData?.summary?.conductor_inactivo ?? 0,
   };
 
-  let totalCriticos = 0;
-  let totalAdvertencias = 0;
-  let totalAdministrativos = 0;
-  let hasNewCritical = false;
   const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
+  const newCount = newSummaries.length;
 
   for (const es of newSummaries) {
     mergedEvents.push(es);
     const key = normalizeEventTypeForSummary(es.type);
     summaryCounts[key] = (summaryCounts[key] || 0) + 1;
-    if (es.severity === "critico") {
-      totalCriticos++;
-      hasNewCritical = true;
-    } else if (es.severity === "advertencia") {
-      totalAdvertencias++;
-    } else {
-      totalAdministrativos++;
-    }
   }
 
   const riskScore = computeRiskScore(summaryCounts, mergedEvents);
@@ -589,17 +542,17 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   }
 
   const metaDeltas = {
-    totalEvents: newSummaries.length,
+    totalEvents: newCount,
     totalExcesos: summaryCounts.excesos - (existingData?.summary?.excesos ?? 0),
     totalNoIdentificados: summaryCounts.no_identificados - (existingData?.summary?.no_identificados ?? 0),
     totalContactos: summaryCounts.contactos - (existingData?.summary?.contactos ?? 0),
     totalLlaveSinCargar: summaryCounts.llave_sin_cargar - (existingData?.summary?.llave_sin_cargar ?? 0),
     totalConductorInactivo: summaryCounts.conductor_inactivo - (existingData?.summary?.conductor_inactivo ?? 0),
-    totalCriticos: totalCriticos,
-    totalAdvertencias: totalAdvertencias,
-    totalAdministrativos: totalAdministrativos,
+    totalCriticos: newCount,
+    totalAdvertencias: 0,
+    totalAdministrativos: 0,
     totalVehicles: isNewVehicle ? 1 : 0,
-    vehiclesWithCritical: isNewVehicle && hasNewCritical ? 1 : !hadCriticalBefore && hasNewCritical ? 1 : 0,
+    vehiclesWithCritical: isNewVehicle ? 1 : hadCriticalBefore ? 0 : 1,
   };
 
   return { isNewVehicle, metaDeltas };

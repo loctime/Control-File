@@ -185,10 +185,6 @@ function parseLine(line) {
 
   const { brand, model, location } = parseBrandModelLocation(brandModelRest);
 
-  let severity = "info";
-  if (speed >= 130) severity = "critico";
-  else if (speed >= 110) severity = "advertencia";
-
   return {
     speed,
     fecha: eventDateStr,
@@ -201,7 +197,7 @@ function parseLine(line) {
     eventDate: eventDateStr,
     eventTime: eventTimeStr,
     eventCategory: "exceso_velocidad",
-    severity,
+    severity: "critico",
     timezone: DEFAULT_TIMEZONE,
     rawLine: trimmed,
   };
@@ -296,27 +292,14 @@ function parseExcesos(bodyText) {
     const restForLocation = rest.replace(/\([^)]+\)/, "").trim();
     const { brand, model, location } = parseBrandModelLocation(restForLocation);
 
-    // ---- CLASIFICACIÓN INTELIGENTE ----
-    // Usar rest original (con paréntesis) para la clasificación
+    // ---- CLASIFICACIÓN POR TIPO (severity siempre critico) ----
     let type = "exceso";
-    let severity = "info";
-
-    // Clasificación interna por type (no modifica reason)
     if (/\(sin llave\)/i.test(rest)) {
       type = "sin_llave";
-      severity = "critico";
     } else if (/\(llave sin cargar/i.test(rest)) {
       type = "llave_no_registrada";
-      severity = "advertencia";
     } else if (/\(conductor inactivo/i.test(rest)) {
       type = "conductor_inactivo";
-      severity = "advertencia";
-    }
-
-    // Si sigue siendo exceso normal, severidad por velocidad
-    if (type === "exceso") {
-      if (speed >= 130) severity = "critico";
-      else if (speed >= 110) severity = "advertencia";
     }
 
     events.push({
@@ -329,7 +312,7 @@ function parseExcesos(bodyText) {
       model,
       location,
       eventTimestamp,
-      severity,
+      severity: "critico",
       rawLine: trimmed,
       reason
     });
@@ -418,14 +401,10 @@ function parseNoIdentificados(bodyText) {
     const reason = reasonRaw.trim();
 
     let type = "no_identificado";
-    let severity = "critico";
-
     if (/llave sin cargar/i.test(reason)) {
       type = "llave_no_registrada";
-      severity = "advertencia";
     } else if (/conductor inactivo/i.test(reason)) {
       type = "conductor_inactivo";
-      severity = "advertencia";
     }
 
     events.push({
@@ -438,7 +417,7 @@ function parseNoIdentificados(bodyText) {
       model,
       location: "",
       eventTimestamp,
-      severity,
+      severity: "critico",
       rawLine: trimmed,
       reason
     });
@@ -523,7 +502,7 @@ function parseContactoSinIdentificacion(bodyText) {
       model,
       location: "",
       eventTimestamp,
-      severity: "advertencia",
+      severity: "critico",
       rawLine: trimmed,
       reason: null
     });
@@ -560,7 +539,7 @@ function normalizarEvento(raw, sourceEmailType) {
     brand: raw.brand ?? "",
     model: raw.model ?? "",
     rawLine: raw.rawLine ?? "",
-    severity: raw.severity ?? "info",
+    severity: raw.severity ?? "critico",
     timezone: raw.timezone ?? DEFAULT_TIMEZONE,
     eventCategory: raw.eventCategory ?? "exceso_velocidad",
     fecha: raw.fecha ?? null,
