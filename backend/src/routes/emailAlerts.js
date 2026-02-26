@@ -235,6 +235,57 @@ function getMetricsByTypeFromMeta(meta) {
 }
 
 /**
+ * Genera un objeto "meta" a partir solo de los documentos de vehículos dados.
+ * Usado para resumen personalizado por destinatario (solo sus patentes).
+ * Recalcula: totalVehicles, totalEvents, vehiclesWithCritical, totales por tipo.
+ */
+function buildMetaFromVehicleDocs(vehicleDocs) {
+  if (!Array.isArray(vehicleDocs) || vehicleDocs.length === 0) {
+    return {
+      totalVehicles: 0,
+      totalEvents: 0,
+      vehiclesWithCritical: 0,
+      totalExcesos: 0,
+      totalNoIdentificados: 0,
+      totalContactos: 0,
+      totalLlaveSinCargar: 0,
+      totalConductorInactivo: 0,
+    };
+  }
+  let totalEvents = 0;
+  let vehiclesWithCritical = 0;
+  const byType = {
+    excesos: 0,
+    no_identificados: 0,
+    contactos: 0,
+    llave_sin_cargar: 0,
+    conductor_inactivo: 0,
+  };
+  for (const doc of vehicleDocs) {
+    const events = Array.isArray(doc.events) ? doc.events : [];
+    const n = events.length;
+    totalEvents += n;
+    if (n > 0) vehiclesWithCritical += 1;
+    const s = doc.summary || {};
+    byType.excesos += s.excesos ?? 0;
+    byType.no_identificados += s.no_identificados ?? 0;
+    byType.contactos += s.contactos ?? 0;
+    byType.llave_sin_cargar += s.llave_sin_cargar ?? 0;
+    byType.conductor_inactivo += s.conductor_inactivo ?? 0;
+  }
+  return {
+    totalVehicles: vehicleDocs.length,
+    totalEvents,
+    vehiclesWithCritical,
+    totalExcesos: byType.excesos,
+    totalNoIdentificados: byType.no_identificados,
+    totalContactos: byType.contactos,
+    totalLlaveSinCargar: byType.llave_sin_cargar,
+    totalConductorInactivo: byType.conductor_inactivo,
+  };
+}
+
+/**
  * Encabezado global del email usando meta del día (resumen ejecutivo con métricas por tipo).
  */
 function buildGlobalSummaryHeader(meta, dateKey) {
@@ -463,21 +514,14 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       logger.info(`[GET-PENDING-ALERTS] Responsable ${i + 1}: ${g.responsableEmail}, patentes: ${g.docs.length}`);
     });
 
-    const dateKeysNeeded = [...new Set(groups.map((g) => g.dateKey))];
-    const metaByDate = new Map();
-    for (const dateKey of dateKeysNeeded) {
-      const meta = await getDailyMeta(dateKey);
-      metaByDate.set(dateKey, meta);
-    }
-
     const alerts = groups.map((group) => {
-      const meta = metaByDate.get(group.dateKey) || null;
       const sortedDocs = sortVehiclesByCriticity(group.docs);
+      const metaForRecipient = buildMetaFromVehicleDocs(sortedDocs);
       const alertIds = sortedDocs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
       return {
         responsableEmail: group.responsableEmail,
         subject: buildConsolidatedSubject(group.dateKey),
-        body: buildConsolidatedBody(meta, sortedDocs, group.dateKey),
+        body: buildConsolidatedBody(metaForRecipient, sortedDocs, group.dateKey),
         alertIds,
       };
     });
