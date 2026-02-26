@@ -25,6 +25,12 @@ describe("vehicleEventParser", () => {
       expect(detectEmailType("No identificado del día 16/02")).toBe(EMAIL_TYPE_NO_IDENTIFICADOS);
     });
 
+    it("detecta aviso por falta de identificación como no_identificados", () => {
+      expect(detectEmailType("Aviso por falta de identificación (maximiasa)")).toBe(EMAIL_TYPE_NO_IDENTIFICADOS);
+      expect(detectEmailType("Aviso por falta de identificacion")).toBe(EMAIL_TYPE_NO_IDENTIFICADOS);
+      expect(detectEmailType("Falta de identificación del día")).toBe(EMAIL_TYPE_NO_IDENTIFICADOS);
+    });
+
     it("detecta contacto sin identificación del día (y no como no_identificados)", () => {
       expect(detectEmailType("Contacto sin identificación del día")).toBe(EMAIL_TYPE_CONTACTO);
       expect(detectEmailType("Contacto sin identificacion del dia")).toBe(EMAIL_TYPE_CONTACTO);

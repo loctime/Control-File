@@ -113,10 +113,10 @@ function detectEmailType(subject, bodyText) {
     console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: CONTACTO`);
     return EMAIL_TYPE_CONTACTO;
   }
-  // Prioridad 2: No identificados del día
+  // Prioridad 2: No identificados (incl. "No identificados del día", "Aviso por falta de identificación", "sin identificación", variantes sin tilde o mal codificadas)
   if (SUBJECT_PATTERNS.no_identificados.test(s) ||
       /no\s+identific/i.test(normalized) ||
-      /falta\s+identific/i.test(normalized) ||
+      /falta\s+(de\s+)?identific/i.test(normalized) ||
       /sin\s+identific/i.test(normalized)) {
     console.log(`[DETECT-EMAIL-TYPE] ✅ Detectado: NO_IDENTIFICADOS`);
     return EMAIL_TYPE_NO_IDENTIFICADOS;
