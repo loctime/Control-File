@@ -47,6 +47,13 @@ function parseDateQuery(queryDate) {
   return trimmed;
 }
 
+function getTodayKeyArgentina() {
+  const now = new Date();
+  return now.toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+}
+
 /**
  * Obtiene TODAS las alertas pendientes (alertSent === false) de todas las fechas.
  * Recorre todas las subcolecciones de dailyAlerts.
@@ -486,20 +493,19 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     }
 
     const docs = await getPendingAlerts();
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
+    const todayKey = getTodayKeyArgentina();
+    const filteredDocs = docs.filter(doc => doc.dateKey < todayKey);
 
-    if (docs.length === 0) {
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${filteredDocs.length}`);
+
+    if (filteredDocs.length === 0) {
       return res.status(200).json({ ok: true, alerts: [] });
     }
 
-    // Enriquecer con responsables actuales desde vehicles si faltan
+    // Enriquecer siempre con responsables actuales desde vehicles
     const enriched = await Promise.all(
-      docs.map(async (doc) => {
+      filteredDocs.map(async (doc) => {
         const plate = normalizePlate(doc.plate || doc.id);
-        const fromDoc = Array.isArray(doc.responsables) ? doc.responsables : [];
-        if (fromDoc.filter((e) => typeof e === "string" && e.includes("@")).length > 0) {
-          return { ...doc, plate, responsables: fromDoc };
-        }
         const vehicle = await getVehicle(plate);
         const responsables = Array.isArray(vehicle?.responsables)
           ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
