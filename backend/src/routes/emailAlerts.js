@@ -140,11 +140,41 @@ function buildConsolidatedSubject(dateKey) {
 }
 
 /**
- * Formatea fecha/hora en formato argentino.
+ * Formatea fecha/hora en formato argentino (DD/MM/YYYY HH:mm).
+ * La hora mostrada debe coincidir EXACTAMENTE con la del email original.
+ *
+ * Para strings ISO con offset (ej. "2026-02-27T13:45:01-03:00") se extraen
+ * fecha y hora del string sin usar Date, así el servidor (UTC u otra TZ)
+ * no altera la hora. Para Timestamp de Firestore o otros tipos se usa
+ * timeZone "America/Argentina/Buenos_Aires".
  */
 function formatDateTimeArgentina(timestamp) {
   if (!timestamp) return "-";
   try {
+    // Firestore Timestamp: convertir a Date y formatear con TZ explícita
+    if (timestamp && typeof timestamp.toDate === "function") {
+      const date = timestamp.toDate();
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleString("es-AR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/Argentina/Buenos_Aires",
+      }).replace(/,/g, "");
+    }
+
+    const str = typeof timestamp === "string" ? timestamp.trim() : String(timestamp);
+    // ISO con tiempo: "2026-02-27T13:45:01" o "2026-02-27T13:45:01-03:00" o "...Z"
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:[.]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
+    if (isoMatch) {
+      const [, y, m, d, hh, mm] = isoMatch;
+      return `${d}/${m}/${y} ${hh}:${mm}`;
+    }
+
+    // Fallback: Date con timeZone Argentina
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return "-";
     return date.toLocaleString("es-AR", {
@@ -153,7 +183,8 @@ function formatDateTimeArgentina(timestamp) {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false
+      hour12: false,
+      timeZone: "America/Argentina/Buenos_Aires",
     }).replace(/,/g, "");
   } catch {
     return "-";
