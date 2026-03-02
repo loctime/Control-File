@@ -3,7 +3,7 @@
  * El backend NO envía emails. Solo expone pendientes y permite marcarlas como enviadas.
  * Un solo email por responsable por día, consolidando todas las patentes en un resumen.
  *
- * GET  /api/email/get-pending-daily-alerts → [{ responsableEmail, subject, body, alertIds }]
+ * GET  /api/email/get-pending-daily-alerts → [{ responsableEmails, subject, body, alertIds }]
  * POST /api/email/mark-alert-sent → body: { alertIds: string[] }
  */
 
@@ -130,6 +130,49 @@ function groupAlertsByResponsable(pendingDocs) {
   }
 
   return Array.from(byKey.values()).map((g) => ({ dateKey: g.dateKey, responsableEmail: g.responsableEmail, docs: g.docs }));
+}
+
+/**
+ * Agrupa alertas pendientes por conjunto de responsables (mismo día + mismos emails).
+ * Si múltiples vehículos comparten exactamente el mismo conjunto de responsables, se genera un solo grupo consolidado.
+ * Retorna: Array<{ dateKey, responsableEmails: string[], plates: Set<string>, docs: vehicleDoc[] }>
+ */
+function groupAlertsByResponsableSet(pendingDocs) {
+  const byKey = new Map();
+
+  for (const doc of pendingDocs) {
+    const plate = normalizePlate(doc.plate || doc.id);
+    const dateKey = doc.dateKey;
+    const raw = Array.isArray(doc.responsables) ? doc.responsables : [];
+    const responsableEmails = [...new Set(
+      raw
+        .filter((e) => typeof e === "string" && e.includes("@"))
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0)
+    )].sort();
+
+    if (responsableEmails.length === 0) continue;
+
+    const key = `${dateKey}|${responsableEmails.join(",")}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        dateKey,
+        responsableEmails,
+        plates: new Set(),
+        docs: [],
+      });
+    }
+    const group = byKey.get(key);
+    group.plates.add(plate);
+    group.docs.push(doc);
+  }
+
+  return Array.from(byKey.values()).map((g) => ({
+    dateKey: g.dateKey,
+    responsableEmails: g.responsableEmails,
+    plates: g.plates,
+    docs: g.docs,
+  }));
 }
 
 /**
@@ -522,8 +565,8 @@ async function markAlertsAsSentBatch(alertIds) {
  * GET /email/get-pending-daily-alerts
  *
  * Requiere: x-local-token.
- * Agrupa por responsable (email): un solo email por responsable por día.
- * Respuesta: [{ responsableEmail, subject, body, alertIds }].
+ * Agrupa por conjunto de responsables (mismo día + mismos emails): un solo email por grupo consolidado.
+ * Respuesta: [{ responsableEmails, subject, body, alertIds }].
  */
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
   try {
@@ -554,10 +597,10 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       })
     );
 
-    const groups = groupAlertsByResponsable(enriched);
-    logger.info(`[GET-PENDING-ALERTS] Agrupamiento por responsable: ${groups.length} responsable(s)`);
+    const groups = groupAlertsByResponsableSet(enriched);
+    logger.info(`[GET-PENDING-ALERTS] Agrupamiento por conjunto de responsables: ${groups.length} grupo(s)`);
     groups.forEach((g, i) => {
-      logger.info(`[GET-PENDING-ALERTS] Responsable ${i + 1}: ${g.responsableEmail}, patentes: ${g.docs.length}`);
+      logger.info(`[GET-PENDING-ALERTS] Grupo ${i + 1}: responsables [${g.responsableEmails.join(", ")}], patentes: ${g.docs.length}`);
     });
 
     const alerts = groups.map((group) => {
@@ -565,7 +608,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       const metaForRecipient = buildMetaFromVehicleDocs(sortedDocs);
       const alertIds = sortedDocs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
       return {
-        responsableEmail: group.responsableEmail,
+        responsableEmails: group.responsableEmails,
         subject: buildConsolidatedSubject(group.dateKey),
         body: buildConsolidatedBody(metaForRecipient, sortedDocs, group.dateKey),
         alertIds,
