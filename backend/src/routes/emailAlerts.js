@@ -381,10 +381,18 @@ function buildVehicleSection(doc) {
   const rowsHtml = sortedEvents
     .map((e) => {
       const color = getSeverityColor(e);
-      let typeLabel =
-        e.reason && typeof e.reason === "string" && e.reason.trim().length > 0
-          ? e.reason + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "")
-          : getTypeLabel(e);
+      let typeLabel;
+      const hasReason = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0;
+      const hasDriver = e.driverName && typeof e.driverName === "string" && e.driverName.trim().length > 0;
+      if (hasReason || hasDriver) {
+        const parts = [];
+        if (hasReason) parts.push(e.reason.trim());
+        if (hasDriver) parts.push(e.driverName.trim());
+        const prefix = parts.join(" - ");
+        typeLabel = prefix + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
+      } else {
+        typeLabel = getTypeLabel(e);
+      }
       return `
     <tr>
       <td style="padding:8px; font-weight:bold; color:${color};">${escapeHtml(typeLabel)}</td>
@@ -407,12 +415,12 @@ function buildVehicleSection(doc) {
       : "";
 
   return `
-  <section style="margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
-    <h2 style="font-size: 18px; color: #333; margin: 0 0 8px 0;">🚗 ${escapeHtml(plate)}</h2>
-    <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">${escapeHtml(brand || "")} ${escapeHtml(model || "")}</p>
-    <div style="margin-bottom: 12px; font-size: 14px;">
-      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;">🔴 ${totalEventos} eventos</span>` : ""}
-    </div>
+  <section style="margin-bottom: 28px;">
+    <div style="border-top:1px solid #ccc; margin:20px 0;"></div>
+    <h2 style="font-size: 16px; color: #333; margin: 0 0 8px 0;">
+      🚗 ${escapeHtml(plate)} - ${escapeHtml(brand || "")} ${escapeHtml(model || "")}
+      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;"> 🔴 ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>` : ""}
+    </h2>
     ${typeSummaryHtml}
     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
       <thead>
@@ -425,6 +433,7 @@ function buildVehicleSection(doc) {
       </thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+    <div style="border-top:1px solid #ccc; margin:20px 0;"></div>
   </section>`;
 }
 

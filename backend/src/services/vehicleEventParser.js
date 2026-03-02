@@ -69,7 +69,7 @@ function parseBrandModelLocation(rest) {
 
   for (let i = 1; i < parts.length; i++) {
     const lower = parts[i].toLowerCase();
-    if (LOCATION_KEYWORDS.some((kw) => lower === kw || lower.startsWith(kw + "."))) {
+    if (LOCATION_KEYWORDS.some((kw) => lower.startsWith(kw))) {
       locationStart = i;
       break;
     }
@@ -292,6 +292,34 @@ function parseExcesos(bodyText) {
     const restForLocation = rest.replace(/\([^)]+\)/, "").trim();
     const { brand, model, location } = parseBrandModelLocation(restForLocation);
 
+    // Detectar nombre de conductor dentro del modelo:
+    // - Solo si hay razón entre paréntesis (reason !== null)
+    // - El nombre del conductor son ≥2 palabras consecutivas en MAYÚSCULAS al final del modelo
+    // - No debe consumir todo el modelo para no romper modelos multi-palabra reales (ej: "Frontier XE")
+    let driverName = null;
+    let finalModel = model;
+    if (reason && typeof model === "string" && model.trim().length > 0) {
+      const parts = model.trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 3) {
+        const suffix = [];
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const token = parts[i];
+          const isUpper = token === token.toUpperCase();
+          const hasLetter = /[A-ZÁÉÍÓÚÑ]/.test(token);
+          const hasDigit = /\d/.test(token);
+          if (isUpper && hasLetter && !hasDigit) {
+            suffix.unshift(token);
+          } else {
+            break;
+          }
+        }
+        if (suffix.length >= 2 && suffix.length < parts.length) {
+          driverName = suffix.join(" ");
+          finalModel = parts.slice(0, parts.length - suffix.length).join(" ");
+        }
+      }
+    }
+
     // ---- CLASIFICACIÓN POR TIPO (severity siempre critico) ----
     let type = "exceso";
     if (/\(sin llave\)/i.test(rest)) {
@@ -309,12 +337,13 @@ function parseExcesos(bodyText) {
       hasSpeed: true,
       plate,
       brand,
-      model,
+      model: finalModel,
       location,
       eventTimestamp,
       severity: "critico",
       rawLine: trimmed,
-      reason
+      reason,
+      driverName: driverName ?? null
     });
 
     if (isDev) {
@@ -531,6 +560,7 @@ function normalizarEvento(raw, sourceEmailType) {
     type: raw.type ?? "info",
     sourceEmailType: sourceEmailType ?? "excesos_del_dia",
     reason: raw.reason ?? null,
+    driverName: raw.driverName ?? null,
     speed: raw.speed ?? null,
     hasSpeed: raw.hasSpeed ?? false,
     eventTimestamp: raw.eventTimestamp ?? null,
