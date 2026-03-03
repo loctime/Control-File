@@ -507,6 +507,83 @@ function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
 }
 
 /**
+ * Cuerpo del email general por grupos operativos (todas las operaciones en un solo HTML).
+ * Recibe el array groups de groupAlertsByResponsableSet; por cada grupo ordena por criticidad,
+ * calcula meta con buildMetaFromVehicleDocs y usa buildVehicleSection por vehículo.
+ */
+function buildGeneralGroupsBody(groups, dateKey) {
+  if (!Array.isArray(groups) || groups.length === 0) {
+    return `
+  <html>
+    <body style="font-family: Arial; padding: 20px;">
+      <h2>No hay alertas pendientes.</h2>
+    </body>
+  </html>
+    `.trim();
+  }
+
+  const today = new Date().toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const sections = groups
+    .map((group) => {
+      const sortedDocs = sortVehiclesByCriticity(group.docs);
+      const meta = buildMetaFromVehicleDocs(sortedDocs);
+      const operationName = (sortedDocs[0]?.operacion || "SIN OPERACIÓN").toUpperCase();
+      const responsablesText = (group.responsableEmails || []).join(", ");
+
+      return `
+  <div style="margin-top: 35px; border-top: 3px solid #000; padding-top: 12px;">
+    <h2 style="margin: 0; font-size: 18px;">
+      🏭 OPERACIÓN ${escapeHtml(operationName)}
+    </h2>
+    <div style="font-size: 13px; color: #555; margin: 6px 0 12px 0;">
+      Responsables: ${escapeHtml(responsablesText)}<br>
+      Vehículos con eventos: ${meta.totalVehicles} |
+      Total eventos: ${meta.totalEvents}
+    </div>
+  </div>
+
+  ${sortedDocs.map((doc) => buildVehicleSection(doc)).join("")}
+      `.trim();
+    })
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Resumen General de Operaciones – ${dateKey}</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #ffffff;">
+
+    <div style="text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 600;">
+        🚨 Resumen General de Operaciones
+      </h1>
+      <p style="margin: 6px 0 0 0; color: #666; font-size: 14px;">
+        ${dateKey}
+      </p>
+    </div>
+
+    ${sections}
+
+    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee; text-align: center;">
+      <p style="margin: 0; font-size: 12px; color: #666;">
+        Resumen generado el ${today}
+      </p>
+    </div>
+
+  </body>
+</html>
+  `.trim();
+}
+
+/**
  * Parsea alertId (formato: YYYY-MM-DD_PLATE) en { dateKey, plate }.
  * Normaliza la patente para garantizar consistencia.
  */
@@ -582,7 +659,15 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${filteredDocs.length}`);
 
     if (filteredDocs.length === 0) {
-      return res.status(200).json({ ok: true, alerts: [] });
+      const generalBody = buildGeneralGroupsBody([], todayKey);
+      return res.status(200).json({
+        ok: true,
+        alerts: [],
+        general: {
+          subject: `🚨 Resumen general de operaciones – ${todayKey}`,
+          body: generalBody,
+        },
+      });
     }
 
     // Enriquecer siempre con responsables actuales desde vehicles
@@ -615,8 +700,18 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       };
     });
 
+    const dateKeyForGeneral = groups.length > 0 ? groups[0].dateKey : todayKey;
+    const generalBody = buildGeneralGroupsBody(groups, dateKeyForGeneral);
+
     logger.info(`[GET-PENDING-ALERTS] Respuesta: ${alerts.length} email(s) consolidado(s)`);
-    return res.status(200).json({ ok: true, alerts });
+    return res.status(200).json({
+      ok: true,
+      general: {
+        subject: `🚨 Resumen general de operaciones – ${dateKeyForGeneral}`,
+        body: generalBody,
+      },
+      alerts,
+    });
   } catch (err) {
     logger.error("[GET-PENDING-ALERTS] Error:", err.message, err.stack);
     return res.status(500).json({
