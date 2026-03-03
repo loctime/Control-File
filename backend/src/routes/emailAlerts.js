@@ -524,7 +524,7 @@ function buildGeneralGroupsBody(groups, dateKey) {
     .map((group) => {
       const sortedDocs = sortVehiclesByCriticity(group.docs);
       const meta = buildMetaFromVehicleDocs(sortedDocs);
-      const operationName = (sortedDocs[0]?.operacion || "SIN OPERACIÓN").toUpperCase();
+      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "SIN OPERACIÓN").toUpperCase();
       const responsablesText = (group.responsableEmails || []).join(", ");
 
       return `
@@ -669,7 +669,8 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         const responsables = Array.isArray(vehicle?.responsables)
           ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
           : [];
-        return { ...doc, plate, responsables };
+        const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
+        return { ...doc, plate, responsables, operationName, operacion: operationName };
       })
     );
 
