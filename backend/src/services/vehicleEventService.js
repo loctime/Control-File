@@ -503,6 +503,45 @@ async function updateDailyMetaBatch(dateKey, deltas) {
 }
 
 /**
+ * Asegura que el documento padre apps/emails/dailyAlerts/{dateKey} exista con campos propios.
+ * Sin esto, Firestore no considera el documento existente y DAILY_ALERTS_REF.get() devuelve vacío.
+ * @param {string} dateKey - YYYY-MM-DD
+ */
+async function ensureDailyAlertDayDoc(dateKey) {
+  const db = getDb();
+  const dayRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("dailyAlerts")
+    .doc(dateKey);
+  await dayRef.set(
+    {
+      dateKey,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * Actualiza lastUpdatedAt del documento del día (apps/emails/dailyAlerts/{dateKey}).
+ * @param {string} dateKey - YYYY-MM-DD
+ */
+async function touchDailyAlertDayDoc(dateKey) {
+  const db = getDb();
+  const dayRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("dailyAlerts")
+    .doc(dateKey);
+  await dayRef.set(
+    { lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+}
+
+/**
  * Crea o actualiza el documento diario con todos los eventos del lote en una sola escritura.
  * Deduplica por eventId. No decrementa contadores.
  * @param {string} dateKey - YYYY-MM-DD
@@ -515,6 +554,8 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   if (!eventSummaries || eventSummaries.length === 0) {
     return { isNewVehicle: false, metaDeltas: null };
   }
+
+  await ensureDailyAlertDayDoc(dateKey);
 
   const db = getDb();
   const normalized = normalizePlate(plate);
@@ -582,6 +623,8 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   } else {
     await vehiclesRef.update(docPayload);
   }
+
+  await touchDailyAlertDayDoc(dateKey);
 
   const metaDeltas = {
     totalEvents: newCount,

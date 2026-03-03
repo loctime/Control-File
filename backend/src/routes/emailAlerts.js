@@ -55,6 +55,19 @@ function getTodayKeyArgentina() {
 }
 
 /**
+ * Convierte un dateKey YYYY-MM-DD en un número comparable (YYYYMMDD).
+ * Devuelve NaN si el formato no es válido.
+ */
+function toDateKeyNumber(key) {
+  if (!key || typeof key !== "string") return NaN;
+  const trimmed = key.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return NaN;
+  const [y, m, d] = trimmed.split("-").map(Number);
+  if (!y || !m || !d) return NaN;
+  return y * 10000 + m * 100 + d;
+}
+
+/**
  * Obtiene alertas pendientes de días anteriores a hoy (Argentina).
  * Una sola capa de filtrado: dateKey < todayKey y alertSent !== true.
  *
@@ -64,22 +77,62 @@ function getTodayKeyArgentina() {
 async function getPendingAlerts(todayKey) {
   const dateKeysSnap = await DAILY_ALERTS_REF.get();
   const allDateKeys = dateKeysSnap.docs.map((doc) => doc.id);
-  const pastDateKeys = allDateKeys.filter((dateKey) => dateKey < todayKey);
+
+  const todayNum = toDateKeyNumber(todayKey);
+  const pastDateKeys = allDateKeys.filter((dateKey) => {
+    const num = toDateKeyNumber(dateKey);
+    return Number.isFinite(num) && Number.isFinite(todayNum) && num < todayNum;
+  });
+
+  logger.info(
+    "[GET-PENDING-ALERTS][DEBUG] todayKey=%s, todayNum=%s, allDateKeys=%j, pastDateKeys=%j",
+    todayKey,
+    String(todayNum),
+    allDateKeys,
+    pastDateKeys
+  );
 
   const allAlerts = [];
   for (const dateKey of pastDateKeys) {
     try {
       const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
+      logger.info(
+        "[GET-PENDING-ALERTS][DEBUG] dateKey=%s, vehicles=%d",
+        dateKey,
+        vehiclesSnap.docs.length
+      );
+
       for (const vehicleDoc of vehiclesSnap.docs) {
         const data = vehicleDoc.data();
-        if (data.alertSent !== true) {
+        const isPending = data.alertSent !== true;
+
+        logger.info(
+          "[GET-PENDING-ALERTS][DEBUG] Evaluando doc dateKey=%s id=%s alertSent=%s isPending=%s",
+          dateKey,
+          vehicleDoc.id,
+          String(data.alertSent),
+          String(isPending)
+        );
+
+        if (isPending) {
           allAlerts.push({ id: vehicleDoc.id, dateKey, ...data });
         }
       }
-    } catch {
+    } catch (e) {
+      logger.error(
+        "[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=%s: %s",
+        dateKey,
+        e && e.message ? e.message : String(e)
+      );
       continue;
     }
   }
+
+  logger.info(
+    "[GET-PENDING-ALERTS][DEBUG] Total alertas pendientes devueltas: %d",
+    allAlerts.length
+  );
+
   return allAlerts;
 }
 
@@ -644,7 +697,14 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
+    const nowIso = new Date().toISOString();
     const todayKey = getTodayKeyArgentina();
+    logger.info(
+      "[GET-PENDING-ALERTS][DEBUG] nowIso=%s, todayKeyArgentina=%s",
+      nowIso,
+      todayKey
+    );
+
     const docs = await getPendingAlerts(todayKey);
 
     logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
