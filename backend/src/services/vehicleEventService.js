@@ -431,6 +431,7 @@ function buildEventSummary(event) {
     hasSpeed: typeof speedVal === "number",
     eventTimestamp: event.eventTimestamp || "",
     location: event.location || "",
+    locationRaw: event.locationRaw || event.location || "",
     severity,
     rawData: {
       brand: event.brand || null,

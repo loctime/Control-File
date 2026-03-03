@@ -486,7 +486,7 @@ function buildVehicleSection(doc) {
       <td style="padding:8px; font-weight:bold; color:${color};">${escapeHtml(typeLabel)}</td>
       <td style="padding:8px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
       <td style="padding:8px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
-      <td style="padding:8px;">${escapeHtml(e.location || "Sin ubicación")}</td>
+      <td style="padding:8px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicación")}</td>
     </tr>`;
     })
     .join("");
@@ -577,7 +577,7 @@ function buildGeneralGroupsBody(groups, dateKey) {
     .map((group) => {
       const sortedDocs = sortVehiclesByCriticity(group.docs);
       const meta = buildMetaFromVehicleDocs(sortedDocs);
-      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "SIN OPERACIÓN").toUpperCase();
+      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "Operación no asignada").toUpperCase();
       const responsablesText = (group.responsableEmails || []).join(", ");
 
       return `

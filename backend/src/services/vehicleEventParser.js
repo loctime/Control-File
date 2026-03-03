@@ -312,6 +312,29 @@ function normalizarEvento(raw, sourceEmailType) {
   };
 }
 
+/**
+ * Extrae el nombre de operación del cuerpo del email (Opción A).
+ * Formato esperado en el body del email, en una de las primeras líneas:
+ *   Operación: Nombre de la operación
+ *   Operacion: Nombre de la operación
+ * Se buscan hasta las primeras 15 líneas. El valor se guarda en vehicles y dailyAlerts y se muestra en el resumen.
+ * @param {string} bodyText - Cuerpo del email
+ * @returns {string|null} Nombre de la operación o null si no se encuentra
+ */
+function extractOperationFromBody(bodyText) {
+  if (!bodyText || typeof bodyText !== "string") return null;
+  const lines = bodyText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const re = /^Operaci[oó]n\s*:\s*(.+)$/i;
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const m = lines[i].match(re);
+    if (m && m[1]) {
+      const name = m[1].trim();
+      return name.length > 0 ? name : null;
+    }
+  }
+  return null;
+}
+
 function parseVehicleEventsFromEmail(subject, bodyText) {
   const sourceEmailType = detectEmailType(subject);
   let rawEvents = [];
@@ -348,9 +371,12 @@ function parseVehicleEventsFromEmail(subject, bodyText) {
           ? "contacto_sin_identificacion"
           : "excesos_del_dia";
 
+  const operationName = extractOperationFromBody(bodyText);
+
   return {
     events: rawEvents.map((raw) => normalizarEvento(raw, sourceEmailTypeKey)),
     sourceEmailType: detectedType,
+    operationName: operationName || null,
   };
 }
 
@@ -374,6 +400,7 @@ module.exports = {
   parseNoIdentificados,
   parseContactoSinIdentificacion,
   parseVehicleEventsFromEmail,
+  extractOperationFromBody,
   normalizarEvento,
   detectEmailType,
   getSubjectPatterns,

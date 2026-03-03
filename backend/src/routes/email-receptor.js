@@ -115,7 +115,7 @@ router.post("/email-local-ingest", async (req, res) => {
 
     // --- Parseo de eventos ---
     const bodyText = body_text || "";
-    const { events: rawEvents, sourceEmailType } = parseVehicleEventsFromEmail(
+    const { events: rawEvents, sourceEmailType, operationName: operationNameFromEmail } = parseVehicleEventsFromEmail(
       emailData.subject || "",
       bodyText
     );
@@ -230,6 +230,9 @@ router.post("/email-local-ingest", async (req, res) => {
         let vehicle = vehicleCache.get(plate);
         if (!vehicle) {
           vehicle = await getVehicle(plate);
+          if (vehicle && operationNameFromEmail && !vehicle.operationName && !vehicle.operacion) {
+            vehicle = { ...vehicle, operationName: operationNameFromEmail, operacion: operationNameFromEmail };
+          }
           vehicleCache.set(plate, vehicle);
         }
 
@@ -243,6 +246,9 @@ router.post("/email-local-ingest", async (req, res) => {
             if (domainOk && underLimit) {
               vehicle = await createVehicleFromEvent(event);
               if (vehicle) {
+                if (operationNameFromEmail) {
+                  vehicle = { ...vehicle, operationName: operationNameFromEmail, operacion: operationNameFromEmail };
+                }
                 vehicleCache.set(plate, vehicle);
                 createdThisEmail++;
                 event.vehicleRegistered = true;
@@ -258,6 +264,10 @@ router.post("/email-local-ingest", async (req, res) => {
           }
         } else {
           event.vehicleRegistered = true;
+          if (vehicle && operationNameFromEmail && !vehicle.operationName && !vehicle.operacion) {
+            vehicle = { ...vehicle, operationName: operationNameFromEmail, operacion: operationNameFromEmail };
+            vehicleCache.set(plate, vehicle);
+          }
         }
 
         event.eventId = generateDeterministicEventId(
@@ -333,7 +343,10 @@ router.post("/email-local-ingest", async (req, res) => {
       console.log("🔍 [EMAIL-LOCAL] ========== ACTUALIZANDO VEHÍCULOS (1 por patente) ==========");
       for (const [plate, event] of plateToLatestEvent) {
         try {
-          await upsertVehicle(event);
+          const eventWithOp = operationNameFromEmail
+            ? { ...event, operationName: event.operationName || operationNameFromEmail, operacion: event.operacion || operationNameFromEmail }
+            : event;
+          await upsertVehicle(eventWithOp);
         } catch (err) {
           console.error(`❌ [EMAIL-LOCAL] Error upsertVehicle ${plate}:`, err.message);
         }
