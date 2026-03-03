@@ -47,8 +47,40 @@ async function getVehicle(plate) {
     .collection("vehicles")
     .doc(normalized)
     .get();
-  if (!docSnap.exists) return null;
-  return { id: docSnap.id, ...docSnap.data() };
+  const baseVehicle = docSnap.exists ? { id: docSnap.id, ...docSnap.data() } : null;
+
+  const masterCandidates = [
+    db.collection("apps").doc("fleet").collection("vehicles").doc(normalized),
+    db.collection("apps").doc("master").collection("vehicles").doc(normalized),
+    db.collection("vehicles").doc(normalized),
+  ];
+
+  let masterVehicle = null;
+  for (const candidate of masterCandidates) {
+    const snap = await candidate.get();
+    if (snap.exists) {
+      masterVehicle = { id: snap.id, ...snap.data() };
+      break;
+    }
+  }
+
+  if (!baseVehicle && !masterVehicle) return null;
+
+  const operationName =
+    masterVehicle?.operationName ||
+    masterVehicle?.operacion ||
+    baseVehicle?.operationName ||
+    baseVehicle?.operacion ||
+    null;
+
+  return {
+    ...(baseVehicle || {}),
+    ...(masterVehicle || {}),
+    id: normalized,
+    plate: normalized,
+    operationName,
+    operacion: operationName,
+  };
 }
 
 /**
@@ -168,6 +200,8 @@ async function createVehicleFromEvent(event) {
     lastEventTimestamp: event.eventTimestamp || null,
     totalEvents: 1,
     totalSpeedingEvents: isSpeedingEvent ? 1 : 0,
+    operationName: event.operationName || event.operacion || null,
+    operacion: event.operationName || event.operacion || null,
     updatedAt: now,
     createdAt: now,
   });
@@ -206,6 +240,8 @@ async function upsertVehicle(event) {
       lastEventTimestamp: event.eventTimestamp,
       totalEvents: 1,
       totalSpeedingEvents: isSpeedingEvent ? 1 : 0,
+      operationName: event.operationName || event.operacion || null,
+      operacion: event.operationName || event.operacion || null,
       updatedAt: now,
       createdAt: now,
     });
@@ -221,6 +257,10 @@ async function upsertVehicle(event) {
 
     if (hasValidBrand) updates.brand = event.brand.trim();
     if (hasValidModel) updates.model = event.model.trim();
+    if (event.operationName || event.operacion) {
+      updates.operationName = event.operationName || event.operacion;
+      updates.operacion = event.operationName || event.operacion;
+    }
 
     if (isSpeedingEvent) {
       updates.totalSpeedingEvents = admin.firestore.FieldValue.increment(1);
@@ -525,6 +565,8 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     dateKey,
     brand: vehicle.brand || "",
     model: vehicle.model || "",
+    operationName: vehicle.operationName || vehicle.operacion || null,
+    operacion: vehicle.operationName || vehicle.operacion || null,
     responsables,
     alertSent: existingData?.alertSent ?? false,
     sentAt: existingData?.sentAt ?? null,
