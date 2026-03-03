@@ -55,32 +55,24 @@ function getTodayKeyArgentina() {
 }
 
 /**
- * Obtiene TODAS las alertas pendientes (alertSent === false) de todas las fechas.
- * Recorre todas las subcolecciones de dailyAlerts.
- * 
- * IMPORTANTE: En Firestore, si un documento solo tiene subcolecciones pero no datos,
- * .get() no lo encuentra. Por eso usamos listCollections() para obtener las subcolecciones.
+ * Obtiene alertas pendientes de días anteriores a hoy (Argentina).
+ * Una sola capa de filtrado: dateKey < todayKey y alertSent !== true.
+ *
+ * @param {string} todayKey - Fecha de hoy en Argentina (YYYY-MM-DD).
+ * @returns {Promise<Array<{ id: string, dateKey: string, ... }>>} Documentos de vehículos pendientes (nunca incluye el día actual).
  */
-async function getPendingAlerts() {
+async function getPendingAlerts(todayKey) {
   const dateKeysSnap = await DAILY_ALERTS_REF.get();
-  let dateKeys = dateKeysSnap.docs.map((doc) => doc.id);
-
-  if (dateKeys.length === 0) {
-    const today = new Date();
-    for (let i = 0; i < 60; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      dateKeys.push(date.toISOString().slice(0, 10));
-    }
-  }
+  const allDateKeys = dateKeysSnap.docs.map((doc) => doc.id);
+  const pastDateKeys = allDateKeys.filter((dateKey) => dateKey < todayKey);
 
   const allAlerts = [];
-  for (const dateKey of dateKeys) {
+  for (const dateKey of pastDateKeys) {
     try {
       const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
       for (const vehicleDoc of vehiclesSnap.docs) {
         const data = vehicleDoc.data();
-        if (data.alertSent === false || data.alertSent === undefined || data.alertSent === null) {
+        if (data.alertSent !== true) {
           allAlerts.push({ id: vehicleDoc.id, dateKey, ...data });
         }
       }
@@ -652,13 +644,12 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const docs = await getPendingAlerts();
     const todayKey = getTodayKeyArgentina();
-    const filteredDocs = docs.filter(doc => doc.dateKey < todayKey);
+    const docs = await getPendingAlerts(todayKey);
 
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${filteredDocs.length}`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
 
-    if (filteredDocs.length === 0) {
+    if (docs.length === 0) {
       const generalBody = buildGeneralGroupsBody([], todayKey);
       return res.status(200).json({
         ok: true,
@@ -672,7 +663,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
 
     // Enriquecer siempre con responsables actuales desde vehicles
     const enriched = await Promise.all(
-      filteredDocs.map(async (doc) => {
+      docs.map(async (doc) => {
         const plate = normalizePlate(doc.plate || doc.id);
         const vehicle = await getVehicle(plate);
         const responsables = Array.isArray(vehicle?.responsables)
