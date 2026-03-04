@@ -40,6 +40,7 @@ const publicHorariosRoutes = require('./routes/publicHorarios.routes');
 const emailWebhookRoutes = require('./routes/emailWebhook');
 const emailReceptorRoutes = require('./routes/email-receptor');
 const emailAlertsRoutes = require('./routes/emailAlerts');
+const emailUsersRoutes = require('./modules/emailUsers/emailUsers.routes');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
@@ -214,6 +215,7 @@ app.use('/api/horarios', horariosRoutes);
 app.use('/api', emailWebhookRoutes);
 app.use('/api', emailReceptorRoutes);
 app.use('/api', emailAlertsRoutes);
+app.use('/api', emailUsersRoutes);
 
 // Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
