@@ -860,11 +860,12 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
           );
         }
 
-        const responsables = Array.isArray(vehicle?.responsables)
-          ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-          : Array.isArray(doc.responsables)
-            ? doc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-            : [];
+        let responsables = [];
+        if (Array.isArray(doc.responsables) && doc.responsables.length > 0) {
+          responsables = doc.responsables.filter((e) => typeof e === "string" && e.includes("@"));
+        } else if (Array.isArray(vehicle?.responsables)) {
+          responsables = vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"));
+        }
         const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
         return { ...doc, plate, responsables, operationName, operacion: operationName };
       })
