@@ -41,6 +41,7 @@ const emailWebhookRoutes = require('./routes/emailWebhook');
 const emailReceptorRoutes = require('./routes/email-receptor');
 const emailAlertsRoutes = require('./routes/emailAlerts');
 const emailUsersRoutes = require('./modules/emailUsers/emailUsers.routes');
+const emailAlertsApiRoutes = require('./modules/emailAlerts/emailAlerts.routes');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
@@ -216,6 +217,7 @@ app.use('/api', emailWebhookRoutes);
 app.use('/api', emailReceptorRoutes);
 app.use('/api', emailAlertsRoutes);
 app.use('/api', emailUsersRoutes);
+app.use('/api', emailAlertsApiRoutes);
 
 // Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);

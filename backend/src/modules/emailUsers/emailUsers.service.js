@@ -168,46 +168,59 @@ async function syncAccessUsers() {
   const allEmailsSet = new Set();
   const candidateRoles = new Map(); // email -> desiredRole (solo para nuevos docs)
 
-  // 1) Recorrer todos los vehículos y normalizar responsables/responsablesNormalized
-  const vehiclesSnap = await VEHICLES_REF.get();
-  const batchUpdates = [];
+  // 1) Recorrer todos los vehículos de forma paginada y normalizar responsables/responsablesNormalized
+  const PAGE_SIZE = 500;
+  let lastDoc = null;
 
-  vehiclesSnap.forEach((doc) => {
-    const data = doc.data() || {};
-    const rawResponsables = Array.isArray(data.responsables) ? data.responsables : [];
-    const storedNormalized = Array.isArray(data.responsablesNormalized)
-      ? data.responsablesNormalized
-      : [];
-
-    const normalizedFromRaw = normalizeEmailArray(rawResponsables);
-    const normalizedStored = normalizeEmailArray(storedNormalized);
-
-    const mergedSet = new Set([...normalizedFromRaw, ...normalizedStored]);
-    const merged = Array.from(mergedSet);
-
-    merged.forEach((email) => allEmailsSet.add(email));
-
-    const needsUpdate =
-      merged.length > 0 &&
-      (normalizedStored.length !== merged.length ||
-        normalizedStored.some((e, idx) => e !== merged[idx]));
-
-    if (needsUpdate) {
-      batchUpdates.push({
-        ref: doc.ref,
-        data: { responsablesNormalized: merged },
-      });
+  // Paginar por documentId para evitar cargar toda la colección en memoria
+  // y aplicar updates en batches por página.
+  // orderBy(FieldPath.documentId()) requiere usar el id del último doc con startAfter.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let query = VEHICLES_REF.orderBy(admin.firestore.FieldPath.documentId()).limit(PAGE_SIZE);
+    if (lastDoc) {
+      query = query.startAfter(lastDoc.id);
     }
-  });
 
-  // Aplicar updates en vehículos en batches para no superar límites
-  if (batchUpdates.length > 0) {
-    const MAX_BATCH = 500;
-    for (let i = 0; i < batchUpdates.length; i += MAX_BATCH) {
-      const slice = batchUpdates.slice(i, i + MAX_BATCH);
-      const batch = db.batch();
-      slice.forEach(({ ref, data }) => batch.set(ref, data, { merge: true }));
+    const snap = await query.get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    let batchOps = 0;
+
+    snap.forEach((doc) => {
+      const data = doc.data() || {};
+      const rawResponsables = Array.isArray(data.responsables) ? data.responsables : [];
+      const storedNormalized = Array.isArray(data.responsablesNormalized)
+        ? data.responsablesNormalized
+        : [];
+
+      const normalizedFromRaw = normalizeEmailArray(rawResponsables);
+      const normalizedStored = normalizeEmailArray(storedNormalized);
+
+      const mergedSet = new Set([...normalizedFromRaw, ...normalizedStored]);
+      const merged = Array.from(mergedSet);
+
+      merged.forEach((email) => allEmailsSet.add(email));
+
+      const needsUpdate =
+        merged.length > 0 &&
+        (normalizedStored.length !== merged.length ||
+          normalizedStored.some((e, idx) => e !== merged[idx]));
+
+      if (needsUpdate) {
+        batch.set(doc.ref, { responsablesNormalized: merged }, { merge: true });
+        batchOps += 1;
+      }
+    });
+
+    if (batchOps > 0) {
       await batch.commit();
+    }
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE_SIZE) {
+      break;
     }
   }
 
@@ -243,47 +256,73 @@ async function syncAccessUsers() {
   }
 
   const allEmails = Array.from(allEmailsSet);
+
+  // 3) Cargar todos los usuarios existentes de access en memoria (evita lecturas repetidas)
+  const existingUsers = new Map();
+  const accessSnap = await ACCESS_REF.get();
+  accessSnap.forEach((doc) => {
+    existingUsers.set(doc.id, doc.data() || {});
+  });
+
+  // 4) Asegurar documentos en apps/emails/access/{email} usando batch writes
   let created = 0;
   let updated = 0;
+  const MAX_BATCH = 500;
+  let batch = db.batch();
+  let batchOps = 0;
 
-  // 3) Asegurar documentos en apps/emails/access/{email}
+  async function commitIfNeeded() {
+    if (batchOps > 0) {
+      await batch.commit();
+      batch = db.batch();
+      batchOps = 0;
+    }
+  }
+
   for (const email of allEmails) {
     const docRef = ACCESS_REF.doc(email);
-    const snap = await docRef.get();
+    const existing = existingUsers.get(email);
 
-    if (!snap.exists) {
+    if (!existing) {
       const role = candidateRoles.get(email) || "responsable";
-      await docRef.set({
+      batch.set(docRef, {
         email,
         role,
         active: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       created += 1;
-      continue;
+      batchOps += 1;
+    } else {
+      const update = {};
+
+      if (!existing.email) {
+        update.email = email;
+      }
+      if (existing.active == null) {
+        update.active = true;
+      }
+
+      // No sobreescribimos role si ya existe; si está vacío, usamos el candidato si hay.
+      if (existing.role == null || existing.role === "") {
+        const candidateRole = candidateRoles.get(email) || "responsable";
+        update.role = candidateRole;
+      }
+
+      if (Object.keys(update).length > 0) {
+        batch.set(docRef, update, { merge: true });
+        updated += 1;
+        batchOps += 1;
+      }
     }
 
-    const data = snap.data() || {};
-    const update = {};
-
-    if (!data.email) {
-      update.email = email;
-    }
-    if (data.active == null) {
-      update.active = true;
-    }
-
-    // No sobreescribimos role si ya existe; si está vacío, usamos el candidato si hay.
-    if (data.role == null || data.role === "") {
-      const candidateRole = candidateRoles.get(email) || "responsable";
-      update.role = candidateRole;
-    }
-
-    if (Object.keys(update).length > 0) {
-      await docRef.set(update, { merge: true });
-      updated += 1;
+    if (batchOps >= MAX_BATCH) {
+      // eslint-disable-next-line no-await-in-loop
+      await commitIfNeeded();
     }
   }
+
+  await commitIfNeeded();
 
   return { created, updated, totalEmails: allEmails.length };
 }

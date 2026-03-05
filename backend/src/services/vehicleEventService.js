@@ -655,6 +655,36 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
 
   await touchDailyAlertDayDoc(dateKey);
 
+  // Índice de ownership por responsable:
+  // apps/emails/responsables/{email}/alerts/{alertId}
+  // Fuente de verdad sigue siendo dailyAlerts; este índice es solo para lectura rápida.
+  const indexResponsables =
+    responsablesNormalized.length > 0 ? responsablesNormalized : normalizeEmailArray(responsables);
+  const alertId = `${dateKey}_${normalized}`;
+  const encodedAlertId = encodeURIComponent(alertId);
+
+  for (const email of indexResponsables) {
+    const encodedEmail = encodeURIComponent(email);
+    const alertRef = db
+      .collection("apps")
+      .doc("emails")
+      .collection("responsables")
+      .doc(encodedEmail)
+      .collection("alerts")
+      .doc(encodedAlertId);
+
+    await alertRef.set(
+      {
+        plate: normalized,
+        dateKey,
+        riskScore,
+        alertSent: docPayload.alertSent === true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
   const metaDeltas = {
     totalEvents: newCount,
     totalExcesos: summaryCounts.excesos - (existingData?.summary?.excesos ?? 0),
