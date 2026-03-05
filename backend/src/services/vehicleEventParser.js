@@ -15,7 +15,7 @@ const SUBJECT_PATTERNS = {
   contacto: /contacto\s+sin\s+identificaci[oó]n\s+(del\s+)?d[íi]a/i,
 };
 
-const PLATE_REGEX = /([A-Z]{2}[- ]?\d{3}[- ]?[A-Z]{2})/i;
+const PLATE_REGEX = /([A-Z]{2}[\s-]*\d{3}[\s-]*[A-Z]{2}|[A-Z]{3}[\s-]*\d{3})/i;
 
 function normalizeBodyLines(bodyText) {
   if (!bodyText) return [];
@@ -843,3 +843,4 @@ module.exports = {
   EMAIL_TYPE_NO_IDENTIFICADOS,
   EMAIL_TYPE_CONTACTO,
 };
+

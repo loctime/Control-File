@@ -397,13 +397,13 @@ router.patch('/email-config', async (req, res) => {
     const updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
 
     if (Array.isArray(body.generalRecipients)) {
-      updates.generalRecipients = body.generalRecipients;
+      updates.generalRecipients = normalizeEmailArray(body.generalRecipients);
     }
     if (Array.isArray(body.ccRecipients)) {
-      updates.ccRecipients = body.ccRecipients;
+      updates.ccRecipients = normalizeEmailArray(body.ccRecipients);
     }
     if (Array.isArray(body.reportRecipients)) {
-      updates.reportRecipients = body.reportRecipients;
+      updates.reportRecipients = normalizeEmailArray(body.reportRecipients);
     }
 
     if (Object.keys(updates).length <= 1) {
@@ -465,3 +465,4 @@ router.post('/sync-access-users', async (req, res) => {
 });
 
 module.exports = router;
+

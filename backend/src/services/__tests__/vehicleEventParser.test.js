@@ -94,6 +94,23 @@ Ford     F400      AD-374-LK   02-03-2026 11:40:40`;
     expect(events[0].plateNormalized).toBe("AG628GV");
   });
 
+
+  it("parsea formato de patente vieja ABC123", () => {
+    const body = `No identificados del dÌa
+02/03/26 01:44:19 ABC - 123 - Ford Ranger (No identificado)`;
+    const events = parseNoIdentificados(body);
+    expect(events).toHaveLength(1);
+    expect(events[0].plateNormalized).toBe("ABC123");
+  });
+
+  it("parsea formato nuevo AA123AA con separadores variables", () => {
+    const body = `Excesos del dÌa
+120 Km/h 02/03/26 11:11:41 AG  -  572 - HB - Toyota Hilux (12E89EC) RP7`;
+    const events = parseExcesos(body);
+    expect(events).toHaveLength(1);
+    expect(events[0].plateNormalized).toBe("AG572HB");
+  });
+
   it("parseVehicleEventsFromEmail conserva sourceEmailType", () => {
     const subject = "Excesos del d√≠a";
     const body = "120 Km/h 02/03/26 11:11:41 AG-572-HB - Toyota Hilux (12E89EC) RP7";
