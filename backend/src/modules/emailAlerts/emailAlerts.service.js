@@ -2,7 +2,14 @@ const admin = require("firebase-admin");
 const { normalizeEmail } = require("../emailUsers/emailUsers.service");
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    }),
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  });
 }
 
 const db = admin.firestore();

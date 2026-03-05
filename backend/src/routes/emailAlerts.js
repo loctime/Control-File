@@ -1,10 +1,10 @@
 /**
  * Rutas para alertas diarias.
- * El backend NO env√≠a emails. Solo expone pendientes y permite marcarlas como enviadas.
- * Un solo email por responsable por d√≠a, consolidando todas las patentes en un resumen.
+ * El backend NO envÌa emails. Solo expone pendientes y permite marcarlas como enviadas.
+ * Un solo email por responsable por dÌa, consolidando todas las patentes en un resumen.
  *
- * GET  /api/email/get-pending-daily-alerts ‚Üí [{ responsableEmails, subject, body, alertIds }]
- * POST /api/email/mark-alert-sent ‚Üí body: { alertIds: string[] }
+ * GET  /api/email/get-pending-daily-alerts ? [{ responsableEmails, subject, body, alertIds }]
+ * POST /api/email/mark-alert-sent ? body: { alertIds: string[] }
  */
 
 const express = require("express");
@@ -15,7 +15,14 @@ const { getDailyTotalsByType } = require("../services/dailyMetricsService");
 const { logger } = require("../utils/logger");
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    }),
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  });
 }
 
 const db = admin.firestore();
@@ -26,7 +33,7 @@ const DAILY_ALERTS_REF = db
   .collection("dailyAlerts");
 
 /**
- * Valida x-local-token. Retorna true si v√°lido.
+ * Valida x-local-token. Retorna true si v·lido.
  */
 function validateLocalToken(req) {
   const token = process.env.LOCAL_EMAIL_TOKEN;
@@ -35,7 +42,7 @@ function validateLocalToken(req) {
 }
 
 /**
- * Parsea y valida ?date=YYYY-MM-DD. Retorna el string dateKey o null si es inv√°lido.
+ * Parsea y valida ?date=YYYY-MM-DD. Retorna el string dateKey o null si es inv·lido.
  */
 function parseDateQuery(queryDate) {
   if (!queryDate || typeof queryDate !== "string") return null;
@@ -55,8 +62,8 @@ function getTodayKeyArgentina() {
 }
 
 /**
- * Convierte un dateKey YYYY-MM-DD en un n√∫mero comparable (YYYYMMDD).
- * Devuelve NaN si el formato no es v√°lido.
+ * Convierte un dateKey YYYY-MM-DD en un n˙mero comparable (YYYYMMDD).
+ * Devuelve NaN si el formato no es v·lido.
  */
 function toDateKeyNumber(key) {
   if (!key || typeof key !== "string") return NaN;
@@ -83,11 +90,11 @@ function normalizeEmailArray(values) {
 }
 
 /**
- * Obtiene alertas pendientes de d√≠as anteriores a hoy (Argentina).
+ * Obtiene alertas pendientes de dÌas anteriores a hoy (Argentina).
  * Una sola capa de filtrado: dateKey < todayKey y alertSent !== true.
  *
  * @param {string} todayKey - Fecha de hoy en Argentina (YYYY-MM-DD).
- * @returns {Promise<Array<{ id: string, dateKey: string, ... }>>} Documentos de veh√≠culos pendientes (nunca incluye el d√≠a actual).
+ * @returns {Promise<Array<{ id: string, dateKey: string, ... }>>} Documentos de vehÌculos pendientes (nunca incluye el dÌa actual).
  */
 async function getPendingAlerts(todayKey) {
   const dateKeysSnap = await DAILY_ALERTS_REF.get();
@@ -152,7 +159,7 @@ async function getPendingAlerts(todayKey) {
 }
 
 /**
- * Obtiene el documento meta del d√≠a (apps/emails/dailyAlerts/{dateKey}/meta/meta).
+ * Obtiene el documento meta del dÌa (apps/emails/dailyAlerts/{dateKey}/meta/meta).
  * Retorna null si no existe; los contadores se tratan como 0.
  */
 async function getDailyMeta(dateKey) {
@@ -193,8 +200,8 @@ function groupAlertsByResponsable(pendingDocs) {
 }
 
 /**
- * Agrupa alertas pendientes por conjunto de responsables (mismo d√≠a + mismos emails).
- * Si m√∫ltiples veh√≠culos comparten exactamente el mismo conjunto de responsables, se genera un solo grupo consolidado.
+ * Agrupa alertas pendientes por conjunto de responsables (mismo dÌa + mismos emails).
+ * Si m˙ltiples vehÌculos comparten exactamente el mismo conjunto de responsables, se genera un solo grupo consolidado.
  * Retorna: Array<{ dateKey, responsableEmails: string[], plates: Set<string>, docs: vehicleDoc[] }>
  */
 function groupAlertsByResponsableSet(pendingDocs) {
@@ -236,10 +243,10 @@ function groupAlertsByResponsableSet(pendingDocs) {
 }
 
 /**
- * Asunto del email consolidado por responsable/d√≠a.
+ * Asunto del email consolidado por responsable/dÌa.
  */
 function buildConsolidatedSubject(dateKey) {
-  return `üö® Resumen diario de flota ‚Äì ${dateKey}`;
+  return `?? Resumen diario de flota ? ${dateKey}`;
 }
 
 /**
@@ -247,14 +254,14 @@ function buildConsolidatedSubject(dateKey) {
  * La hora mostrada debe coincidir EXACTAMENTE con la del email original.
  *
  * Para strings ISO con offset (ej. "2026-02-27T13:45:01-03:00") se extraen
- * fecha y hora del string sin usar Date, as√≠ el servidor (UTC u otra TZ)
+ * fecha y hora del string sin usar Date, asÌ el servidor (UTC u otra TZ)
  * no altera la hora. Para Timestamp de Firestore o otros tipos se usa
  * timeZone "America/Argentina/Buenos_Aires".
  */
 function formatDateTimeArgentina(timestamp) {
   if (!timestamp) return "-";
   try {
-    // Firestore Timestamp: convertir a Date y formatear con TZ expl√≠cita
+    // Firestore Timestamp: convertir a Date y formatear con TZ explÌcita
     if (timestamp && typeof timestamp.toDate === "function") {
       const date = timestamp.toDate();
       if (isNaN(date.getTime())) return "-";
@@ -308,21 +315,21 @@ function getTypeLabel(e) {
     case "no_identificado":
       return "No identificado";
     case "contacto":
-      return "Contacto sin identificaci√≥n";
+      return "Contacto sin identificaciÛn";
     default:
       return "Exceso de velocidad";
   }
 }
 
 /**
- * Color para eventos (todos cr√≠ticos): siempre rojo.
+ * Color para eventos (todos crÌticos): siempre rojo.
  */
 function getSeverityColor(_e) {
   return "#d32f2f"; // rojo
 }
 
 /**
- * Escapa caracteres HTML para prevenir inyecci√≥n.
+ * Escapa caracteres HTML para prevenir inyecciÛn.
  */
 function escapeHtml(text) {
   if (!text || typeof text !== "string") return "";
@@ -337,7 +344,7 @@ function escapeHtml(text) {
 }
 
 /**
- * Ordena documentos de veh√≠culos por mayor criticidad (riskScore desc, luego patente).
+ * Ordena documentos de vehÌculos por mayor criticidad (riskScore desc, luego patente).
  * Documentos sin riskScore se tratan como 0.
  */
 function sortVehiclesByCriticity(docs) {
@@ -353,7 +360,7 @@ function sortVehiclesByCriticity(docs) {
 }
 
 /**
- * M√©tricas por tipo desde meta del d√≠a (v2).
+ * MÈtricas por tipo desde meta del dÌa (v2).
  * Devuelve objeto con totales por tipo para el resumen ejecutivo.
  */
 function getMetricsByTypeFromMeta(meta) {
@@ -376,7 +383,7 @@ function getMetricsByTypeFromMeta(meta) {
 }
 
 /**
- * Genera un objeto "meta" a partir solo de los documentos de veh√≠culos dados.
+ * Genera un objeto "meta" a partir solo de los documentos de vehÌculos dados.
  * Usado para resumen personalizado por destinatario (solo sus patentes).
  * Recalcula: totalVehicles, totalEvents, vehiclesWithCritical, totales por tipo.
  */
@@ -427,7 +434,7 @@ function buildMetaFromVehicleDocs(vehicleDocs) {
 }
 
 /**
- * Encabezado global del email usando meta del d√≠a (resumen ejecutivo con m√©tricas por tipo).
+ * Encabezado global del email usando meta del dÌa (resumen ejecutivo con mÈtricas por tipo).
  */
 function buildGlobalSummaryHeader(meta, dateKey) {
   const totalVehicles = meta ? (meta.totalVehicles ?? 0) : 0;
@@ -442,7 +449,7 @@ function buildGlobalSummaryHeader(meta, dateKey) {
           <strong>Por tipo:</strong>
           ${byType.excesos > 0 ? ` Excesos de velocidad: ${byType.excesos}` : ""}
           ${byType.no_identificados > 0 ? ` | No identificados: ${byType.no_identificados}` : ""}
-          ${byType.contactos > 0 ? ` | Contacto sin identificaci√≥n: ${byType.contactos}` : ""}
+          ${byType.contactos > 0 ? ` | Contacto sin identificaciÛn: ${byType.contactos}` : ""}
           ${byType.llave_sin_cargar > 0 ? ` | Llave sin cargar: ${byType.llave_sin_cargar}` : ""}
           ${byType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${byType.conductor_inactivo}` : ""}
         </div>`
@@ -455,19 +462,19 @@ function buildGlobalSummaryHeader(meta, dateKey) {
   </div>
   <div style="background-color: #e3f2fd; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
     <div style="font-size: 14px; line-height: 1.8;">
-      <strong>Veh√≠culos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
+      <strong>VehÌculos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
       <strong>Total eventos:</strong> ${totalEvents}
-      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">Veh√≠culos con eventos: ${vehiclesWithCritical}</span>` : ""}
+      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">VehÌculos con eventos: ${vehiclesWithCritical}</span>` : ""}
     </div>
     <div style="font-size: 14px; margin-top: 8px;">
-      ${totalEvents > 0 ? `<span style="color: #d32f2f; font-weight: bold;">üî¥ ${totalEvents} eventos</span>` : ""}
+      ${totalEvents > 0 ? `<span style="color: #d32f2f; font-weight: bold;">?? ${totalEvents} eventos</span>` : ""}
     </div>
     ${metricsByTypeHtml}
   </div>`;
 }
 
 /**
- * Secci√≥n HTML por veh√≠culo (patente, resumen por severidad, tabla de eventos).
+ * SecciÛn HTML por vehÌculo (patente, resumen por severidad, tabla de eventos).
  */
 function buildVehicleSection(doc) {
   const { plate, brand, model, events, summary } = doc;
@@ -501,7 +508,7 @@ function buildVehicleSection(doc) {
       <td style="padding:8px; font-weight:bold; color:${color};">${escapeHtml(typeLabel)}</td>
       <td style="padding:8px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
       <td style="padding:8px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
-      <td style="padding:8px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicaci√≥n")}</td>
+      <td style="padding:8px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicaciÛn")}</td>
     </tr>`;
     })
     .join("");
@@ -521,8 +528,8 @@ function buildVehicleSection(doc) {
   <section style="margin-bottom: 28px;">
     <div style="border-top:1px solid #ccc; margin:20px 0;"></div>
     <h2 style="font-size: 16px; color: #333; margin: 0 0 8px 0;">
-      üöó ${escapeHtml(plate)} - ${escapeHtml(brand || "")} ${escapeHtml(model || "")}
-      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;"> üî¥ ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>` : ""}
+      ?? ${escapeHtml(plate)} - ${escapeHtml(brand || "")} ${escapeHtml(model || "")}
+      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;"> ?? ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>` : ""}
     </h2>
     ${typeSummaryHtml}
     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -531,7 +538,7 @@ function buildVehicleSection(doc) {
           <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Tipo</th>
           <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Velocidad</th>
           <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Fecha/Hora</th>
-          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Ubicaci√≥n</th>
+          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">UbicaciÛn</th>
         </tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
@@ -541,7 +548,7 @@ function buildVehicleSection(doc) {
 }
 
 /**
- * Cuerpo consolidado: encabezado global + secci√≥n por veh√≠culo.
+ * Cuerpo consolidado: encabezado global + secciÛn por vehÌculo.
  */
 function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
   const sections = vehicleDocs.map((doc) => buildVehicleSection(doc)).join("");
@@ -554,7 +561,7 @@ function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Resumen diario de flota ‚Äì ${dateKey}</title>
+  <title>Resumen diario de flota ? ${dateKey}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
   ${buildGlobalSummaryHeader(meta, dateKey)}
@@ -569,7 +576,7 @@ function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
 /**
  * Cuerpo del email general por grupos operativos (todas las operaciones en un solo HTML).
  * Recibe el array groups de groupAlertsByResponsableSet; por cada grupo ordena por criticidad,
- * calcula meta con buildMetaFromVehicleDocs y usa buildVehicleSection por veh√≠culo.
+ * calcula meta con buildMetaFromVehicleDocs y usa buildVehicleSection por vehÌculo.
  */
 function buildGeneralGroupsBody(groups, dateKey) {
   if (!Array.isArray(groups) || groups.length === 0) {
@@ -592,17 +599,17 @@ function buildGeneralGroupsBody(groups, dateKey) {
     .map((group) => {
       const sortedDocs = sortVehiclesByCriticity(group.docs);
       const meta = buildMetaFromVehicleDocs(sortedDocs);
-      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "Operaci√≥n no asignada").toUpperCase();
+      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "OperaciÛn no asignada").toUpperCase();
       const responsablesText = (group.responsableEmails || []).join(", ");
 
       return `
   <div style="margin-top: 35px; border-top: 3px solid #000; padding-top: 12px;">
     <h2 style="margin: 0; font-size: 18px;">
-      üè≠ OPERACI√ìN ${escapeHtml(operationName)}
+      ?? OPERACI”N ${escapeHtml(operationName)}
     </h2>
     <div style="font-size: 13px; color: #555; margin: 6px 0 12px 0;">
       Responsables: ${escapeHtml(responsablesText)}<br>
-      Veh√≠culos con eventos: ${meta.totalVehicles} |
+      VehÌculos con eventos: ${meta.totalVehicles} |
       Total eventos: ${meta.totalEvents}
     </div>
   </div>
@@ -617,13 +624,13 @@ function buildGeneralGroupsBody(groups, dateKey) {
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Resumen General de Operaciones ‚Äì ${dateKey}</title>
+    <title>Resumen General de Operaciones ? ${dateKey}</title>
   </head>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #ffffff;">
 
     <div style="text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
       <h1 style="margin: 0; font-size: 22px; font-weight: 600;">
-        üö® Resumen General de Operaciones
+        ?? Resumen General de Operaciones
       </h1>
       <p style="margin: 6px 0 0 0; color: #666; font-size: 14px;">
         ${dateKey}
@@ -671,7 +678,7 @@ async function markAlertAsSent(dateKey, plate) {
 }
 
 /**
- * Marca m√∫ltiples alertas como enviadas en batch (m√°x 500 por batch).
+ * Marca m˙ltiples alertas como enviadas en batch (m·x 500 por batch).
  */
 async function markAlertsAsSentBatch(alertIds) {
   const parsed = alertIds
@@ -737,7 +744,7 @@ async function markAlertsAsSentBatch(alertIds) {
  * GET /email/get-pending-daily-alerts
  *
  * Requiere: x-local-token.
- * Agrupa por conjunto de responsables (mismo d√≠a + mismos emails): un solo email por grupo consolidado.
+ * Agrupa por conjunto de responsables (mismo dÌa + mismos emails): un solo email por grupo consolidado.
  * Respuesta: [{ responsableEmails, subject, body, alertIds }].
  */
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
@@ -765,7 +772,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         ok: true,
         alerts: [],
         general: {
-          subject: `üö® Resumen general de operaciones ‚Äì ${todayKey}`,
+          subject: `?? Resumen general de operaciones ? ${todayKey}`,
           body: generalBody,
         },
       });
@@ -803,7 +810,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         const failedDoc = docs[idx] || {};
         const plate = normalizePlate(failedDoc.plate || failedDoc.id);
         logger.warn(
-          `[GET-PENDING-ALERTS] Enriquecimiento inv·lido para ${plate}:`,
+          `[GET-PENDING-ALERTS] Enriquecimiento inv?lido para ${plate}:`,
           result.reason && result.reason.message ? result.reason.message : String(result.reason)
         );
 
@@ -849,7 +856,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     return res.status(200).json({
       ok: true,
       general: {
-        subject: `üö® Resumen general de operaciones ‚Äì ${dateKeyForGeneral}`,
+        subject: `?? Resumen general de operaciones ? ${dateKeyForGeneral}`,
         body: generalBody,
       },
       alerts,
@@ -915,8 +922,8 @@ router.post("/email/mark-alert-sent", async (req, res) => {
 });
 
 /**
- * Compara total de eventos en meta del d√≠a con la suma de events en cada vehicle.
- * √ötil para detectar posibles p√©rdidas o inconsistencias (v2).
+ * Compara total de eventos en meta del dÌa con la suma de events en cada vehicle.
+ * ⁄til para detectar posibles pÈrdidas o inconsistencias (v2).
  * @param {string} dateKey - YYYY-MM-DD
  * @returns {{ ok: boolean, totalInMeta: number, totalInAlerts: number, diff: number }}
  */
@@ -943,7 +950,7 @@ async function getDailyConsistency(dateKey) {
 
 /**
  * GET /email/daily-metrics?date=YYYY-MM-DD
- * M√©tricas del d√≠a (totales por tipo y por severidad) para dashboard o scripts (v2).
+ * MÈtricas del dÌa (totales por tipo y por severidad) para dashboard o scripts (v2).
  */
 router.get("/email/daily-metrics", async (req, res) => {
   try {
@@ -967,7 +974,7 @@ router.get("/email/daily-metrics", async (req, res) => {
 
 /**
  * GET /email/daily-consistency?date=YYYY-MM-DD
- * Sanity check: compara totalEvents en meta con suma de events por vehicle ese d√≠a.
+ * Sanity check: compara totalEvents en meta con suma de events por vehicle ese dÌa.
  */
 router.get("/email/daily-consistency", async (req, res) => {
   try {
@@ -991,7 +998,7 @@ router.get("/email/daily-consistency", async (req, res) => {
 
 /**
  * GET /email/debug-pending-alerts
- * Endpoint temporal de debug para verificar qu√© est√° pasando
+ * Endpoint temporal de debug para verificar quÈ est· pasando
  */
 router.get("/email/debug-pending-alerts", async (req, res) => {
   try {
