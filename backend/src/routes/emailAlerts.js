@@ -92,6 +92,23 @@ function getTodayKeyArgentina() {
 }
 
 /**
+ * Fecha de ayer en Argentina (YYYY-MM-DD). Se usa para buscar alertas diarias pendientes.
+ */
+function getYesterdayKeyArgentina() {
+  const now = new Date();
+  const argDateStr = now.toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+  const [y, m, d] = argDateStr.split("-").map(Number);
+  const argDate = new Date(y, m - 1, d);
+  argDate.setDate(argDate.getDate() - 1);
+  const yy = argDate.getFullYear();
+  const mm = String(argDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(argDate.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/**
  * Convierte un dateKey YYYY-MM-DD en un n?mero comparable (YYYYMMDD).
  * Devuelve NaN si el formato no es v?lido.
  */
@@ -185,6 +202,31 @@ async function getPendingAlerts(todayKey) {
     allAlerts.length
   );
 
+  return allAlerts;
+}
+
+/**
+ * Obtiene alertas pendientes solo para un dateKey (apps/emails/dailyAlerts/{dateKey}/vehicles).
+ * @param {string} dateKey - YYYY-MM-DD
+ * @returns {Promise<Array<{ id: string, dateKey: string, ... }>>}
+ */
+async function getPendingAlertsForDateKey(dateKey) {
+  const allAlerts = [];
+  try {
+    const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
+    for (const vehicleDoc of vehiclesSnap.docs) {
+      const data = vehicleDoc.data();
+      if (data.alertSent !== true) {
+        allAlerts.push({ id: vehicleDoc.id, dateKey, ...data });
+      }
+    }
+  } catch (e) {
+    logger.error(
+      "[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=%s: %s",
+      dateKey,
+      e && e.message ? e.message : String(e)
+    );
+  }
   return allAlerts;
 }
 
@@ -784,25 +826,20 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const nowIso = new Date().toISOString();
-    const todayKey = getTodayKeyArgentina();
-    logger.info(
-      "[GET-PENDING-ALERTS][DEBUG] nowIso=%s, todayKeyArgentina=%s",
-      nowIso,
-      todayKey
-    );
+    const dateKey = getYesterdayKeyArgentina();
+    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey:", dateKey);
 
-    const docs = await getPendingAlerts(todayKey);
+    const docs = await getPendingAlertsForDateKey(dateKey);
 
     logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
 
     if (docs.length === 0) {
-      const generalBody = buildGeneralGroupsBody([], todayKey);
+      const generalBody = buildGeneralGroupsBody([], dateKey);
       return res.status(200).json({
         ok: true,
         alerts: [],
         general: {
-          subject: `?? Resumen general de operaciones ? ${todayKey}`,
+          subject: `?? Resumen general de operaciones ? ${dateKey}`,
           body: generalBody,
         },
       });
@@ -879,7 +916,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       };
     });
 
-    const dateKeyForGeneral = groups.length > 0 ? groups[0].dateKey : todayKey;
+    const dateKeyForGeneral = groups.length > 0 ? groups[0].dateKey : dateKey;
     const generalBody = buildGeneralGroupsBody(groups, dateKeyForGeneral);
 
     logger.info(`[GET-PENDING-ALERTS] Respuesta: ${alerts.length} email(s) consolidado(s)`);
