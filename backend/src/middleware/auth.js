@@ -34,23 +34,46 @@ let centralAuth; // Auth del proyecto de identidad
 if (!admin.apps.length) {
   // App de datos (Firestore de ControlFile)
   try {
-    const appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
-    admin.initializeApp({
-      credential: admin.credential.cert(appDataCred),
-      projectId: process.env.FB_DATA_PROJECT_ID,
-    });
+    const rawAppData = process.env.FB_ADMIN_APPDATA;
+    if (rawAppData && typeof rawAppData === 'string') {
+      const appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
+      admin.initializeApp({
+        credential: admin.credential.cert(appDataCred),
+        projectId: process.env.FB_DATA_PROJECT_ID,
+      });
+    } else if (
+      process.env.FIREBASE_PROJECT_ID &&
+      process.env.FIREBASE_PRIVATE_KEY &&
+      (process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
+    ) {
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail,
+          privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        }),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    } else {
+      throw new Error('Configura FB_ADMIN_APPDATA o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY)');
+    }
   } catch (e) {
     console.error('Error inicializando App de datos:', e);
     throw e;
   }
 
-  // App de Auth central para verifyIdToken
+  // App de Auth central para verifyIdToken (mismo proyecto que datos o identidad separada)
   try {
-    const appIdentityCred = parseServiceAccount('FB_ADMIN_IDENTITY');
-    const authApp = admin.initializeApp({
-      credential: admin.credential.cert(appIdentityCred),
-    }, 'authApp');
-    centralAuth = authApp.auth();
+    if (process.env.FB_ADMIN_IDENTITY) {
+      const appIdentityCred = parseServiceAccount('FB_ADMIN_IDENTITY');
+      const authApp = admin.initializeApp({
+        credential: admin.credential.cert(appIdentityCred),
+      }, 'authApp');
+      centralAuth = authApp.auth();
+    } else {
+      centralAuth = admin.auth();
+    }
   } catch (e) {
     console.error('Error inicializando App de identidad:', e);
     throw e;
@@ -60,11 +83,7 @@ if (!admin.apps.length) {
   try {
     centralAuth = admin.app('authApp').auth();
   } catch (_) {
-    const appIdentityCred = parseServiceAccount('FB_ADMIN_IDENTITY');
-    const authApp = admin.initializeApp({
-      credential: admin.credential.cert(appIdentityCred),
-    }, 'authApp');
-    centralAuth = authApp.auth();
+    centralAuth = admin.auth();
   }
 }
 
