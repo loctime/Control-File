@@ -348,11 +348,35 @@ async function syncAccessUsers() {
 
   await commitIfNeeded();
 
-  return { created, updated, totalEmails: allEmails.length };
+  // 5) Deshabilitar usuarios que ya no están en ninguna fuente (vehicles.responsables, config recipients)
+  let disabled = 0;
+  for (const [email, data] of existingUsers) {
+    if (allEmailsSet.has(email)) continue;
+    const isCurrentlyEnabled = data.enabled === true || data.active === true;
+    if (!isCurrentlyEnabled) continue;
+
+    const docRef = ACCESS_REF.doc(email);
+    batch.set(docRef, {
+      enabled: false,
+      active: false,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    disabled += 1;
+    batchOps += 1;
+
+    if (batchOps >= MAX_BATCH) {
+      await commitIfNeeded();
+    }
+  }
+
+  await commitIfNeeded();
+
+  return { created, updated, disabled, totalEmails: allEmails.length };
 }
 
 module.exports = {
   normalizeEmail,
+  normalizeEmailArray,
   ensureUser,
   getMe,
   getMyVehicles,

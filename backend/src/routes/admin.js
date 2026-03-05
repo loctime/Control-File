@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { logger } = require('../utils/logger');
-const { syncAccessUsers } = require('../modules/emailUsers/emailUsers.service');
+const { syncAccessUsers, normalizeEmailArray } = require('../modules/emailUsers/emailUsers.service');
+const { normalizePlate } = require('../services/vehicleEventService');
 
 /**
  * POST /api/admin/create-user
@@ -238,6 +239,135 @@ router.post('/create-user', async (req, res) => {
     });
   } catch (error) {
     logger.error('admin/create-user failed', { error });
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * PATCH /api/admin/vehicle-alerts
+ *
+ * Actualiza responsables de uno o más vehículos en apps/emails/vehicles.
+ * Tras guardar, ejecuta syncAccessUsers() para mantener apps/emails/access alineado.
+ *
+ * Body:
+ *   - { plate: string, responsables: string[] }  (un vehículo)
+ *   - { vehicles: [{ plate: string, responsables: string[] }] }  (varios)
+ *
+ * Requiere role admin o supermax en custom claims.
+ */
+router.patch('/vehicle-alerts', async (req, res) => {
+  try {
+    const claims = req.claims || {};
+    const allowedRoles = ['admin', 'supermax'];
+    if (!claims.role || !allowedRoles.includes(claims.role)) {
+      return res.status(403).json({
+        error: "No tienes permisos. Se requiere role in ['admin', 'supermax'] en custom claims.",
+      });
+    }
+
+    const body = req.body || {};
+    let vehiclesToUpdate = [];
+
+    if (body.plate != null && Array.isArray(body.responsables)) {
+      vehiclesToUpdate = [{ plate: body.plate, responsables: body.responsables }];
+    } else if (Array.isArray(body.vehicles)) {
+      vehiclesToUpdate = body.vehicles.filter(
+        (v) => v != null && v.plate != null && Array.isArray(v.responsables)
+      );
+    }
+
+    if (vehiclesToUpdate.length === 0) {
+      return res.status(400).json({
+        error: 'Body debe ser { plate, responsables } o { vehicles: [{ plate, responsables }] }',
+      });
+    }
+
+    const db = admin.firestore();
+    const vehiclesRef = db.collection('apps').doc('emails').collection('vehicles');
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    for (const { plate, responsables } of vehiclesToUpdate) {
+      const normalizedPlate = normalizePlate(plate);
+      if (!normalizedPlate) continue;
+
+      const responsablesNormalized = normalizeEmailArray(responsables);
+      await vehiclesRef.doc(normalizedPlate).set(
+        { responsables, responsablesNormalized, updatedAt: now },
+        { merge: true }
+      );
+    }
+
+    const result = await syncAccessUsers();
+
+    return res.status(200).json({
+      ok: true,
+      vehiclesUpdated: vehiclesToUpdate.length,
+      sync: result,
+    });
+  } catch (error) {
+    logger.error('admin/vehicle-alerts failed', { error });
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * PATCH /api/admin/email-config
+ *
+ * Actualiza la configuración de alertas por email (apps/emails/config/config).
+ * Acepta generalRecipients, ccRecipients, reportRecipients (arrays de emails).
+ * Tras guardar, ejecuta syncAccessUsers() para mantener apps/emails/access alineado.
+ *
+ * Body: { generalRecipients?: string[], ccRecipients?: string[], reportRecipients?: string[], ... }
+ *
+ * Requiere role admin o supermax en custom claims.
+ */
+router.patch('/email-config', async (req, res) => {
+  try {
+    const claims = req.claims || {};
+    const allowedRoles = ['admin', 'supermax'];
+    if (!claims.role || !allowedRoles.includes(claims.role)) {
+      return res.status(403).json({
+        error: "No tienes permisos. Se requiere role in ['admin', 'supermax'] en custom claims.",
+      });
+    }
+
+    const body = req.body || {};
+    const updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+
+    if (Array.isArray(body.generalRecipients)) {
+      updates.generalRecipients = body.generalRecipients;
+    }
+    if (Array.isArray(body.ccRecipients)) {
+      updates.ccRecipients = body.ccRecipients;
+    }
+    if (Array.isArray(body.reportRecipients)) {
+      updates.reportRecipients = body.reportRecipients;
+    }
+
+    if (Object.keys(updates).length <= 1) {
+      return res.status(400).json({
+        error: 'Body debe incluir al menos uno de: generalRecipients, ccRecipients, reportRecipients (arrays)',
+      });
+    }
+
+    const db = admin.firestore();
+    const configRef = db.collection('apps').doc('emails').collection('config').doc('config');
+    await configRef.set(updates, { merge: true });
+
+    const result = await syncAccessUsers();
+
+    return res.status(200).json({
+      ok: true,
+      sync: result,
+    });
+  } catch (error) {
+    logger.error('admin/email-config failed', { error });
     return res.status(500).json({
       error: 'Error interno del servidor',
       details: error.message,
