@@ -772,7 +772,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     }
 
     // Enriquecer siempre con responsables actuales desde vehicles
-    const enriched = await Promise.all(
+    const enrichedResults = await Promise.allSettled(
       docs.map(async (doc) => {
         const plate = normalizePlate(doc.plate || doc.id);
         let vehicle = null;
@@ -795,6 +795,31 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         return { ...doc, plate, responsables, operationName, operacion: operationName };
       })
     );
+
+    const enriched = enrichedResults
+      .map((result, idx) => {
+        if (result.status === "fulfilled") return result.value;
+
+        const failedDoc = docs[idx] || {};
+        const plate = normalizePlate(failedDoc.plate || failedDoc.id);
+        logger.warn(
+          `[GET-PENDING-ALERTS] Enriquecimiento inválido para ${plate}:`,
+          result.reason && result.reason.message ? result.reason.message : String(result.reason)
+        );
+
+        const fallbackResponsables = Array.isArray(failedDoc.responsables)
+          ? failedDoc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+          : [];
+
+        return {
+          ...failedDoc,
+          plate,
+          responsables: fallbackResponsables,
+          operationName: failedDoc.operationName || failedDoc.operacion || null,
+          operacion: failedDoc.operationName || failedDoc.operacion || null,
+        };
+      })
+      .filter(Boolean);
 
     const groups = groupAlertsByResponsableSet(enriched);
     logger.info(`[GET-PENDING-ALERTS] Agrupamiento por conjunto de responsables: ${groups.length} grupo(s)`);
@@ -830,10 +855,19 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       alerts,
     });
   } catch (err) {
-    logger.error("[GET-PENDING-ALERTS] Error:", err.message, err.stack);
-    return res.status(500).json({
-      error: "error interno",
-      message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    logger.error("[GET-PENDING-ALERTS] Error no controlado", {
+      error: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? err.stack : undefined,
+    });
+    const todayKey = getTodayKeyArgentina();
+    const generalBody = buildGeneralGroupsBody([], todayKey);
+    return res.status(200).json({
+      ok: true,
+      alerts: [],
+      general: {
+        subject: `Resumen general de operaciones - ${todayKey}`,
+        body: generalBody,
+      },
     });
   }
 });
@@ -1006,3 +1040,4 @@ router.get("/email/debug-pending-alerts", async (req, res) => {
 });
 
 module.exports = router;
+
