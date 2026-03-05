@@ -317,6 +317,62 @@ router.patch('/vehicle-alerts', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/email-config
+ *
+ * Lee la configuración de destinatarios globales del sistema de alertas por email
+ * (apps/emails/config/config). Si el documento no existe devuelve arrays vacíos.
+ *
+ * Respuesta: { ok: true, config: { generalRecipients, ccRecipients, reportRecipients } }
+ *
+ * Requiere role admin o supermax en custom claims.
+ */
+router.get('/email-config', async (req, res) => {
+  try {
+    const claims = req.claims || {};
+    const allowedRoles = ['admin', 'supermax'];
+    if (!claims.role || !allowedRoles.includes(claims.role)) {
+      return res.status(403).json({
+        error: "No tienes permisos. Se requiere role in ['admin', 'supermax'] en custom claims.",
+      });
+    }
+
+    const db = admin.firestore();
+    const configRef = db.collection('apps').doc('emails').collection('config').doc('config');
+    const doc = await configRef.get();
+
+    const defaultConfig = {
+      generalRecipients: [],
+      ccRecipients: [],
+      reportRecipients: [],
+    };
+
+    if (!doc.exists) {
+      return res.status(200).json({
+        ok: true,
+        config: defaultConfig,
+      });
+    }
+
+    const data = doc.data() || {};
+    const config = {
+      generalRecipients: Array.isArray(data.generalRecipients) ? data.generalRecipients : defaultConfig.generalRecipients,
+      ccRecipients: Array.isArray(data.ccRecipients) ? data.ccRecipients : defaultConfig.ccRecipients,
+      reportRecipients: Array.isArray(data.reportRecipients) ? data.reportRecipients : defaultConfig.reportRecipients,
+    };
+
+    return res.status(200).json({
+      ok: true,
+      config,
+    });
+  } catch (error) {
+    logger.error('admin/email-config GET failed', { error });
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+    });
+  }
+});
+
+/**
  * PATCH /api/admin/email-config
  *
  * Actualiza la configuración de alertas por email (apps/emails/config/config).
