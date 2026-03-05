@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { logger } = require('../utils/logger');
+const { syncAccessUsers } = require('../modules/emailUsers/emailUsers.service');
 
 /**
  * POST /api/admin/create-user
@@ -237,6 +238,39 @@ router.post('/create-user', async (req, res) => {
     });
   } catch (error) {
     logger.error('admin/create-user failed', { error });
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/sync-access-users
+ *
+ * Sincroniza usuarios de acceso al sistema de alertas de vehículos.
+ * Protegido por authMiddleware (Firebase ID token) a nivel de /api/admin
+ * y adicionalmente restringido por custom claims de role.
+ */
+router.post('/sync-access-users', async (req, res) => {
+  try {
+    const claims = req.claims || {};
+    const allowedRoles = ['admin', 'supermax'];
+
+    if (!claims.role || !allowedRoles.includes(claims.role)) {
+      return res.status(403).json({
+        error: "No tienes permisos para sincronizar accesos. Se requiere role in ['admin', 'supermax'] en custom claims.",
+      });
+    }
+
+    const result = await syncAccessUsers();
+
+    return res.status(200).json({
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    logger.error('admin/sync-access-users failed', { error });
     return res.status(500).json({
       error: 'Error interno del servidor',
       details: error.message,

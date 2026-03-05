@@ -34,8 +34,11 @@ async function ensureUserHandler(req, res) {
       return res.status(400).json({ error: "email inválido" });
     }
 
-    if (!role || (role !== "admin" && role !== "responsable")) {
-      return res.status(400).json({ error: "role debe ser 'admin' o 'responsable'" });
+    const allowedRoles = ["admin", "general", "report", "responsable"];
+    if (!role || !allowedRoles.includes(role)) {
+      return res
+        .status(400)
+        .json({ error: "role debe ser 'admin', 'general', 'report' o 'responsable'" });
     }
 
     await ensureUser(normalized, role);
@@ -49,6 +52,7 @@ async function ensureUserHandler(req, res) {
 /**
  * GET /api/email/me
  * Devuelve el usuario autorizado actual (req.user viene del auth middleware).
+ * Verifica apps/emails/access/{email}.active === true.
  */
 async function meHandler(req, res) {
   try {
@@ -75,7 +79,9 @@ async function meHandler(req, res) {
 
 /**
  * GET /api/email/my-vehicles
- * Devuelve vehículos visibles según role (admin: todos, responsable: por array-contains).
+ * Devuelve vehículos visibles según role.
+ * - admin/general/report: todos los vehículos
+ * - responsable: solo vehículos donde responsablesNormalized contiene su email
  */
 async function myVehiclesHandler(req, res) {
   try {
@@ -97,8 +103,17 @@ async function myVehiclesHandler(req, res) {
   }
 }
 
+/**
+ * GET /api/vehicles/my-vehicles
+ * Alias explícito para el panel de vehículos, mismo comportamiento que /api/email/my-vehicles.
+ */
+async function myVehiclesAliasHandler(req, res) {
+  return myVehiclesHandler(req, res);
+}
+
 module.exports = {
   ensureUserHandler,
   meHandler,
   myVehiclesHandler,
+  myVehiclesAliasHandler,
 };

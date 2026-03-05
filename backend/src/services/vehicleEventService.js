@@ -33,6 +33,32 @@ function normalizePlate(plate) {
 }
 
 /**
+ * Normaliza email: trim + toLowerCase.
+ * Duplicado ligero de lógica de emailUsers.service para evitar dependencia circular.
+ * @param {string} email
+ * @returns {string}
+ */
+function normalizeEmail(email) {
+  if (email == null || typeof email !== "string") return "";
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Normaliza y deduplica un arreglo de correos.
+ * @param {Array<string>} values
+ * @returns {string[]}
+ */
+function normalizeEmailArray(values) {
+  if (!Array.isArray(values)) return [];
+  const set = new Set();
+  for (const raw of values) {
+    const n = normalizeEmail(raw);
+    if (n) set.add(n);
+  }
+  return Array.from(set);
+}
+
+/**
  * Obtiene el documento del vehículo si existe.
  * @param {string} plate - Patente (normalizada o raw)
  * @returns {Promise<object|null>} Datos del vehículo o null si no existe
@@ -571,6 +597,7 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   const docSnap = await vehiclesRef.get();
   const now = admin.firestore.FieldValue.serverTimestamp();
   const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
+  const responsablesNormalized = normalizeEmailArray(responsables);
 
   const existingData = docSnap.exists ? docSnap.data() : null;
   const existingEvents = existingData?.events || [];
@@ -610,6 +637,7 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     operationName: vehicle.operationName || vehicle.operacion || null,
     operacion: vehicle.operationName || vehicle.operacion || null,
     responsables,
+    responsablesNormalized,
     alertSent: existingData?.alertSent ?? false,
     sentAt: existingData?.sentAt ?? null,
     lastEventAt: now,
