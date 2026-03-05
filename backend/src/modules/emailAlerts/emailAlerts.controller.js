@@ -50,7 +50,7 @@ async function myAlertsHandler(req, res) {
 }
 
 /**
- * GET /api/email/my-vehicles
+ * GET /api/email/my-alerts-vehicles
  * Devuelve vehículos donde el usuario es responsable, usando índice de alertas para riesgo.
  */
 async function myVehiclesHandler(req, res) {

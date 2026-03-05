@@ -51,7 +51,7 @@ function normalizeEmailArray(values) {
 
 /**
  * Asegura que el usuario de acceso exista en apps/emails/access/{email}.
- * Si no existe: crea con email, role, active: true, createdAt.
+ * Si no existe: crea con email, role, active/enabled: true, createdAt/updatedAt.
  * Si existe: merge sin modificar role si ya está definido.
  * @param {string} email - Email (se normaliza internamente)
  * @param {string} role - "admin" | "general" | "report" | "responsable"
@@ -70,11 +70,14 @@ async function ensureUser(email, role) {
   const docSnap = await docRef.get();
 
   if (!docSnap.exists) {
+    const now = admin.firestore.FieldValue.serverTimestamp();
     await docRef.set({
       email: normalized,
       role,
       active: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
     });
     return;
   }
@@ -90,19 +93,28 @@ async function ensureUser(email, role) {
   if (data.role == null || data.role === "") {
     update.role = role;
   }
-  // Si active está indefinido, activamos por defecto al sincronizar
-  if (data.active == null) {
+
+  // Mantener active/enabled alineados para compatibilidad.
+  if (data.active == null && data.enabled == null) {
     update.active = true;
+    update.enabled = true;
+  } else if (data.active == null && data.enabled != null) {
+    update.active = data.enabled === true;
+  } else if (data.enabled == null && data.active != null) {
+    update.enabled = data.active === true;
+  } else if (data.active != null && data.enabled != null && (data.active === true) !== (data.enabled === true)) {
+    update.enabled = data.active === true;
   }
 
   if (Object.keys(update).length > 0) {
+    update.updatedAt = admin.firestore.FieldValue.serverTimestamp();
     await docRef.set(update, { merge: true });
   }
 }
 
 /**
  * Obtiene el usuario autorizado por email desde apps/emails/access.
- * Requiere active === true; si no, retorna null.
+ * Requiere active/enabled === true; si no, retorna null.
  * @param {string} email
  * @returns {Promise<{ email: string, role: string } | null>}
  */
@@ -114,7 +126,8 @@ async function getMe(email) {
   if (!docSnap.exists) return null;
 
   const data = docSnap.data() || {};
-  if (data.active !== true) return null;
+  const isEnabled = data.enabled === true || data.active === true;
+  if (!isEnabled) return null;
 
   return {
     email: data.email || normalized,
@@ -285,11 +298,14 @@ async function syncAccessUsers() {
 
     if (!existing) {
       const role = candidateRoles.get(email) || "responsable";
+      const now = admin.firestore.FieldValue.serverTimestamp();
       batch.set(docRef, {
         email,
         role,
         active: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
       });
       created += 1;
       batchOps += 1;
@@ -299,17 +315,25 @@ async function syncAccessUsers() {
       if (!existing.email) {
         update.email = email;
       }
-      if (existing.active == null) {
+      if (existing.active == null && existing.enabled == null) {
         update.active = true;
+        update.enabled = true;
+      } else if (existing.active == null && existing.enabled != null) {
+        update.active = existing.enabled === true;
+      } else if (existing.enabled == null && existing.active != null) {
+        update.enabled = existing.active === true;
+      } else if (existing.active != null && existing.enabled != null && (existing.active === true) !== (existing.enabled === true)) {
+        update.enabled = existing.active === true;
       }
 
-      // No sobreescribimos role si ya existe; si está vacío, usamos el candidato si hay.
+      // No sobreescribimos role si ya existe; si esta vacio, usamos el candidato si hay.
       if (existing.role == null || existing.role === "") {
         const candidateRole = candidateRoles.get(email) || "responsable";
         update.role = candidateRole;
       }
 
       if (Object.keys(update).length > 0) {
+        update.updatedAt = admin.firestore.FieldValue.serverTimestamp();
         batch.set(docRef, update, { merge: true });
         updated += 1;
         batchOps += 1;

@@ -12,7 +12,8 @@ const {
 // Todas las rutas bajo /api/email/*
 
 router.get("/email/my-alerts", authMiddleware, myAlertsHandler);
-router.get("/email/my-vehicles", authMiddleware, myVehiclesHandler);
+// Evita colisión con /api/email/my-vehicles de emailUsers.routes.
+router.get("/email/my-alerts-vehicles", authMiddleware, myVehiclesHandler);
 router.get("/email/my-stats", authMiddleware, myStatsHandler);
 router.get("/email/my-risk", authMiddleware, myRiskHandler);
 

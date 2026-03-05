@@ -52,7 +52,7 @@ async function ensureUserHandler(req, res) {
 /**
  * GET /api/email/me
  * Devuelve el usuario autorizado actual (req.user viene del auth middleware).
- * Verifica apps/emails/access/{email}.active === true.
+ * Verifica apps/emails/access/{email}.active/enabled === true.
  */
 async function meHandler(req, res) {
   try {

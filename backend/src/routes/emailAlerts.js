@@ -67,6 +67,21 @@ function toDateKeyNumber(key) {
   return y * 10000 + m * 100 + d;
 }
 
+function normalizeEmail(email) {
+  if (email == null || typeof email !== "string") return "";
+  return email.trim().toLowerCase();
+}
+
+function normalizeEmailArray(values) {
+  if (!Array.isArray(values)) return [];
+  const set = new Set();
+  for (const value of values) {
+    const normalized = normalizeEmail(value);
+    if (normalized) set.add(normalized);
+  }
+  return Array.from(set);
+}
+
 /**
  * Obtiene alertas pendientes de días anteriores a hoy (Argentina).
  * Una sola capa de filtrado: dateKey < todayKey y alertSent !== true.
@@ -669,15 +684,50 @@ async function markAlertsAsSentBatch(alertIds) {
   const toUpdate = Array.from(uniqueKeys.values());
   const BATCH_SIZE = 500;
   for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
-    const batch = db.batch();
     const chunk = toUpdate.slice(i, i + BATCH_SIZE);
-    for (const { dateKey, plate } of chunk) {
+    const docRefs = chunk.map(({ dateKey, plate }) =>
+      DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").doc(plate)
+    );
+    const docSnaps = await db.getAll(...docRefs);
+
+    const batch = db.batch();
+
+    for (let j = 0; j < chunk.length; j += 1) {
+      const { dateKey, plate } = chunk[j];
+      const vehicleSnap = docSnaps[j];
       const ref = DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").doc(plate);
       batch.update(ref, {
         alertSent: true,
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      const vehicleData = vehicleSnap.exists ? vehicleSnap.data() || {} : {};
+      const responsables = normalizeEmailArray(
+        Array.isArray(vehicleData.responsablesNormalized) && vehicleData.responsablesNormalized.length > 0
+          ? vehicleData.responsablesNormalized
+          : vehicleData.responsables
+      );
+      const encodedAlertId = encodeURIComponent(`${dateKey}_${plate}`);
+
+      for (const email of responsables) {
+        const indexRef = db
+          .collection("apps")
+          .doc("emails")
+          .collection("responsables")
+          .doc(encodeURIComponent(email))
+          .collection("alerts")
+          .doc(encodedAlertId);
+
+        batch.set(
+          indexRef,
+          {
+            alertSent: true,
+          },
+          { merge: true }
+        );
+      }
     }
+
     await batch.commit();
   }
   return toUpdate.length;
@@ -744,8 +794,11 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       const sortedDocs = sortVehiclesByCriticity(group.docs);
       const metaForRecipient = buildMetaFromVehicleDocs(sortedDocs);
       const alertIds = sortedDocs.map((d) => `${group.dateKey}_${normalizePlate(d.plate || d.id)}`);
+      const responsableEmails = group.responsableEmails;
       return {
-        responsableEmails: group.responsableEmails,
+        responsableEmails,
+        // Backward compatibility for existing PowerShell scripts.
+        responsableEmail: responsableEmails.length > 0 ? responsableEmails[0] : null,
         subject: buildConsolidatedSubject(group.dateKey),
         body: buildConsolidatedBody(metaForRecipient, sortedDocs, group.dateKey),
         alertIds,
