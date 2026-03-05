@@ -14,15 +14,39 @@ const { formatDateKey, getVehicle, normalizePlate } = require("../services/vehic
 const { getDailyTotalsByType } = require("../services/dailyMetricsService");
 const { logger } = require("../utils/logger");
 
+function parseServiceAccount(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (_) {}
+  try {
+    return JSON.parse(trimmed.replace(/\\n/g, "\n"));
+  } catch (_) {}
+  return null;
+}
+
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+  const appData = parseServiceAccount(process.env.FB_ADMIN_APPDATA || "");
+
+  if (appData) {
+    admin.initializeApp({
+      credential: admin.credential.cert(appData),
+      projectId: process.env.FB_DATA_PROJECT_ID || appData.project_id,
+    });
+  } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_SERVICE_ACCOUNT_KEY && process.env.FIREBASE_PRIVATE_KEY) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
       projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    }),
-    projectId: process.env.FIREBASE_PROJECT_ID,
-  });
+    });
+  } else {
+    logger.warn("[emailAlerts] Firebase admin inicializado sin credenciales explícitas");
+    admin.initializeApp();
+  }
 }
 
 const db = admin.firestore();
