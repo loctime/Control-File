@@ -775,10 +775,22 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     const enriched = await Promise.all(
       docs.map(async (doc) => {
         const plate = normalizePlate(doc.plate || doc.id);
-        const vehicle = await getVehicle(plate);
+        let vehicle = null;
+
+        try {
+          vehicle = await getVehicle(plate);
+        } catch (err) {
+          logger.warn(
+            `[GET-PENDING-ALERTS] No se pudo obtener vehicle ${plate}:`,
+            err && err.message ? err.message : String(err)
+          );
+        }
+
         const responsables = Array.isArray(vehicle?.responsables)
           ? vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-          : [];
+          : Array.isArray(doc.responsables)
+            ? doc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
+            : [];
         const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
         return { ...doc, plate, responsables, operationName, operacion: operationName };
       })
