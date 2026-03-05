@@ -845,56 +845,32 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       });
     }
 
-    // Enriquecer siempre con responsables actuales desde vehicles
-    const enrichedResults = await Promise.allSettled(
-      docs.map(async (doc) => {
-        const plate = normalizePlate(doc.plate || doc.id);
-        let vehicle = null;
+    // Cargar todos los vehículos una sola vez (apps/emails/vehicles)
+    const vehiclesSnap = await db
+      .collection("apps")
+      .doc("emails")
+      .collection("vehicles")
+      .get();
 
-        try {
-          vehicle = await getVehicle(plate);
-        } catch (err) {
-          logger.warn(
-            `[GET-PENDING-ALERTS] No se pudo obtener vehicle ${plate}:`,
-            err && err.message ? err.message : String(err)
-          );
-        }
+    const vehiclesMap = new Map();
+    vehiclesSnap.docs.forEach((doc) => {
+      vehiclesMap.set(normalizePlate(doc.id), doc.data());
+    });
 
-        let responsables = [];
-        if (Array.isArray(doc.responsables) && doc.responsables.length > 0) {
-          responsables = doc.responsables.filter((e) => typeof e === "string" && e.includes("@"));
-        } else if (Array.isArray(vehicle?.responsables)) {
-          responsables = vehicle.responsables.filter((e) => typeof e === "string" && e.includes("@"));
-        }
-        const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
-        return { ...doc, plate, responsables, operationName, operacion: operationName };
-      })
-    );
+    // Enriquecer con responsables y operationName desde vehiclesMap (en memoria)
+    const enriched = docs.map((doc) => {
+      const plate = normalizePlate(doc.plate || doc.id);
+      const vehicle = vehiclesMap.get(plate) || null;
 
-    const enriched = enrichedResults
-      .map((result, idx) => {
-        if (result.status === "fulfilled") return result.value;
-
-        const failedDoc = docs[idx] || {};
-        const plate = normalizePlate(failedDoc.plate || failedDoc.id);
-        logger.warn(
-          `[GET-PENDING-ALERTS] Enriquecimiento inv?lido para ${plate}:`,
-          result.reason && result.reason.message ? result.reason.message : String(result.reason)
+      let responsables = [];
+      if (Array.isArray(vehicle?.responsables)) {
+        responsables = vehicle.responsables.filter(
+          (e) => typeof e === "string" && e.includes("@")
         );
-
-        const fallbackResponsables = Array.isArray(failedDoc.responsables)
-          ? failedDoc.responsables.filter((e) => typeof e === "string" && e.includes("@"))
-          : [];
-
-        return {
-          ...failedDoc,
-          plate,
-          responsables: fallbackResponsables,
-          operationName: failedDoc.operationName || failedDoc.operacion || null,
-          operacion: failedDoc.operationName || failedDoc.operacion || null,
-        };
-      })
-      .filter(Boolean);
+      }
+      const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
+      return { ...doc, plate, responsables, operationName, operacion: operationName };
+    });
 
     const groups = groupAlertsByResponsableSet(enriched);
     logger.info(`[GET-PENDING-ALERTS] Agrupamiento por conjunto de responsables: ${groups.length} grupo(s)`);
