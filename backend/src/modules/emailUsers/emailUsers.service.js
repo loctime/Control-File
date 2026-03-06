@@ -204,21 +204,19 @@ async function syncAccessUsers() {
         ? data.responsablesNormalized
         : [];
 
-      const normalizedFromRaw = normalizeEmailArray(rawResponsables);
+      // Fuente de verdad: solo responsables. responsablesNormalized = normalize(responsables).
+      const canonicalNormalized = normalizeEmailArray(rawResponsables);
+      canonicalNormalized.forEach((email) => allEmailsSet.add(email));
+
+      // Corregir responsablesNormalized si está desincronizado (p. ej. emails obsoletos).
       const normalizedStored = normalizeEmailArray(storedNormalized);
-
-      const mergedSet = new Set([...normalizedFromRaw, ...normalizedStored]);
-      const merged = Array.from(mergedSet);
-
-      merged.forEach((email) => allEmailsSet.add(email));
-
-      const needsUpdate =
-        merged.length > 0 &&
-        (normalizedStored.length !== merged.length ||
-          normalizedStored.some((e, idx) => e !== merged[idx]));
+      const arraysEqual =
+        canonicalNormalized.length === normalizedStored.length &&
+        canonicalNormalized.every((e, idx) => e === normalizedStored[idx]);
+      const needsUpdate = !arraysEqual;
 
       if (needsUpdate) {
-        batch.set(doc.ref, { responsablesNormalized: merged }, { merge: true });
+        batch.set(doc.ref, { responsablesNormalized: canonicalNormalized }, { merge: true });
         batchOps += 1;
       }
     });
