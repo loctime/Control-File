@@ -188,10 +188,10 @@ async function getPendingAlerts(todayKey) {
         }
       }
     } catch (e) {
+      const errMsg = e && e.message ? e.message : String(e);
+      const errCode = e && e.code !== undefined ? e.code : "n/a";
       logger.error(
-        "[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=%s: %s",
-        dateKey,
-        e && e.message ? e.message : String(e)
+        `[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=${dateKey}: ${errMsg} (code=${errCode})`
       );
       continue;
     }
@@ -223,10 +223,10 @@ async function getPendingAlertsForDateKey(dateKey) {
       }
     }
   } catch (e) {
+    const errMsg = e && e.message ? e.message : String(e);
+    const errCode = e && e.code !== undefined ? e.code : "n/a";
     logger.error(
-      "[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=%s: %s",
-      dateKey,
-      e && e.message ? e.message : String(e)
+      `[GET-PENDING-ALERTS][DEBUG] Error leyendo vehicles para dateKey=${dateKey}: ${errMsg} (code=${errCode})`
     );
   }
   return allAlerts;
@@ -836,11 +836,14 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     }
 
     const dateKey = getYesterdayKeyArgentina();
-    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey=%s", dateKey);
+    const todayKey = getTodayKeyArgentina();
+    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey=%s (yesterday Argentina)", dateKey);
 
-    const docs = await getPendingAlertsForDateKey(dateKey);
+    // Obtener todas las alertas de d?as pasados (misma l?gica que funcionaba) y filtrar por ayer
+    const allPastDocs = await getPendingAlerts(todayKey);
+    const docs = allPastDocs.filter((d) => d.dateKey === dateKey);
 
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos): ${docs.length}`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) para ${dateKey}: ${docs.length} (total pasados: ${allPastDocs.length})`);
 
     if (docs.length === 0) {
       const generalBody = buildGeneralGroupsBody([], dateKey);
