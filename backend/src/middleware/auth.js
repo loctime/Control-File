@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { logger } = require('../utils/logger');
 
 // Intenta parsear credenciales de forma robusta
 function parseServiceAccount(envVarName) {
@@ -70,7 +71,7 @@ if (!admin.apps.length) {
         credential: admin.credential.cert(appDataCred),
         projectId,
       });
-      console.log(`[Firebase] Inicializado con ${credSource}, projectId: ${projectId}`);
+      logger.info(`[Firebase] Inicializado con ${credSource}, projectId: ${projectId}`);
     } else {
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
@@ -88,7 +89,7 @@ if (!admin.apps.length) {
           }),
           projectId,
         });
-        console.log(`[Firebase] Inicializado con FIREBASE_* (split), projectId: ${projectId}`);
+        logger.info(`[Firebase] Inicializado con FIREBASE_* (split), projectId: ${projectId}`);
       } else {
         throw new Error('Configura FB_ADMIN_APPDATA, GOOGLE_SERVICE_ACCOUNT_KEY (JSON completo), o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY o FIREBASE_ADMIN_PRIVATE_KEY)');
       }

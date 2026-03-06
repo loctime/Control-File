@@ -252,6 +252,11 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
+  logger.info('ControlFile backend started', {
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID || null,
+  });
   console.log(`🚀 Servidor backend ejecutándose en puerto ${PORT}`);
   console.log(`📁 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🏠 Modo local: ${isLocalMode ? 'activado' : 'desactivado'}`);
