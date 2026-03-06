@@ -214,8 +214,10 @@ async function getPendingAlertsForDateKey(dateKey) {
   const allAlerts = [];
   try {
     const vehiclesSnap = await DAILY_ALERTS_REF.doc(dateKey).collection("vehicles").get();
+    logger.info("[DEBUG] vehiclesSnap size:", vehiclesSnap.size);
     for (const vehicleDoc of vehiclesSnap.docs) {
       const data = vehicleDoc.data();
+      logger.info("[DEBUG] vehicle doc:", vehicleDoc.id, vehicleDoc.data());
       if (data.alertSent !== true) {
         allAlerts.push({ id: vehicleDoc.id, dateKey, ...data });
       }
@@ -290,7 +292,14 @@ function groupAlertsByResponsableSet(pendingDocs) {
         .filter((e) => e.length > 0)
     )].sort();
 
-    if (responsableEmails.length === 0) continue;
+    if (responsableEmails.length === 0) {
+      logger.warn("[DEBUG] skipping alert without responsables", {
+        plate,
+        dateKey,
+        rawResponsables: raw,
+      });
+      continue;
+    }
 
     const key = `${dateKey}|${responsableEmails.join(",")}`;
     if (!byKey.has(key)) {
@@ -827,7 +836,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     }
 
     const dateKey = getYesterdayKeyArgentina();
-    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey:", dateKey);
+    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey=%s", dateKey);
 
     const docs = await getPendingAlertsForDateKey(dateKey);
 
@@ -845,7 +854,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       });
     }
 
-    // Cargar todos los vehículos una sola vez (apps/emails/vehicles)
+    // Cargar todos los veh?culos una sola vez (apps/emails/vehicles)
     const vehiclesSnap = await db
       .collection("apps")
       .doc("emails")
@@ -856,22 +865,41 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     vehiclesSnap.docs.forEach((doc) => {
       vehiclesMap.set(normalizePlate(doc.id), doc.data());
     });
+    logger.info("[DEBUG] vehiclesMap size:", vehiclesMap.size);
 
     // Enriquecer con responsables y operationName desde vehiclesMap (en memoria)
     const enriched = docs.map((doc) => {
       const plate = normalizePlate(doc.plate || doc.id);
+      logger.info("[DEBUG] processing alert", {
+        rawPlate: doc.plate || doc.id,
+        normalizedPlate: plate,
+      });
+
       const vehicle = vehiclesMap.get(plate) || null;
+      logger.info("[DEBUG] vehicle lookup result", {
+        plate,
+        found: !!vehicle,
+      });
 
       let responsables = [];
       if (Array.isArray(vehicle?.responsables)) {
-        responsables = vehicle.responsables.filter(
-          (e) => typeof e === "string" && e.includes("@")
-        );
+        responsables = vehicle.responsables;
+      } else if (Array.isArray(doc.responsables)) {
+        responsables = doc.responsables;
       }
+      responsables = responsables.filter(
+        (e) => typeof e === "string" && e.includes("@")
+      );
+      logger.info("[DEBUG] responsables resolved", {
+        plate,
+        responsables,
+      });
+
       const operationName = vehicle?.operationName || vehicle?.operacion || doc.operationName || doc.operacion || null;
       return { ...doc, plate, responsables, operationName, operacion: operationName };
     });
 
+    logger.info("[DEBUG] enriched alerts count", enriched.length);
     const groups = groupAlertsByResponsableSet(enriched);
     logger.info(`[GET-PENDING-ALERTS] Agrupamiento por conjunto de responsables: ${groups.length} grupo(s)`);
     groups.forEach((g, i) => {
@@ -893,6 +921,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       };
     });
 
+    logger.info("[DEBUG] alerts before final response:", alerts.length, "groups:", groups.length);
     const dateKeyForGeneral = groups.length > 0 ? groups[0].dateKey : dateKey;
     const generalBody = buildGeneralGroupsBody(groups, dateKeyForGeneral);
 
