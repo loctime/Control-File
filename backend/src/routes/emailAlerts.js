@@ -14,6 +14,15 @@ const { formatDateKey, getVehicle, normalizePlate } = require("../services/vehic
 const { getDailyTotalsByType } = require("../services/dailyMetricsService");
 const { syncAccessUsers } = require("../modules/emailUsers/emailUsers.service");
 const { logger } = require("../utils/logger");
+const {
+  buildConsolidatedBody,
+  buildConsolidatedSubject,
+  buildGeneralGroupsBody,
+  buildGeneralSubjectLastDays,
+  buildGeneralSubjectSingleDate,
+  buildMetaFromVehicleDocs,
+  sortVehiclesByCriticity,
+} = require("../services/email/emailTemplateBuilder");
 
 const db = admin.firestore();
 
@@ -311,414 +320,6 @@ function groupAlertsByResponsableSet(pendingDocs) {
 }
 
 /**
- * Asunto del email consolidado por responsable/d?a.
- */
-function buildConsolidatedSubject(dateKey) {
-  return `?? Resumen diario de flota ? ${dateKey}`;
-}
-
-/**
- * Formatea fecha/hora en formato argentino (DD/MM/YYYY HH:mm).
- * La hora mostrada debe coincidir EXACTAMENTE con la del email original.
- *
- * Para strings ISO con offset (ej. "2026-02-27T13:45:01-03:00") se extraen
- * fecha y hora del string sin usar Date, as? el servidor (UTC u otra TZ)
- * no altera la hora. Para Timestamp de Firestore o otros tipos se usa
- * timeZone "America/Argentina/Buenos_Aires".
- */
-function formatDateTimeArgentina(timestamp) {
-  if (!timestamp) return "-";
-  try {
-    // Firestore Timestamp: convertir a Date y formatear con TZ expl?cita
-    if (timestamp && typeof timestamp.toDate === "function") {
-      const date = timestamp.toDate();
-      if (isNaN(date.getTime())) return "-";
-      return date.toLocaleString("es-AR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "America/Argentina/Buenos_Aires",
-      }).replace(/,/g, "");
-    }
-
-    const str = typeof timestamp === "string" ? timestamp.trim() : String(timestamp);
-    // ISO con tiempo: "2026-02-27T13:45:01" o "2026-02-27T13:45:01-03:00" o "...Z"
-    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:[.]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
-    if (isoMatch) {
-      const [, y, m, d, hh, mm] = isoMatch;
-      return `${d}/${m}/${y} ${hh}:${mm}`;
-    }
-
-    // Fallback: Date con timeZone Argentina
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return "-";
-    return date.toLocaleString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "America/Argentina/Buenos_Aires",
-    }).replace(/,/g, "");
-  } catch {
-    return "-";
-  }
-}
-
-/**
- * Mapea type del evento a etiqueta legible para el email.
- */
-function getTypeLabel(e) {
-  switch (e.type) {
-    case "sin_llave":
-      return "SIN LLAVE";
-    case "llave_no_registrada":
-      return "Llave no registrada";
-    case "conductor_inactivo":
-      return "Conductor inactivo";
-    case "no_identificado":
-      return "No identificado";
-    case "contacto":
-      return "Contacto sin identificaci?n";
-    default:
-      return "Exceso de velocidad";
-  }
-}
-
-/**
- * Color para eventos (todos cr?ticos): siempre rojo.
- */
-function getSeverityColor(_e) {
-  return "#d32f2f"; // rojo
-}
-
-/**
- * Escapa caracteres HTML para prevenir inyecci?n.
- */
-function escapeHtml(text) {
-  if (!text || typeof text !== "string") return "";
-  const map = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-}
-
-/**
- * Ordena documentos de veh?culos por mayor criticidad (riskScore desc, luego patente).
- * Documentos sin riskScore se tratan como 0.
- */
-function sortVehiclesByCriticity(docs) {
-  if (!Array.isArray(docs) || docs.length <= 1) return docs;
-  return [...docs].sort((a, b) => {
-    const scoreA = typeof a.riskScore === "number" ? a.riskScore : 0;
-    const scoreB = typeof b.riskScore === "number" ? b.riskScore : 0;
-    if (scoreB !== scoreA) return scoreB - scoreA;
-    const plateA = (a.plate || a.id || "").toString();
-    const plateB = (b.plate || b.id || "").toString();
-    return plateA.localeCompare(plateB);
-  });
-}
-
-/**
- * M?tricas por tipo desde meta del d?a (v2).
- * Devuelve objeto con totales por tipo para el resumen ejecutivo.
- */
-function getMetricsByTypeFromMeta(meta) {
-  if (!meta) {
-    return {
-      excesos: 0,
-      no_identificados: 0,
-      contactos: 0,
-      llave_sin_cargar: 0,
-      conductor_inactivo: 0,
-    };
-  }
-  return {
-    excesos: meta.totalExcesos ?? 0,
-    no_identificados: meta.totalNoIdentificados ?? 0,
-    contactos: meta.totalContactos ?? 0,
-    llave_sin_cargar: meta.totalLlaveSinCargar ?? 0,
-    conductor_inactivo: meta.totalConductorInactivo ?? 0,
-  };
-}
-
-/**
- * Genera un objeto "meta" a partir solo de los documentos de veh?culos dados.
- * Usado para resumen personalizado por destinatario (solo sus patentes).
- * Recalcula: totalVehicles, totalEvents, vehiclesWithCritical, totales por tipo.
- */
-function buildMetaFromVehicleDocs(vehicleDocs) {
-  if (!Array.isArray(vehicleDocs) || vehicleDocs.length === 0) {
-    return {
-      totalVehicles: 0,
-      totalEvents: 0,
-      vehiclesWithCritical: 0,
-      totalExcesos: 0,
-      totalNoIdentificados: 0,
-      totalContactos: 0,
-      totalLlaveSinCargar: 0,
-      totalConductorInactivo: 0,
-    };
-  }
-  let totalEvents = 0;
-  let vehiclesWithCritical = 0;
-  const byType = {
-    excesos: 0,
-    no_identificados: 0,
-    contactos: 0,
-    llave_sin_cargar: 0,
-    conductor_inactivo: 0,
-  };
-  for (const doc of vehicleDocs) {
-    const events = Array.isArray(doc.events) ? doc.events : [];
-    const n = events.length;
-    totalEvents += n;
-    if (n > 0) vehiclesWithCritical += 1;
-    const s = doc.summary || {};
-    byType.excesos += s.excesos ?? 0;
-    byType.no_identificados += s.no_identificados ?? 0;
-    byType.contactos += s.contactos ?? 0;
-    byType.llave_sin_cargar += s.llave_sin_cargar ?? 0;
-    byType.conductor_inactivo += s.conductor_inactivo ?? 0;
-  }
-  return {
-    totalVehicles: vehicleDocs.length,
-    totalEvents,
-    vehiclesWithCritical,
-    totalExcesos: byType.excesos,
-    totalNoIdentificados: byType.no_identificados,
-    totalContactos: byType.contactos,
-    totalLlaveSinCargar: byType.llave_sin_cargar,
-    totalConductorInactivo: byType.conductor_inactivo,
-  };
-}
-
-/**
- * Encabezado global del email usando meta del d?a (resumen ejecutivo con m?tricas por tipo).
- */
-function buildGlobalSummaryHeader(meta, dateKey) {
-  const totalVehicles = meta ? (meta.totalVehicles ?? 0) : 0;
-  const totalEvents = meta ? (meta.totalEvents ?? 0) : 0;
-  const vehiclesWithCritical = meta ? (meta.vehiclesWithCritical ?? 0) : 0;
-  const byType = getMetricsByTypeFromMeta(meta);
-
-  const metricsByTypeHtml =
-    byType.excesos > 0 || byType.no_identificados > 0 || byType.contactos > 0 ||
-    byType.llave_sin_cargar > 0 || byType.conductor_inactivo > 0
-      ? `<div style="font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #bbdefb;">
-          <strong>Por tipo:</strong>
-          ${byType.excesos > 0 ? ` Excesos de velocidad: ${byType.excesos}` : ""}
-          ${byType.no_identificados > 0 ? ` | No identificados: ${byType.no_identificados}` : ""}
-          ${byType.contactos > 0 ? ` | Contacto sin identificaci?n: ${byType.contactos}` : ""}
-          ${byType.llave_sin_cargar > 0 ? ` | Llave sin cargar: ${byType.llave_sin_cargar}` : ""}
-          ${byType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${byType.conductor_inactivo}` : ""}
-        </div>`
-      : "";
-
-  return `
-  <div style="text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #eee;">
-    <h1 style="margin: 0; font-size: 22px; color: #333; font-weight: 600;">Resumen diario de flota</h1>
-    <p style="margin: 8px 0 0 0; font-size: 16px; color: #666;">${dateKey}</p>
-  </div>
-  <div style="background-color: #e3f2fd; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
-    <div style="font-size: 14px; line-height: 1.8;">
-      <strong>Veh?culos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
-      <strong>Total eventos:</strong> ${totalEvents}
-      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color: #d32f2f; font-weight: bold;">Veh?culos con eventos: ${vehiclesWithCritical}</span>` : ""}
-    </div>
-    <div style="font-size: 14px; margin-top: 8px;">
-      ${totalEvents > 0 ? `<span style="color: #d32f2f; font-weight: bold;">?? ${totalEvents} eventos</span>` : ""}
-    </div>
-    ${metricsByTypeHtml}
-  </div>`;
-}
-
-/**
- * Secci?n HTML por veh?culo (patente, resumen por severidad, tabla de eventos).
- */
-function buildVehicleSection(doc) {
-  const { plate, brand, model, events, summary } = doc;
-  if (!Array.isArray(events) || events.length === 0) {
-    return `<section style="margin-bottom: 28px;"><h2 style="font-size: 18px; color: #333;">${escapeHtml(plate)}</h2><p>Sin eventos.</p></section>`;
-  }
-
-  const sortedEvents = events
-    .filter((e) => e && e.eventTimestamp)
-    .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
-  const totalEventos = sortedEvents.length;
-  const summaryByType = summary || {};
-
-  const rowsHtml = sortedEvents
-    .map((e) => {
-      const color = getSeverityColor(e);
-      let typeLabel;
-      const hasReason = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0;
-      const hasDriver = e.driverName && typeof e.driverName === "string" && e.driverName.trim().length > 0;
-      if (hasReason || hasDriver) {
-        const parts = [];
-        if (hasReason) parts.push(e.reason.trim());
-        if (hasDriver) parts.push(e.driverName.trim());
-        const prefix = parts.join(" - ");
-        typeLabel = prefix + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
-      } else {
-        typeLabel = getTypeLabel(e);
-      }
-      return `
-    <tr>
-      <td style="padding:8px; font-weight:bold; color:${color};">${escapeHtml(typeLabel)}</td>
-      <td style="padding:8px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
-      <td style="padding:8px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
-      <td style="padding:8px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicaci?n")}</td>
-    </tr>`;
-    })
-    .join("");
-
-  const typeSummaryHtml =
-    Object.keys(summaryByType).length > 0
-      ? `<div style="font-size: 12px; margin-bottom: 8px; color: #555;">
-          ${summaryByType.excesos > 0 ? `Excesos: ${summaryByType.excesos}` : ""}
-          ${summaryByType.no_identificados > 0 ? ` | No identificados: ${summaryByType.no_identificados}` : ""}
-          ${summaryByType.contactos > 0 ? ` | Contactos: ${summaryByType.contactos}` : ""}
-          ${summaryByType.llave_sin_cargar > 0 ? ` | Llave sin cargar: ${summaryByType.llave_sin_cargar}` : ""}
-          ${summaryByType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${summaryByType.conductor_inactivo}` : ""}
-        </div>`
-      : "";
-
-  return `
-  <section style="margin-bottom: 28px;">
-    <div style="border-top:1px solid #ccc; margin:20px 0;"></div>
-    <h2 style="font-size: 16px; color: #333; margin: 0 0 8px 0;">
-      ?? ${escapeHtml(plate)} - ${escapeHtml(brand || "")} ${escapeHtml(model || "")}
-      ${totalEventos > 0 ? `<span style="color: #d32f2f; font-weight: bold;"> ?? ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>` : ""}
-    </h2>
-    ${typeSummaryHtml}
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-      <thead>
-        <tr style="background-color: #f5f5f5;">
-          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Tipo</th>
-          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Velocidad</th>
-          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Fecha/Hora</th>
-          <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Ubicaci?n</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-    <div style="border-top:1px solid #ccc; margin:20px 0;"></div>
-  </section>`;
-}
-
-/**
- * Cuerpo consolidado: encabezado global + secci?n por veh?culo.
- */
-function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
-  const sections = vehicleDocs.map((doc) => buildVehicleSection(doc)).join("");
-  const today = new Date().toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Resumen diario de flota ? ${dateKey}</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-  ${buildGlobalSummaryHeader(meta, dateKey)}
-  ${sections}
-  <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; text-align: center;">
-    <p style="margin: 0; color: #666; font-size: 12px;">Resumen generado el ${today}</p>
-  </div>
-</body>
-</html>`.trim();
-}
-
-/**
- * Cuerpo del email general por grupos operativos (todas las operaciones en un solo HTML).
- * Recibe el array groups de groupAlertsByResponsableSet; por cada grupo ordena por criticidad,
- * calcula meta con buildMetaFromVehicleDocs y usa buildVehicleSection por veh?culo.
- */
-function buildGeneralGroupsBody(groups, dateKey) {
-  if (!Array.isArray(groups) || groups.length === 0) {
-    return `
-  <html>
-    <body style="font-family: Arial; padding: 20px;">
-      <h2>No hay alertas pendientes.</h2>
-    </body>
-  </html>
-    `.trim();
-  }
-
-  const today = new Date().toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
-  const sections = groups
-    .map((group) => {
-      const sortedDocs = sortVehiclesByCriticity(group.docs);
-      const meta = buildMetaFromVehicleDocs(sortedDocs);
-      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "Operaci?n no asignada").toUpperCase();
-      const responsablesText = (group.responsableEmails || []).join(", ");
-
-      return `
-  <div style="margin-top: 35px; border-top: 3px solid #000; padding-top: 12px;">
-    <h2 style="margin: 0; font-size: 18px;">
-      ?? OPERACI?N ${escapeHtml(operationName)}
-    </h2>
-    <div style="font-size: 13px; color: #555; margin: 6px 0 12px 0;">
-      Responsables: ${escapeHtml(responsablesText)}<br>
-      Veh?culos con eventos: ${meta.totalVehicles} |
-      Total eventos: ${meta.totalEvents}
-    </div>
-  </div>
-
-  ${sortedDocs.map((doc) => buildVehicleSection(doc)).join("")}
-      `.trim();
-    })
-    .join("");
-
-  return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Resumen General de Operaciones ? ${dateKey}</title>
-  </head>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #ffffff;">
-
-    <div style="text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
-      <h1 style="margin: 0; font-size: 22px; font-weight: 600;">
-        ?? Resumen General de Operaciones
-      </h1>
-      <p style="margin: 6px 0 0 0; color: #666; font-size: 14px;">
-        ${dateKey}
-      </p>
-    </div>
-
-    ${sections}
-
-    <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee; text-align: center;">
-      <p style="margin: 0; font-size: 12px; color: #666;">
-        Resumen generado el ${today}
-      </p>
-    </div>
-
-  </body>
-</html>
-  `.trim();
-}
-
-/**
  * Parsea alertId (formato: YYYY-MM-DD_PLATE) en { dateKey, plate }.
  * Normaliza la patente para garantizar consistencia.
  */
@@ -831,7 +432,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       docs.push(...alerts);
     }
 
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) en ?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as: ${docs.length}`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) en últimos ${PENDING_ALERTS_DAYS_BACK} días: ${docs.length}`);
 
     if (docs.length === 0) {
       const lastDayInWindow = getLastNDaysDateKeysArgentina(PENDING_ALERTS_DAYS_BACK)[0] || getYesterdayKeyArgentina();
@@ -840,7 +441,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         ok: true,
         alerts: [],
         general: {
-          subject: `?? Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`,
+          subject: buildGeneralSubjectLastDays(PENDING_ALERTS_DAYS_BACK),
           body: generalBody,
         },
       });
@@ -917,12 +518,10 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     const uniqueDates = [...new Set(groups.map((g) => g.dateKey))];
     const dateKeyForGeneral = uniqueDates[0] || getYesterdayKeyArgentina();
     const generalBody = buildGeneralGroupsBody(groups, dateKeyForGeneral);
-    let generalSubject;
-    if (uniqueDates.length > 1) {
-      generalSubject = `?? Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`;
-    } else {
-      generalSubject = `?? Resumen general de operaciones ? ${uniqueDates[0]}`;
-    }
+    const generalSubject =
+      uniqueDates.length > 1
+        ? buildGeneralSubjectLastDays(PENDING_ALERTS_DAYS_BACK)
+        : buildGeneralSubjectSingleDate(uniqueDates[0]);
 
     logger.info(`[GET-PENDING-ALERTS] Respuesta: ${alerts.length} email(s) consolidado(s)`);
     return res.status(200).json({
@@ -949,7 +548,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       ok: true,
       alerts: [],
       general: {
-        subject: `Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`,
+        subject: buildGeneralSubjectLastDays(PENDING_ALERTS_DAYS_BACK),
         body: generalBody,
       },
     });
