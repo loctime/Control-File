@@ -416,12 +416,33 @@ async function markAlertsAsSentBatch(alertIds) {
  * Agrupa por conjunto de responsables (mismo d?a + mismos emails): un solo email por grupo consolidado.
  * Respuesta: [{ responsableEmails, subject, body, alertIds }].
  */
+const EMAIL_CONFIG_REF = db
+  .collection("apps")
+  .doc("emails")
+  .collection("config")
+  .doc("config");
+
+/**
+ * Lee la configuraci?n de email (destinatarios general, CC, reporte). Si no existe, devuelve arrays vac?os.
+ */
+async function getEmailConfig() {
+  const snap = await EMAIL_CONFIG_REF.get();
+  const config = snap.exists && snap.data() ? snap.data() : {};
+  return {
+    to: Array.isArray(config.generalRecipients) ? config.generalRecipients : [],
+    cc: Array.isArray(config.ccRecipients) ? config.ccRecipients : [],
+    reportRecipients: Array.isArray(config.reportRecipients) ? config.reportRecipients : [],
+  };
+}
+
 router.get("/email/get-pending-daily-alerts", async (req, res) => {
   try {
     if (!validateLocalToken(req)) {
       logger.warn("[GET-PENDING-ALERTS] Intento no autorizado desde:", req.ip);
       return res.status(401).json({ error: "no autorizado" });
     }
+
+    const emailConfig = await getEmailConfig();
 
     const allowedDateKeys = getLastNDaysDateKeysArgentina(PENDING_ALERTS_DAYS_BACK);
     logger.info("[GET-PENDING-ALERTS] searching alerts for last %d days (Argentina): %j", PENDING_ALERTS_DAYS_BACK, allowedDateKeys);
@@ -432,7 +453,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       docs.push(...alerts);
     }
 
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) en últimos ${PENDING_ALERTS_DAYS_BACK} días: ${docs.length}`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) en ?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as: ${docs.length}`);
 
     if (docs.length === 0) {
       const lastDayInWindow = getLastNDaysDateKeysArgentina(PENDING_ALERTS_DAYS_BACK)[0] || getYesterdayKeyArgentina();
@@ -441,6 +462,9 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
         ok: true,
         alerts: [],
         general: {
+          to: emailConfig.to,
+          cc: emailConfig.cc,
+          reportRecipients: emailConfig.reportRecipients,
           subject: buildGeneralSubjectLastDays(PENDING_ALERTS_DAYS_BACK),
           body: generalBody,
         },
@@ -527,6 +551,9 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     return res.status(200).json({
       ok: true,
       general: {
+        to: emailConfig.to,
+        cc: emailConfig.cc,
+        reportRecipients: emailConfig.reportRecipients,
         subject: generalSubject,
         body: generalBody,
       },
@@ -544,10 +571,19 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       stack: err && err.stack ? err.stack : undefined,
     });
     const generalBody = buildGeneralGroupsBody([], getTodayKeyArgentina());
+    let fallbackConfig = { to: [], cc: [], reportRecipients: [] };
+    try {
+      fallbackConfig = await getEmailConfig();
+    } catch (_) {
+      // Si falla la lectura de config en catch, usar arrays vacíos
+    }
     return res.status(200).json({
       ok: true,
       alerts: [],
       general: {
+        to: fallbackConfig.to,
+        cc: fallbackConfig.cc,
+        reportRecipients: fallbackConfig.reportRecipients,
         subject: buildGeneralSubjectLastDays(PENDING_ALERTS_DAYS_BACK),
         body: generalBody,
       },
