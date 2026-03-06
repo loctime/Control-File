@@ -45,6 +45,7 @@ const emailReceptorRoutes = require('./routes/email-receptor');
 const emailAlertsRoutes = require('./routes/emailAlerts');
 const emailUsersRoutes = require('./modules/emailUsers/emailUsers.routes');
 const emailAlertsApiRoutes = require('./modules/emailAlerts/emailAlerts.routes');
+const logisticsV2Routes = require('./modules/logistics/logistics.routes');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
@@ -92,7 +93,9 @@ const allowedHeaders = [
   'Content-Type',
   'X-Requested-With',
   'X-SDK-Version',
-  'X-SDK-Client'
+  'X-SDK-Client',
+  'x-idempotency-key',
+  'x-request-id'
 ];
 
 const corsOptions = {
@@ -221,6 +224,7 @@ app.use('/api', emailReceptorRoutes);
 app.use('/api', emailAlertsRoutes);
 app.use('/api', emailUsersRoutes);
 app.use('/api', emailAlertsApiRoutes);
+app.use('/api/logistics/v2', authMiddleware, logisticsV2Routes);
 
 // Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
@@ -286,3 +290,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+
