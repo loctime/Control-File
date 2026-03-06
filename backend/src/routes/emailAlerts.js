@@ -51,6 +51,9 @@ function getTodayKeyArgentina() {
   });
 }
 
+/** N?mero de d?as hacia atr?s para incluir alertas pendientes (hoy = 0, ayer = 1, ..., 5 d?as atr?s). */
+const PENDING_ALERTS_DAYS_BACK = 5;
+
 /**
  * Fecha de ayer en Argentina (YYYY-MM-DD). Se usa para buscar alertas diarias pendientes.
  */
@@ -66,6 +69,29 @@ function getYesterdayKeyArgentina() {
   const mm = String(argDate.getMonth() + 1).padStart(2, "0");
   const dd = String(argDate.getDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
+}
+
+/**
+ * Devuelve las fechas (YYYY-MM-DD) de los ?ltimos n d?as en Argentina (ayer, anteayer, ..., n d?as atr?s).
+ * Hoy no se incluye. ?til para filtrar alertas pendientes a enviar.
+ */
+function getLastNDaysDateKeysArgentina(n) {
+  if (!Number.isFinite(n) || n < 1) return [];
+  const argDateStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+  const [y, m, d] = argDateStr.split("-").map(Number);
+  const argDate = new Date(y, m - 1, d);
+  const keys = [];
+  for (let i = 1; i <= n; i++) {
+    const d2 = new Date(argDate);
+    d2.setDate(d2.getDate() - i);
+    const yy = d2.getFullYear();
+    const mm = String(d2.getMonth() + 1).padStart(2, "0");
+    const dd = String(d2.getDate()).padStart(2, "0");
+    keys.push(`${yy}-${mm}-${dd}`);
+  }
+  return keys;
 }
 
 /**
@@ -100,6 +126,7 @@ function normalizeEmailArray(values) {
  * Obtiene alertas pendientes de d?as anteriores a hoy (Argentina).
  * Una sola capa de filtrado: dateKey < todayKey y alertSent !== true.
  *
+ * @deprecated No escala bien con muchos d?as hist?ricos. Usar getPendingAlertsForDateKey por cada dateKey de getLastNDaysDateKeysArgentina(N).
  * @param {string} todayKey - Fecha de hoy en Argentina (YYYY-MM-DD).
  * @returns {Promise<Array<{ id: string, dateKey: string, ... }>>} Documentos de veh?culos pendientes (nunca incluye el d?a actual).
  */
@@ -795,23 +822,25 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       return res.status(401).json({ error: "no autorizado" });
     }
 
-    const dateKey = getYesterdayKeyArgentina();
-    const todayKey = getTodayKeyArgentina();
-    logger.info("[GET-PENDING-ALERTS] searching alerts for dateKey=%s (yesterday Argentina)", dateKey);
+    const allowedDateKeys = getLastNDaysDateKeysArgentina(PENDING_ALERTS_DAYS_BACK);
+    logger.info("[GET-PENDING-ALERTS] searching alerts for last %d days (Argentina): %j", PENDING_ALERTS_DAYS_BACK, allowedDateKeys);
 
-    // Obtener todas las alertas de d?as pasados (misma l?gica que funcionaba) y filtrar por ayer
-    const allPastDocs = await getPendingAlerts(todayKey);
-    const docs = allPastDocs.filter((d) => d.dateKey === dateKey);
+    const docs = [];
+    for (const dateKey of allowedDateKeys) {
+      const alerts = await getPendingAlertsForDateKey(dateKey);
+      docs.push(...alerts);
+    }
 
-    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) para ${dateKey}: ${docs.length} (total pasados: ${allPastDocs.length})`);
+    logger.info(`[GET-PENDING-ALERTS] Alertas pendientes (documentos) en ?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as: ${docs.length}`);
 
     if (docs.length === 0) {
-      const generalBody = buildGeneralGroupsBody([], dateKey);
+      const lastDayInWindow = getLastNDaysDateKeysArgentina(PENDING_ALERTS_DAYS_BACK)[0] || getYesterdayKeyArgentina();
+      const generalBody = buildGeneralGroupsBody([], lastDayInWindow);
       return res.status(200).json({
         ok: true,
         alerts: [],
         general: {
-          subject: `?? Resumen general de operaciones ? ${dateKey}`,
+          subject: `?? Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`,
           body: generalBody,
         },
       });
@@ -885,14 +914,21 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     });
 
     logger.info("[DEBUG] alerts before final response:", alerts.length, "groups:", groups.length);
-    const dateKeyForGeneral = groups.length > 0 ? groups[0].dateKey : dateKey;
+    const uniqueDates = [...new Set(groups.map((g) => g.dateKey))];
+    const dateKeyForGeneral = uniqueDates[0] || getYesterdayKeyArgentina();
     const generalBody = buildGeneralGroupsBody(groups, dateKeyForGeneral);
+    let generalSubject;
+    if (uniqueDates.length > 1) {
+      generalSubject = `?? Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`;
+    } else {
+      generalSubject = `?? Resumen general de operaciones ? ${uniqueDates[0]}`;
+    }
 
     logger.info(`[GET-PENDING-ALERTS] Respuesta: ${alerts.length} email(s) consolidado(s)`);
     return res.status(200).json({
       ok: true,
       general: {
-        subject: `?? Resumen general de operaciones ? ${dateKeyForGeneral}`,
+        subject: generalSubject,
         body: generalBody,
       },
       alerts,
@@ -908,13 +944,12 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       error: err && err.message ? err.message : String(err),
       stack: err && err.stack ? err.stack : undefined,
     });
-    const todayKey = getTodayKeyArgentina();
-    const generalBody = buildGeneralGroupsBody([], todayKey);
+    const generalBody = buildGeneralGroupsBody([], getTodayKeyArgentina());
     return res.status(200).json({
       ok: true,
       alerts: [],
       general: {
-        subject: `Resumen general de operaciones - ${todayKey}`,
+        subject: `Resumen general de operaciones (?ltimos ${PENDING_ALERTS_DAYS_BACK} d?as)`,
         body: generalBody,
       },
     });
