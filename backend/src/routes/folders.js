@@ -16,7 +16,7 @@
 
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 const { logger } = require('../utils/logger');

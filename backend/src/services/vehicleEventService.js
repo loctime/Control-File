@@ -5,21 +5,11 @@
  */
 
 const crypto = require("crypto");
-const admin = require("firebase-admin");
+const admin = require("../firebaseAdmin");
 
 const MAX_BATCH_SIZE = 500;
 
 function getDb() {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      }),
-      projectId: process.env.FIREBASE_PROJECT_ID,
-    });
-  }
   return admin.firestore();
 }
 

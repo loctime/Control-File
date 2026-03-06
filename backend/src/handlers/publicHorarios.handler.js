@@ -6,7 +6,7 @@
  * Usa admin.firestore() ya inicializado (auth.js al arrancar el servidor).
  * Índice compuesto requerido: schedules: ownerId ASC + weekStart DESC
  */
-const admin = require('firebase-admin');
+const admin = require('../../firebaseAdmin');
 const { logger } = require('../utils/logger');
 
 const SLUG_REGEX = /^[a-z0-9-]{1,64}$/;

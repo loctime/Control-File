@@ -1,26 +1,22 @@
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const { logger } = require('../utils/logger');
 
-// Intenta parsear credenciales de forma robusta
+// Intenta parsear credenciales de forma robusta (solo para FB_ADMIN_IDENTITY)
 function parseServiceAccount(envVarName) {
   let raw = process.env[envVarName];
   if (!raw || typeof raw !== 'string') {
     throw new Error(`${envVarName} no está configurada`);
   }
   raw = raw.trim();
-  // Quitar comillas envolventes si existen
   if ((raw.startsWith('\'') && raw.endsWith('\'')) || (raw.startsWith('"') && raw.endsWith('"'))) {
     raw = raw.slice(1, -1);
   }
-  // Intento 1: parse directo
   try {
     return JSON.parse(raw);
   } catch (_) {}
-  // Intento 2: normalizar \n a saltos reales (algunas UIs escapan distinto)
   try {
     return JSON.parse(raw.replace(/\\n/g, '\n'));
   } catch (_) {}
-  // Intento 3: reemplazar comillas simples por dobles (si pegaron JSON con ' ')
   try {
     return JSON.parse(raw.replace(/'/g, '"'));
   } catch (e) {
@@ -29,98 +25,22 @@ function parseServiceAccount(envVarName) {
   }
 }
 
-let centralAuth; // Auth del proyecto de identidad
+let centralAuth;
 
-// Intenta parsear JSON de cuenta de servicio sin lanzar (para fallbacks)
-function tryParseServiceAccountJson(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  try {
-    const data = JSON.parse(trimmed);
-    if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
-    return null;
-  } catch (_) {}
-  try {
-    const data = JSON.parse(trimmed.replace(/\\n/g, '\n'));
-    if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
-    return null;
-  } catch (_) {}
-  return null;
-}
-
-// Doble inicialización: App de datos (default) y App de Auth central (nombrada)
-if (!admin.apps.length) {
-  // App de datos (Firestore de ControlFile)
-  try {
-    let appDataCred = null;
-    const rawAppData = process.env.FB_ADMIN_APPDATA;
-    if (rawAppData && typeof rawAppData === 'string') {
-      try {
-        appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
-      } catch (_) {}
-    }
-    let credSource = 'FB_ADMIN_APPDATA';
-    if (!appDataCred && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-      appDataCred = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-      if (appDataCred) credSource = 'GOOGLE_SERVICE_ACCOUNT_KEY';
-    }
-    if (appDataCred) {
-      const projectId = process.env.FB_DATA_PROJECT_ID || appDataCred.project_id || appDataCred.projectId;
-      admin.initializeApp({
-        credential: admin.credential.cert(appDataCred),
-        projectId,
-      });
-      logger.info(`[Firebase] Inicializado con ${credSource}, projectId: ${projectId}`);
-    } else {
-      const projectId = process.env.FIREBASE_PROJECT_ID;
-      const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
-      let clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-      if (!clientEmail && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-        const fromGoogle = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-        if (fromGoogle) clientEmail = fromGoogle.client_email;
-      }
-      if (projectId && privateKeyRaw && clientEmail) {
-        admin.initializeApp({
-          credential: admin.credential.cert({
-            projectId,
-            clientEmail,
-            privateKey: privateKeyRaw.replace(/\\n/g, '\n'),
-          }),
-          projectId,
-        });
-        logger.info(`[Firebase] Inicializado con FIREBASE_* (split), projectId: ${projectId}`);
-      } else {
-        throw new Error('Configura FB_ADMIN_APPDATA, GOOGLE_SERVICE_ACCOUNT_KEY (JSON completo), o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY o FIREBASE_ADMIN_PRIVATE_KEY)');
-      }
-    }
-  } catch (e) {
-    console.error('Error inicializando App de datos:', e);
-    throw e;
-  }
-
-  // App de Auth central para verifyIdToken (mismo proyecto que datos o identidad separada)
-  try {
-    if (process.env.FB_ADMIN_IDENTITY) {
-      const appIdentityCred = parseServiceAccount('FB_ADMIN_IDENTITY');
-      const authApp = admin.initializeApp({
-        credential: admin.credential.cert(appIdentityCred),
-      }, 'authApp');
-      centralAuth = authApp.auth();
-    } else {
-      centralAuth = admin.auth();
-    }
-  } catch (e) {
-    console.error('Error inicializando App de identidad:', e);
-    throw e;
-  }
-} else {
-  // Reutilizar app nombrada si ya existe
-  try {
-    centralAuth = admin.app('authApp').auth();
-  } catch (_) {
+// App de Auth central (opcional): si FB_ADMIN_IDENTITY está definido, usa una app nombrada 'authApp'
+try {
+  if (process.env.FB_ADMIN_IDENTITY) {
+    const appIdentityCred = parseServiceAccount('FB_ADMIN_IDENTITY');
+    const authApp = admin.initializeApp({
+      credential: admin.credential.cert(appIdentityCred),
+    }, 'authApp');
+    centralAuth = authApp.auth();
+  } else {
     centralAuth = admin.auth();
   }
+} catch (e) {
+  console.error('Error inicializando App de identidad:', e);
+  throw e;
 }
 
 // APP_CODE eliminado - ya no es necesario

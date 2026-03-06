@@ -21,6 +21,9 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+// Firebase Admin must be initialized before any route or middleware that uses Firestore/Auth
+require('./firebaseAdmin');
+
 const authMiddleware = require('./middleware/auth');
 const superdevAuthMiddleware = require('./middleware/superdev-auth');
 const uploadRoutes = require('./routes/upload');
@@ -266,7 +269,7 @@ app.listen(PORT, () => {
 
   // Comprobar conectividad Firestore al arranque (solo en producción para detectar UNAUTHENTICATED pronto)
   if (process.env.NODE_ENV === 'production') {
-    const admin = require('firebase-admin');
+    const admin = require('./firebaseAdmin');
     if (admin.apps.length) {
       admin.firestore().collection('apps').limit(1).get()
         .then(() => { logger.info('[Startup] Firestore: OK'); })

@@ -5,7 +5,7 @@
  * en endpoints exclusivos para desarrolladores.
  */
 
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 
 /**
  * Obtiene la instancia de Auth central (authApp)

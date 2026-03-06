@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const b2Service = require('./b2');
 const { normalizeAppId } = require('../utils/app-ownership');
 const {

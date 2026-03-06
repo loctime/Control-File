@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const { logger } = require('../utils/logger');
 
 const FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB

@@ -1,7 +1,7 @@
 // backend/src/routes/repository-index.js
 // Endpoint POST /api/repository/index para indexación de repositorios desde ControlRepo
 const express = require('express');
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const { logger } = require('../utils/logger');
 const { acquireLock, releaseLock } = require('../services/repository-lock');
 const { indexRepository } = require('../services/repository-indexer');

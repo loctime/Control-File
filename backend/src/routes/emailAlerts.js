@@ -9,61 +9,11 @@
 
 const express = require("express");
 const router = express.Router();
-const admin = require("firebase-admin");
+const admin = require("../firebaseAdmin");
 const { formatDateKey, getVehicle, normalizePlate } = require("../services/vehicleEventService");
 const { getDailyTotalsByType } = require("../services/dailyMetricsService");
 const { syncAccessUsers } = require("../modules/emailUsers/emailUsers.service");
 const { logger } = require("../utils/logger");
-
-function parseServiceAccount(raw) {
-  if (!raw || typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch (_) {}
-  try {
-    return JSON.parse(trimmed.replace(/\\n/g, "\n"));
-  } catch (_) {}
-  return null;
-}
-
-function tryParseServiceAccountJson(raw) {
-  const data = parseServiceAccount(raw);
-  if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
-  return null;
-}
-
-if (!admin.apps.length) {
-  let appData = tryParseServiceAccountJson(process.env.FB_ADMIN_APPDATA || "");
-  if (!appData && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    appData = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-  }
-
-  if (appData) {
-    admin.initializeApp({
-      credential: admin.credential.cert(appData),
-      projectId: process.env.FB_DATA_PROJECT_ID || appData.project_id,
-    });
-  } else if (
-    process.env.FIREBASE_PROJECT_ID &&
-    (process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY) &&
-    (process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-  ) {
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || "";
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail,
-        privateKey: privateKeyRaw.replace(/\\n/g, "\n"),
-      }),
-      projectId: process.env.FIREBASE_PROJECT_ID,
-    });
-  } else {
-    logger.warn("[emailAlerts] Firebase admin inicializado sin credenciales expl?citas");
-    admin.initializeApp();
-  }
-}
 
 const db = admin.firestore();
 
@@ -951,7 +901,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     const isUnauth = (err && (err.code === 16 || (err.message && String(err.message).includes("UNAUTHENTICATED"))));
     if (isUnauth) {
       logger.error(
-        "[GET-PENDING-ALERTS] Firestore UNAUTHENTICATED: Revisa que la cuenta de servicio (FB_ADMIN_APPDATA o GOOGLE_SERVICE_ACCOUNT_KEY) sea del mismo proyecto donde está tu Firestore, que tenga permisos de Firestore y que la clave privada tenga los \\n correctos."
+        "[GET-PENDING-ALERTS] Firestore UNAUTHENTICATED: Revisa que la cuenta de servicio (FB_ADMIN_APPDATA o GOOGLE_SERVICE_ACCOUNT_KEY) sea del mismo proyecto donde est? tu Firestore, que tenga permisos de Firestore y que la clave privada tenga los \\n correctos."
       );
     }
     logger.error("[GET-PENDING-ALERTS] Error no controlado", {

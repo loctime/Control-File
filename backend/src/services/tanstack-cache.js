@@ -171,7 +171,7 @@ class TanStackCache {
 
   // Fetch real de base de datos usando Firestore
   async fetchFilesFromDB(userId, folderId) {
-    const admin = require('firebase-admin');
+    const admin = require('../firebaseAdmin');
     
     try {
       const items = [];
@@ -254,7 +254,7 @@ class TanStackCache {
   }
 
   async fetchFoldersFromDB(userId) {
-    const admin = require('firebase-admin');
+    const admin = require('../firebaseAdmin');
     
     try {
       const folders = [];

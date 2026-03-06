@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const admin = require('../../firebaseAdmin');
 const { logger } = require('../../utils/logger');
 
 // Constantes para creación automática de cuentas

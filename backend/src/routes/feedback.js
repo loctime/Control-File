@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const feedbackService = require('../services/feedback-service');
 const { logger } = require('../utils/logger');
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 
 // Configurar multer para manejar multipart/form-data
 const upload = multer({

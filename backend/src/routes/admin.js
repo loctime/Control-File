@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 const { logger } = require('../utils/logger');
 const { syncAccessUsers, normalizeEmailArray } = require('../modules/emailUsers/emailUsers.service');
 const { normalizePlate } = require('../services/vehicleEventService');

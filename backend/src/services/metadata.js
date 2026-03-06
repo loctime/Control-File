@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const admin = require('../firebaseAdmin');
 
 // APP_CODE eliminado - ya no es necesario
 
