@@ -30,33 +30,63 @@ function parseServiceAccount(envVarName) {
 
 let centralAuth; // Auth del proyecto de identidad
 
+// Intenta parsear JSON de cuenta de servicio sin lanzar (para fallbacks)
+function tryParseServiceAccountJson(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const data = JSON.parse(trimmed);
+    if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
+    return null;
+  } catch (_) {}
+  try {
+    const data = JSON.parse(trimmed.replace(/\\n/g, '\n'));
+    if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
+    return null;
+  } catch (_) {}
+  return null;
+}
+
 // Doble inicialización: App de datos (default) y App de Auth central (nombrada)
 if (!admin.apps.length) {
   // App de datos (Firestore de ControlFile)
   try {
+    let appDataCred = null;
     const rawAppData = process.env.FB_ADMIN_APPDATA;
     if (rawAppData && typeof rawAppData === 'string') {
-      const appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
+      try {
+        appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
+      } catch (_) {}
+    }
+    if (!appDataCred && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+      appDataCred = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    }
+    if (appDataCred) {
       admin.initializeApp({
         credential: admin.credential.cert(appDataCred),
-        projectId: process.env.FB_DATA_PROJECT_ID,
-      });
-    } else if (
-      process.env.FIREBASE_PROJECT_ID &&
-      process.env.FIREBASE_PRIVATE_KEY &&
-      (process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    ) {
-      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail,
-          privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-        }),
-        projectId: process.env.FIREBASE_PROJECT_ID,
+        projectId: process.env.FB_DATA_PROJECT_ID || appDataCred.project_id || appDataCred.projectId,
       });
     } else {
-      throw new Error('Configura FB_ADMIN_APPDATA o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY)');
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
+      let clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      if (!clientEmail && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        const fromGoogle = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+        if (fromGoogle) clientEmail = fromGoogle.client_email;
+      }
+      if (projectId && privateKeyRaw && clientEmail) {
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId,
+            clientEmail,
+            privateKey: privateKeyRaw.replace(/\\n/g, '\n'),
+          }),
+          projectId,
+        });
+      } else {
+        throw new Error('Configura FB_ADMIN_APPDATA, GOOGLE_SERVICE_ACCOUNT_KEY (JSON completo), o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY o FIREBASE_ADMIN_PRIVATE_KEY)');
+      }
     }
   } catch (e) {
     console.error('Error inicializando App de datos:', e);

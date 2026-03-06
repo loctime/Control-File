@@ -27,8 +27,17 @@ function parseServiceAccount(raw) {
   return null;
 }
 
+function tryParseServiceAccountJson(raw) {
+  const data = parseServiceAccount(raw);
+  if (data && (data.project_id || data.projectId) && (data.client_email || data.private_key)) return data;
+  return null;
+}
+
 if (!admin.apps.length) {
-  const appData = parseServiceAccount(process.env.FB_ADMIN_APPDATA || "");
+  let appData = tryParseServiceAccountJson(process.env.FB_ADMIN_APPDATA || "");
+  if (!appData && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    appData = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+  }
 
   if (appData) {
     admin.initializeApp({
@@ -37,15 +46,16 @@ if (!admin.apps.length) {
     });
   } else if (
     process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_PRIVATE_KEY &&
+    (process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY) &&
     (process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
   ) {
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || "";
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail,
-        privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+        privateKey: privateKeyRaw.replace(/\\n/g, "\n"),
       }),
       projectId: process.env.FIREBASE_PROJECT_ID,
     });
