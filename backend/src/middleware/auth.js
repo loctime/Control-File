@@ -59,14 +59,18 @@ if (!admin.apps.length) {
         appDataCred = parseServiceAccount('FB_ADMIN_APPDATA');
       } catch (_) {}
     }
+    let credSource = 'FB_ADMIN_APPDATA';
     if (!appDataCred && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
       appDataCred = tryParseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+      if (appDataCred) credSource = 'GOOGLE_SERVICE_ACCOUNT_KEY';
     }
     if (appDataCred) {
+      const projectId = process.env.FB_DATA_PROJECT_ID || appDataCred.project_id || appDataCred.projectId;
       admin.initializeApp({
         credential: admin.credential.cert(appDataCred),
-        projectId: process.env.FB_DATA_PROJECT_ID || appDataCred.project_id || appDataCred.projectId,
+        projectId,
       });
+      console.log(`[Firebase] Inicializado con ${credSource}, projectId: ${projectId}`);
     } else {
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
@@ -84,6 +88,7 @@ if (!admin.apps.length) {
           }),
           projectId,
         });
+        console.log(`[Firebase] Inicializado con FIREBASE_* (split), projectId: ${projectId}`);
       } else {
         throw new Error('Configura FB_ADMIN_APPDATA, GOOGLE_SERVICE_ACCOUNT_KEY (JSON completo), o (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL o FIREBASE_SERVICE_ACCOUNT_KEY + FIREBASE_PRIVATE_KEY o FIREBASE_ADMIN_PRIVATE_KEY)');
       }

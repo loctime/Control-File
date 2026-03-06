@@ -258,6 +258,23 @@ app.listen(PORT, () => {
   console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
   console.log(`🔐 Firebase Project ID: ${process.env.FIREBASE_PROJECT_ID || 'NO CONFIGURADO'}`);
   console.log(`📦 B2 Bucket: ${process.env.B2_BUCKET_NAME || 'NO CONFIGURADO'}`);
+
+  // Comprobar conectividad Firestore al arranque (solo en producción para detectar UNAUTHENTICATED pronto)
+  if (process.env.NODE_ENV === 'production') {
+    const admin = require('firebase-admin');
+    if (admin.apps.length) {
+      admin.firestore().collection('apps').limit(1).get()
+        .then(() => { logger.info('[Startup] Firestore: OK'); })
+        .catch((e) => {
+          const unauth = e && (e.code === 16 || (e.message && String(e.message).includes('UNAUTHENTICATED')));
+          if (unauth) {
+            logger.error('[Startup] Firestore UNAUTHENTICATED. La cuenta de servicio (FB_ADMIN_APPDATA o GOOGLE_SERVICE_ACCOUNT_KEY) debe ser del proyecto donde está Firestore y tener permisos. Revisa las variables en Render.');
+          } else {
+            logger.warn('[Startup] Firestore check failed:', e && e.message);
+          }
+        });
+    }
+  }
 });
 
 module.exports = app;

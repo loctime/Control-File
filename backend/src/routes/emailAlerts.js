@@ -948,6 +948,12 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
       alerts,
     });
   } catch (err) {
+    const isUnauth = (err && (err.code === 16 || (err.message && String(err.message).includes("UNAUTHENTICATED"))));
+    if (isUnauth) {
+      logger.error(
+        "[GET-PENDING-ALERTS] Firestore UNAUTHENTICATED: Revisa que la cuenta de servicio (FB_ADMIN_APPDATA o GOOGLE_SERVICE_ACCOUNT_KEY) sea del mismo proyecto donde está tu Firestore, que tenga permisos de Firestore y que la clave privada tenga los \\n correctos."
+      );
+    }
     logger.error("[GET-PENDING-ALERTS] Error no controlado", {
       error: err && err.message ? err.message : String(err),
       stack: err && err.stack ? err.stack : undefined,
