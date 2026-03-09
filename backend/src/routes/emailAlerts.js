@@ -575,7 +575,7 @@ router.get("/email/get-pending-daily-alerts", async (req, res) => {
     try {
       fallbackConfig = await getEmailConfig();
     } catch (_) {
-      // Si falla la lectura de config en catch, usar arrays vacíos
+      // Si falla la lectura de config en catch, usar arrays vacï¿½os
     }
     return res.status(200).json({
       ok: true,
