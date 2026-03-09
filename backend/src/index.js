@@ -46,6 +46,7 @@ const emailAlertsRoutes = require('./routes/emailAlerts');
 const emailUsersRoutes = require('./modules/emailUsers/emailUsers.routes');
 const emailAlertsApiRoutes = require('./modules/emailAlerts/emailAlerts.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const dashboardSummaryRoutes = require('./routes/dashboard');
 const logisticsV2Routes = require('./modules/logistics/logistics.routes');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
@@ -226,6 +227,7 @@ app.use('/api', emailAlertsRoutes);
 app.use('/api', emailUsersRoutes);
 app.use('/api', emailAlertsApiRoutes);
 app.use('/api', authMiddleware, dashboardRoutes);
+app.use('/api/dashboard', authMiddleware, dashboardSummaryRoutes);
 app.use('/api/logistics/v2', authMiddleware, logisticsV2Routes);
 
 // Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
