@@ -95,7 +95,67 @@ async function getVehicleDailySummary(plate, dateKey) {
   return { id: docSnap.id, ...docSnap.data() };
 }
 
+/**
+ * Calcula estadísticas para el dashboard de un día a partir de dailyAlerts/vehicles.
+ * Usado para alimentar metrics/daily y agregaciones mensual/anual.
+ *
+ * @param {string} dateKey - YYYY-MM-DD
+ * @returns {Promise<{ totalAlerts: number, alertsSent: number, alertsPending: number, maxRisk: number, avgRisk: number, vehiclesWithAlerts: number }>}
+ */
+async function getDailyStatsForAggregation(dateKey) {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return {
+      totalAlerts: 0,
+      alertsSent: 0,
+      alertsPending: 0,
+      maxRisk: 0,
+      avgRisk: 0,
+      vehiclesWithAlerts: 0,
+    };
+  }
+
+  const vehiclesSnap = await DAILY_ALERTS_REF()
+    .doc(dateKey)
+    .collection("vehicles")
+    .get();
+
+  let totalAlerts = 0;
+  let alertsSent = 0;
+  let alertsPending = 0;
+  let maxRisk = 0;
+  let riskSum = 0;
+  let riskCount = 0;
+
+  for (const doc of vehiclesSnap.docs) {
+    const data = doc.data() || {};
+    totalAlerts += 1;
+    if (data.alertSent === true) {
+      alertsSent += 1;
+    } else {
+      alertsPending += 1;
+    }
+    const risk = typeof data.riskScore === "number" ? data.riskScore : 0;
+    if (risk > 0) {
+      riskSum += risk;
+      riskCount += 1;
+      if (risk > maxRisk) maxRisk = risk;
+    }
+  }
+
+  const avgRisk = riskCount > 0 ? riskSum / riskCount : 0;
+
+  return {
+    totalAlerts,
+    alertsSent,
+    alertsPending,
+    maxRisk,
+    avgRisk,
+    vehiclesWithAlerts: totalAlerts,
+  };
+}
+
 module.exports = {
   getDailyTotalsByType,
   getVehicleDailySummary,
+  getDailyStatsForAggregation,
 };
