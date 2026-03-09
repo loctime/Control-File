@@ -323,6 +323,19 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    /* ========= CONTROLCHAT ========= */
+
+    // ========= CONTROLCHAT =========
+    
+    match /apps/control-chat/users/{userId} {
+      allow read, write: if isAuth() && userId == uid();
+    
+      match /messages/{messageId} {
+        allow read, write: if isAuth() && userId == uid();
+      }
+    }
+    
+
     /* ========= HORARIOS ========= */
 
     /* ===============================
