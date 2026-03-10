@@ -1,58 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/logger-client';
-import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+function getBackendUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
+
+function getAuthHeader(request: NextRequest) {
+  return request.headers.get('Authorization') || request.headers.get('authorization') || '';
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-    const token = authHeader.split('Bearer ')[1];
-    const adminAuth = requireAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(token);
-    const userId = decoded.uid;
-
-    const db = requireAdminDb();
-    const docRef = db.collection('userSettings').doc(userId);
-    const snap = await docRef.get();
-    const data = snap.exists ? snap.data() : {};
-
-    return NextResponse.json({
-      billingInterval: (data as any)?.billingInterval || null,
+    const backendResponse = await fetch(`${getBackendUrl()}/v1/users/settings`, {
+      method: 'GET',
+      headers: {
+        Authorization: getAuthHeader(request),
+      },
     });
+
+    const responseData = await backendResponse.json();
+    if (!backendResponse.ok) {
+      return NextResponse.json(
+        { error: responseData.error || 'Error en el servidor backend' },
+        { status: backendResponse.status }
+      );
+    }
+
+    return NextResponse.json(responseData);
   } catch (error) {
-    logError(error, 'getting user settings');
+    logError(error, 'GET /user/settings');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const body = await request.json();
+    const backendResponse = await fetch(`${getBackendUrl()}/v1/users/settings`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeader(request),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseData = await backendResponse.json();
+    if (!backendResponse.ok) {
+      return NextResponse.json(
+        { error: responseData.error || 'Error en el servidor backend' },
+        { status: backendResponse.status }
+      );
     }
-    const token = authHeader.split('Bearer ')[1];
-    const adminAuth = requireAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(token);
-    const userId = decoded.uid;
 
-    const { billingInterval } = await request.json();
-    if (billingInterval !== 'monthly' && billingInterval !== 'yearly') {
-      return NextResponse.json({ error: 'billingInterval inválido' }, { status: 400 });
-    }
-
-    const db = requireAdminDb();
-    const docRef = db.collection('userSettings').doc(userId);
-    await docRef.set({ billingInterval, updatedAt: new Date() }, { merge: true });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json(responseData);
   } catch (error) {
-    logError(error, 'saving user settings');
+    logError(error, 'POST /user/settings');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

@@ -34,6 +34,7 @@ const healthRoutes = require('./routes/health');
 const foldersRoutes = require('./routes/folders');
 // const userRoutes = require('./routes/user'); // Archivo no existe
 const usersRoutes = require('./routes/users');
+const userRoutes = require('./routes/user');
 const audioRoutes = require('./routes/audio');
 const storesRoutes = require('./routes/stores/sheets');
 const feedbackRoutes = require('./routes/feedback');
@@ -51,6 +52,7 @@ const logisticsV2Routes = require('./modules/logistics/logistics.routes');
 const { getCacheStats, clearCache } = require('./middleware/cache');
 const { logger } = require('./utils/logger');
 const requestLogger = require('./middleware/request-logger');
+const legacyDeprecation = require('./middleware/legacy-deprecation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -137,6 +139,9 @@ app.use(requestLogger);
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+// Legacy API compatibility headers for sunset migration
+app.use(legacyDeprecation);
+
 // Debug middleware for all requests
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/uploads')) {
@@ -164,6 +169,7 @@ app.get('/health', (req, res) => {
   });
 });
 app.use('/api/health', healthRoutes);
+app.use('/v1/health', healthRoutes);
 
 // Test route without auth
 app.post('/api/test-upload', (req, res) => {
@@ -180,6 +186,7 @@ app.post('/api/test-upload', (req, res) => {
 // External upload endpoint - POST /upload (sin /api) para aplicaciones externas
 // Este es el endpoint único y oficial para subida de archivos desde apps externas
 app.post('/upload', authMiddleware, externalUploadRoutes);
+app.post('/v1/external/upload', authMiddleware, externalUploadRoutes);
 
 // Protected routes with auth
 app.use('/api/uploads', authMiddleware, (req, res, next) => {
@@ -189,6 +196,8 @@ app.use('/api/uploads', authMiddleware, (req, res, next) => {
   });
   next();
 }, uploadRoutes);
+app.use('/v1/uploads', authMiddleware, uploadRoutes);
+
 // GitHub endpoints
 // ===== ControlRepo - GitHub =====
 // NOTA: GitHub OAuth fue eliminado. Los repositorios se acceden por URL.
@@ -199,26 +208,37 @@ app.use('/api/github', authMiddleware, githubStatusRoutes);
 // Legacy endpoint - mantener por compatibilidad temporal
 app.use('/api/repository', repositoryIndexRoutes);
 
-// Nuevos endpoints rediseñados - arquitectura limpia
-// POST /repositories/index - Iniciar indexación
+// Nuevos endpoints redise??ados - arquitectura limpia
+// POST /repositories/index - Iniciar indexaci??n
 // GET /repositories/:repositoryId/status - Estado del repositorio
 app.use('/repositories', repositoriesRoutes);
+
+// v1 canonical routes for repository workflows
+app.use('/v1/repositories', repositoriesRoutes);
 
 // Chat endpoint
 // POST /api/chat/query - Consultas sobre repositorios indexados
 app.use('/api/chat', chatRoutes);
+app.use('/v1/chat', chatRoutes);
 
 // Protected routes with auth
 app.use('/api/files', authMiddleware, filesRoutes);
+app.use('/v1/files', authMiddleware, filesRoutes);
 app.use('/api/folders', authMiddleware, foldersRoutes);
+app.use('/v1/folders', authMiddleware, foldersRoutes);
 // app.use('/api/user', authMiddleware, userRoutes); // Ruta deshabilitada: no existe ./routes/user
+app.use('/api/user', authMiddleware, userRoutes);
+app.use('/v1/users', authMiddleware, userRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
+app.use('/v1/users', authMiddleware, usersRoutes);
 app.use('/api/audio', authMiddleware, audioRoutes);
+app.use('/v1/audio', authMiddleware, audioRoutes);
 app.use('/api/stores', authMiddleware, storesRoutes);
 app.use('/api/admin', authMiddleware, adminRoutes);
+app.use('/v1/admin', authMiddleware, adminRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/accounts', authMiddleware, accountsRoutes);
-// Público: GET /api/horarios/publicos-completos?companySlug=... (sin auth)
+// P??blico: GET /api/horarios/publicos-completos?companySlug=... (sin auth)
 app.use(publicHorariosRoutes);
 app.use('/api/horarios', horariosRoutes);
 app.use('/api', emailWebhookRoutes);
@@ -232,14 +252,15 @@ app.use('/api/logistics/v2', authMiddleware, logisticsV2Routes);
 
 // Superdev routes - EXCLUSIVO para usuarios con role === 'superdev'
 app.use('/api/superdev', superdevAuthMiddleware, superdevRoutes);
+app.use('/v1/superdev', superdevAuthMiddleware, superdevRoutes);
 
 // Shares routes - mixed public and protected
 app.use('/api/shares', sharesRoutes);
+app.use('/v1/shares', sharesRoutes);
 
 // TanStack Cache endpoints
 app.get('/api/cache/stats', authMiddleware, getCacheStats);
 app.post('/api/cache/clear', authMiddleware, clearCache);
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error('Unhandled error', { error: err, path: req.path });

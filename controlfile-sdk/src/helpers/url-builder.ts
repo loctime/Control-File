@@ -12,7 +12,7 @@ export function buildShareUrl(token: string, baseUrl: string): string {
 
 export function buildImageUrl(token: string, baseUrl: string): string {
   // Construir URL de imagen directa para <img> tags
-  // Formato: {baseUrl}/api/shares/{token}/image
+  // Formato: {baseUrl}/v1/shares/{token}/image
   const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-  return `${cleanBaseUrl}/api/shares/${token}/image`;
+  return `${cleanBaseUrl}/v1/shares/${token}/image`;
 }

@@ -164,6 +164,17 @@ export interface UploadFileParams {
 
 export type FileResponse = UploadResponse;
 
+export interface TaskbarItem {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  type?: 'folder' | 'app';
+  isCustom?: boolean;
+  folderId?: string;
+}
+
+
 /**
  * Configuración del cliente
  */

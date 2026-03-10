@@ -12,6 +12,8 @@ export class ControlFileClient {
   private async call(path: string, init: RequestInit = {}) {
     const token = await this.getToken();
     const headers = new Headers(init.headers || {});
+    headers.set('x-request-id', typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    headers.set('x-sdk-version', 'controlfile-web-1.1.0');
     headers.set('Authorization', `Bearer ${token}`);
     if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const res = await fetch(`${this.baseUrl}${path}`, { ...init, headers });
@@ -28,27 +30,56 @@ export class ControlFileClient {
     if (params.parentId !== undefined) qs.set('parentId', String(params.parentId));
     if (params.pageSize) qs.set('pageSize', String(params.pageSize));
     if (params.cursor) qs.set('cursor', params.cursor);
-    return this.call(`/api/files/list?${qs.toString()}`);
+    return this.call(`/v1/files?${qs.toString()}`);
   }
 
   async presignUpload(body: { name: string; size: number; mime: string; parentId?: string | null }) {
-    return this.call('/api/uploads/presign', { method: 'POST', body: JSON.stringify(body) });
+    return this.call('/v1/uploads/presign', { method: 'POST', body: JSON.stringify(body) });
   }
 
   async confirm(body: { uploadSessionId: string; parts?: Array<{ PartNumber: number; ETag: string }>; etag?: string }) {
-    return this.call('/api/uploads/confirm', { method: 'POST', body: JSON.stringify(body) });
+    return this.call('/v1/uploads/confirm', { method: 'POST', body: JSON.stringify(body) });
   }
 
   async presignGet(fileId: string) {
-    return this.call('/api/files/presign-get', { method: 'POST', body: JSON.stringify({ fileId }) });
+    return this.call('/v1/files/presign-get', { method: 'POST', body: JSON.stringify({ fileId }) });
   }
 
   async delete(fileId: string) {
-    return this.call('/api/files/delete', { method: 'POST', body: JSON.stringify({ fileId }) });
+    return this.call('/v1/files/delete', { method: 'POST', body: JSON.stringify({ fileId }) });
   }
 
   async rename(fileId: string, newName: string) {
-    return this.call('/api/files/rename', { method: 'POST', body: JSON.stringify({ fileId, newName }) });
+    return this.call('/v1/files/rename', { method: 'POST', body: JSON.stringify({ fileId, newName }) });
+  }
+
+  async getUserSettings() {
+    return this.call('/v1/users/settings', { method: 'GET' });
+  }
+
+  async saveUserSettings(billingInterval: 'monthly' | 'yearly') {
+    return this.call('/v1/users/settings', {
+      method: 'POST',
+      body: JSON.stringify({ billingInterval }),
+    });
+  }
+
+  async getTaskbar() {
+    return this.call('/v1/users/taskbar', { method: 'GET' });
+  }
+
+  async saveTaskbar(items: Array<Record<string, unknown>>) {
+    return this.call('/v1/users/taskbar', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async updateUserPlan(planId: string, interval: 'monthly' | 'yearly') {
+    return this.call('/v1/users/plan', {
+      method: 'POST',
+      body: JSON.stringify({ planId, interval }),
+    });
   }
 
   async replace(fileId: string, file: Blob) {
@@ -56,7 +87,7 @@ export class ControlFileClient {
     const form = new FormData();
     form.set('fileId', fileId);
     form.set('file', file);
-    const res = await fetch(`${this.baseUrl}/api/files/replace`, { method: 'POST', body: form, headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${this.baseUrl}/v1/files/replace`, { method: 'POST', body: form, headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       let err: unknown;
       try { err = await res.json(); } catch { err = { error: res.statusText }; }

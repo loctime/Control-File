@@ -7,6 +7,7 @@ export { ControlFileClient } from './client';
 
 // Módulo contractual (para uso interno, normalmente se accede vía client.forApp())
 export { AppFilesModule } from './modules/app-files';
+export { UsersModule } from './modules/users';
 
 // Tipos públicos
 export type {
@@ -44,6 +45,7 @@ export type {
   AppListFilesParams,
   AppEnsurePathParams,
   AppUploadFileParams,
+  TaskbarItem,
 } from './types';
 
 // Errores tipados

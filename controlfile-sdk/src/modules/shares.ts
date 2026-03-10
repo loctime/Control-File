@@ -39,7 +39,7 @@ export class SharesModule {
     const expiresIn = params.expiresIn ?? 24; // default: 24 horas
 
     const response = await this.http.call<ShareCreateApiResponse>(
-      '/api/shares/create',
+      '/v1/shares/create',
       {
         method: 'POST',
         body: JSON.stringify({
@@ -64,7 +64,7 @@ export class SharesModule {
     validateToken(token);
 
     const response = await this.http.call<ShareInfoApiResponse>(
-      `/api/shares/${token}`,
+      `/v1/shares/${token}`,
       {
         method: 'GET',
       },
@@ -87,7 +87,7 @@ export class SharesModule {
     validateToken(token);
 
     return this.http.call<ShareDownloadResponse>(
-      `/api/shares/${token}/download`,
+      `/v1/shares/${token}/download`,
       {
         method: 'POST',
       },
@@ -109,7 +109,7 @@ export class SharesModule {
   async revoke(token: string): Promise<void> {
     validateToken(token);
 
-    await this.http.call('/api/shares/revoke', {
+    await this.http.call('/v1/shares/revoke', {
       method: 'POST',
       body: JSON.stringify({ shareToken: token }),
     });
@@ -129,7 +129,7 @@ export class SharesModule {
         downloadCount: number;
         shareUrl?: string;
       }>;
-    }>('/api/shares/', {
+    }>('/v1/shares/', {
       method: 'GET',
     });
 

@@ -22,7 +22,7 @@ function normalizeFolderResponse(response: any): Folder {
   const folderId = response.id ?? response.folderId;
   
   if (!folderId) {
-    throw new Error('Invalid /api/folders response: missing id');
+    throw new Error('Invalid /v1/folders response: missing id');
   }
 
   return {
@@ -99,7 +99,7 @@ async function findFolderByName(
   const response = await http.call<{
     items?: any[];
     data?: any[];
-  }>(`/api/folders?${qs.toString()}`);
+  }>(`/v1/folders?${qs.toString()}`);
 
   const rawItems = response.items || response.data || [];
   const items = normalizeFolderArray(rawItems);
@@ -118,7 +118,7 @@ async function findFolderByName(
 /**
  * Crea una nueva carpeta
  * 
- * Nota: POST /api/folders debe ser idempotente en el backend.
+ * Nota: POST /v1/folders debe ser idempotente en el backend.
  * El backend debe tener un índice único (userId, parentId, name) para garantizar
  * que múltiples llamadas con los mismos parámetros no creen duplicados.
  */
@@ -128,7 +128,7 @@ async function createFolder(
   parentId: string | null,
   userId: string
 ): Promise<Folder> {
-  const response = await http.call<any>('/api/folders', {
+  const response = await http.call<any>('/v1/folders', {
     method: 'POST',
     body: JSON.stringify({
       name,

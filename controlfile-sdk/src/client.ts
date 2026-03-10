@@ -7,6 +7,7 @@ import { FilesModule } from './modules/files';
 import { SharesModule } from './modules/shares';
 import { AccountsModule } from './modules/accounts';
 import { FoldersModule } from './modules/folders';
+import { UsersModule } from './modules/users';
 import { AppFilesModule } from './modules/app-files';
 import type {
   ControlFileClientConfig,
@@ -20,6 +21,7 @@ export class ControlFileClient {
   public readonly shares: SharesModule;
   public readonly accounts: AccountsModule;
   public readonly folders: FoldersModule;
+  public readonly users: UsersModule;
 
   constructor(config: ControlFileClientConfig) {
     // Configurar opciones por defecto
@@ -41,6 +43,7 @@ export class ControlFileClient {
     this.shares = new SharesModule(this.http, config.baseUrl);
     this.accounts = new AccountsModule(this.http);
     this.folders = new FoldersModule(this.http);
+    this.users = new UsersModule(this.http);
   }
 
   /**

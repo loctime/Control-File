@@ -1,67 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/logger-client';
-import { requireAdminAuth, requireAdminDb } from '@/lib/firebase-admin';
-import { findPlanById } from '@/lib/plans';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+function getBackendUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
+
+function getAuthHeader(request: NextRequest) {
+  return request.headers.get('Authorization') || request.headers.get('authorization') || '';
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    const token = authHeader.split('Bearer ')[1];
-    const adminAuth = requireAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(token);
-    const userId = decoded.uid;
-
-    const { planId, interval } = await request.json();
-    if (!planId) {
-      return NextResponse.json({ error: 'planId requerido' }, { status: 400 });
-    }
-    if (interval && interval !== 'monthly' && interval !== 'yearly') {
-      return NextResponse.json({ error: 'interval inválido' }, { status: 400 });
-    }
-
-    const plan = await findPlanById(planId);
-    if (!plan) {
-      return NextResponse.json({ error: 'Plan inválido' }, { status: 400 });
-    }
-
-    const db = requireAdminDb();
-    const userRef = db.collection('users').doc(userId);
-    const userSnap = await userRef.get();
-
-    if (!userSnap.exists) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
-    }
-
-    const userData = userSnap.data() as any;
-    const usedBytes = (userData.usedBytes || 0) + (userData.pendingBytes || 0);
-
-    if (usedBytes > plan.quotaBytes) {
-      return NextResponse.json({
-        error: 'No puedes cambiar a un plan con menos espacio del que ya usas',
-        details: {
-          usedBytes,
-          targetQuotaBytes: plan.quotaBytes,
-        }
-      }, { status: 409 });
-    }
-
-    await userRef.update({
-      planQuotaBytes: plan.quotaBytes,
-      planId: plan.planId,
-      planInterval: interval || 'monthly',
-      planUpdatedAt: new Date(),
+    const body = await request.json();
+    const backendResponse = await fetch(`${getBackendUrl()}/v1/users/plan`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeader(request),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     });
 
-    return NextResponse.json({ success: true, planId: plan.planId, planQuotaBytes: plan.quotaBytes, planInterval: interval || 'monthly' });
+    const responseData = await backendResponse.json();
+    if (!backendResponse.ok) {
+      return NextResponse.json(
+        { error: responseData.error || 'Error en el servidor backend' },
+        { status: backendResponse.status }
+      );
+    }
+
+    return NextResponse.json(responseData);
   } catch (error) {
-    logError(error, 'updating plan');
+    logError(error, 'POST /user/plan');
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

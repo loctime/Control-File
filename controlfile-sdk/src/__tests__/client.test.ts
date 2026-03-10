@@ -73,7 +73,7 @@ describe('ControlFileClient', () => {
         expect(result.items).toHaveLength(2);
         expect(result.nextPage).toBeNull();
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/files/list'),
+          expect.stringContaining('/v1/files/list'),
           expect.any(Object)
         );
       });
@@ -140,7 +140,7 @@ describe('ControlFileClient', () => {
         expect(result.downloadUrl).toBe('https://download.url/presigned');
         expect(result.fileName).toBe('test.pdf');
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/files/presign-get'),
+          expect.stringContaining('/v1/files/presign-get'),
           expect.objectContaining({
             method: 'POST',
           })
@@ -158,7 +158,7 @@ describe('ControlFileClient', () => {
         await client.files.delete('file123');
 
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/files/delete'),
+          expect.stringContaining('/v1/files/delete'),
           expect.objectContaining({
             method: 'POST',
           })
@@ -188,7 +188,7 @@ describe('ControlFileClient', () => {
         await client.files.rename('file123', 'new-name.pdf');
 
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/files/rename'),
+          expect.stringContaining('/v1/files/rename'),
           expect.objectContaining({
             method: 'POST',
           })
@@ -222,7 +222,7 @@ describe('ControlFileClient', () => {
         expect(result.shareToken).toBe('token123');
         expect(result.shareUrl).toBeDefined();
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/shares/create'),
+          expect.stringContaining('/v1/shares/create'),
           expect.objectContaining({
             method: 'POST',
           })
@@ -278,13 +278,13 @@ describe('ControlFileClient', () => {
     describe('getImageUrl', () => {
       it('debe generar URL de imagen', () => {
         const url = client.shares.getImageUrl('token123');
-        expect(url).toContain('/api/shares/token123/image');
+        expect(url).toContain('/v1/shares/token123/image');
       });
 
       it('debe aceptar baseUrl personalizado', () => {
         const customBase = 'https://custom.example.com';
         const url = client.shares.getImageUrl('token123', customBase);
-        expect(url).toBe(`${customBase}/api/shares/token123/image`);
+        expect(url).toBe(`${customBase}/v1/shares/token123/image`);
       });
     });
   });

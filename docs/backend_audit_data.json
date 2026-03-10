@@ -1,0 +1,2193 @@
+{
+  "generatedAt": "2026-03-10T05:57:18.874Z",
+  "nextEndpoints": [
+    {
+      "endpoint": "/api/admin/create-user",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "file": "app/api/admin/create-user/route.ts",
+      "backend": "next",
+      "what": "admin",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger-client"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/audio/master",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "app/api/audio/master/route.ts",
+      "backend": "next",
+      "what": "audio",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "/api/audio/master",
+        "/api/audio/info"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/test-ffmpeg",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/audio/test-ffmpeg/route.ts",
+      "backend": "next",
+      "what": "audio",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "/api/audio/test-ffmpeg"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/audio/test-simple",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/audio/test-simple/route.ts",
+      "backend": "next",
+      "what": "audio",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/billing/checkout",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/billing/checkout/route.ts",
+      "backend": "next",
+      "what": "billing",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/plans"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/billing/webhook",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/billing/webhook/route.ts",
+      "backend": "next",
+      "what": "billing",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/plans"
+      ],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/controlfile/upload",
+      "methods": [],
+      "file": "app/api/controlfile/upload/route.ts",
+      "backend": "next",
+      "what": "controlfile",
+      "services": [
+        "@/lib/middleware/api-auth",
+        "@/lib/firebase-admin",
+        "@/lib/b2",
+        "@/lib/logger-client"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/create-user",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "file": "app/api/create-user/route.ts",
+      "backend": "next",
+      "what": "create-user",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger-client"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/files/delete",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/delete/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/delete",
+      "methods": [],
+      "file": "app/api/files/delete/route.v2.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/b2",
+        "@/lib/middleware/api-auth",
+        "@/lib/schemas/api-schemas",
+        "@/lib/logger"
+      ],
+      "firestore": [
+        "files",
+        "orphanedFiles",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/empty-trash",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/empty-trash/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/presign-get",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/presign-get/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/files/proxy-download",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/proxy-download/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "/api/files/presign-get"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/files/rename",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/rename/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/files/zip",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/files/zip/route.ts",
+      "backend": "next",
+      "what": "files",
+      "services": [
+        "@/lib/logger-client",
+        "/api/files/zip"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/folders/by-slug/:username/:path",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/folders/by-slug/[username]/[...path]/route.ts",
+      "backend": "next",
+      "what": "folders",
+      "services": [
+        "@/lib/logger-client",
+        "/api/folders/by-slug"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/folders/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/folders/create/route.ts",
+      "backend": "next",
+      "what": "folders",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger-client",
+        "@/lib/utils/app-ownership"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/permanent-delete",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/folders/permanent-delete/route.ts",
+      "backend": "next",
+      "what": "folders",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/root",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/folders/root/route.ts",
+      "backend": "next",
+      "what": "folders",
+      "services": [
+        "@/lib/logger-client",
+        "/api/folders/root"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/folders/set-main",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/folders/set-main/route.ts",
+      "backend": "next",
+      "what": "folders",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger-client",
+        "@/lib/utils/app-ownership"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/api/health",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "file": "app/api/health/route.ts",
+      "backend": "next",
+      "what": "health",
+      "services": [],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/platform/accounts",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/platform/accounts/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/platform/accounts"
+      ],
+      "firestore": [
+        "platform",
+        "accounts"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/accounts/:uid",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/platform/accounts/[uid]/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/platform/audit",
+        "@/lib/platform/accounts"
+      ],
+      "firestore": [
+        "platform",
+        "accounts",
+        "plans"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/accounts/ensure",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/platform/accounts/ensure/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "platform",
+        "accounts"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/payments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/platform/payments/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/platform/audit",
+        "@/lib/platform/payments"
+      ],
+      "firestore": [
+        "platform",
+        "payments"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/plans",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "app/api/platform/plans/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/platform/audit",
+        "@/lib/platform/plans"
+      ],
+      "firestore": [
+        "platform",
+        "plans"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/plans/:planId",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/platform/plans/[planId]/route.ts",
+      "backend": "next",
+      "what": "platform",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/platform/audit",
+        "@/lib/platform/plans"
+      ],
+      "firestore": [
+        "platform",
+        "plans"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/shares/[token]/route.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/logger-client",
+        "/api/shares"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/shares/:token/download",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/shares/[token]/download/route.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/logger-client",
+        "/api/shares"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/shares/:token/image",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/shares/[token]/image/route.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/logger-client",
+        "/api/shares"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/shares/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/shares/create/route.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/create",
+      "methods": [],
+      "file": "app/api/shares/create/route.v2.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/middleware/api-auth",
+        "@/lib/schemas/api-schemas",
+        "@/lib/logger"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/shares/revoke/route.ts",
+      "backend": "next",
+      "what": "shares",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/impersonate",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/superdev/impersonate/route.ts",
+      "backend": "next",
+      "what": "superdev",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger",
+        "@/lib/middleware/superdev-auth"
+      ],
+      "firestore": [
+        "apps",
+        "owners"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/list-owners",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/superdev/list-owners/route.ts",
+      "backend": "next",
+      "what": "superdev",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/logger",
+        "@/lib/middleware/superdev-auth"
+      ],
+      "firestore": [
+        "apps",
+        "owners"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/confirm",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/uploads/confirm/route.ts",
+      "backend": "next",
+      "what": "uploads",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "uploadSessions",
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/confirm",
+      "methods": [],
+      "file": "app/api/uploads/confirm/route.v2.ts",
+      "backend": "next",
+      "what": "uploads",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/middleware/api-auth",
+        "@/lib/schemas/api-schemas",
+        "@/lib/logger",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "uploadFingerprints",
+        "uploadSessions",
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/presign",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/uploads/presign/route.ts",
+      "backend": "next",
+      "what": "uploads",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/b2"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "uploadSessions"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/presign",
+      "methods": [],
+      "file": "app/api/uploads/presign/route.v2.ts",
+      "backend": "next",
+      "what": "uploads",
+      "services": [
+        "@/lib/firebase-admin",
+        "@/lib/b2",
+        "@/lib/middleware/api-auth",
+        "@/lib/schemas/api-schemas",
+        "@/lib/logger"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "uploadSessions"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/proxy-upload",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/uploads/proxy-upload/route.ts",
+      "backend": "next",
+      "what": "uploads",
+      "services": [
+        "@/lib/logger-client",
+        "/api/uploads/proxy-upload"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/user/plan",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/user/plan/route.ts",
+      "backend": "next",
+      "what": "user",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin",
+        "@/lib/plans"
+      ],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/user/settings",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/user/settings/route.ts",
+      "backend": "next",
+      "what": "user",
+      "services": [
+        "@/lib/logger-client",
+        "@/lib/firebase-admin"
+      ],
+      "firestore": [
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/user/taskbar",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/user/taskbar/route.ts",
+      "backend": "next",
+      "what": "user",
+      "services": [
+        "@/lib/logger-client",
+        "/api/user/taskbar"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/users/initialize",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/users/initialize/route.ts",
+      "backend": "next",
+      "what": "users",
+      "services": [
+        "@/lib/logger-client",
+        "/api/users/initialize"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/users/profile",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/users/profile/route.ts",
+      "backend": "next",
+      "what": "users",
+      "services": [
+        "@/lib/logger-client",
+        "/api/users/profile"
+      ],
+      "firestore": []
+    }
+  ],
+  "expressEndpoints": [
+    {
+      "endpoint": "/api/accounts/ensure",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/accounts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "platform",
+        "accounts"
+      ]
+    },
+    {
+      "endpoint": "/api/accounts/me",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/accounts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "platform",
+        "accounts"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/create-user",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/admin.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "apps",
+        "vehicles",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/email-config",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/admin.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "apps",
+        "vehicles",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/email-config",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "backend/src/routes/admin.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "apps",
+        "vehicles",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/sync-access-users",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/admin.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "apps",
+        "vehicles",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/vehicle-alerts",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "backend/src/routes/admin.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "apps",
+        "vehicles",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/info/:fileId",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/audio.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../services/audio-processing",
+        "../services/audio-processing-simple",
+        "../services/metadata"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/master",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/audio.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../services/audio-processing",
+        "../services/audio-processing-simple",
+        "../services/metadata"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/test-ffmpeg",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/audio.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../services/audio-processing",
+        "../services/audio-processing-simple",
+        "../services/metadata"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/cache/clear",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/index.js",
+      "backend": "express",
+      "what": "src",
+      "services": [
+        "./middleware/auth",
+        "./middleware/superdev-auth",
+        "./middleware/cache",
+        "./middleware/request-logger"
+      ],
+      "firestore": [
+        "apps"
+      ]
+    },
+    {
+      "endpoint": "/api/cache/stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/index.js",
+      "backend": "express",
+      "what": "src",
+      "services": [
+        "./middleware/auth",
+        "./middleware/superdev-auth",
+        "./middleware/cache",
+        "./middleware/request-logger"
+      ],
+      "firestore": [
+        "apps"
+      ]
+    },
+    {
+      "endpoint": "/api/chat/query",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/chat.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-store",
+        "../services/chat-service"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/chat/status",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/chat.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-store",
+        "../services/chat-service"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/dashboard/summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/dashboard.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "meta",
+        "vehicles"
+      ]
+    },
+    {
+      "endpoint": "/api/email-inbound",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/emailWebhook.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "apps"
+      ]
+    },
+    {
+      "endpoint": "/api/email-local-ingest",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/email-receptor.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventParser",
+        "../services/vehicleEventService"
+      ],
+      "firestore": [
+        "_",
+        "apps",
+        "inbox",
+        "unclassifiedEmails"
+      ]
+    },
+    {
+      "endpoint": "/api/email/daily-consistency",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/email/daily-metrics",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/email/debug-pending-alerts",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/email/get-pending-daily-alerts",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/email/mark-alert-sent",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/email/sync-access-users",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/emailAlerts.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/vehicleEventService",
+        "../services/dailyMetricsService",
+        "../services/email/emailTemplateBuilder"
+      ],
+      "firestore": [
+        "apps",
+        "dailyAlerts",
+        "vehicles",
+        "meta",
+        "responsables",
+        "alerts",
+        "config"
+      ]
+    },
+    {
+      "endpoint": "/api/feedback/:feedbackId",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "backend/src/routes/feedback.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/feedback-service"
+      ],
+      "firestore": [
+        "feedback"
+      ]
+    },
+    {
+      "endpoint": "/api/feedback/",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/feedback.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/feedback-service"
+      ],
+      "firestore": [
+        "feedback"
+      ]
+    },
+    {
+      "endpoint": "/api/feedback/",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/feedback.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/feedback-service"
+      ],
+      "firestore": [
+        "feedback"
+      ]
+    },
+    {
+      "endpoint": "/api/files/delete",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/list",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/permanent-delete",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/presign-get",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/rename",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/replace",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/files/zip",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/files.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/cache"
+      ],
+      "firestore": [
+        "files",
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/by-slug/:username/:path(*)",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/folders.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/metadata",
+        "../middleware/cache",
+        "../services/contract-validators",
+        "../services/contract-metrics",
+        "../services/contract-feature-flags"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/folders.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/metadata",
+        "../middleware/cache",
+        "../services/contract-validators",
+        "../services/contract-metrics",
+        "../services/contract-feature-flags"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/folders.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/metadata",
+        "../middleware/cache",
+        "../services/contract-validators",
+        "../services/contract-metrics",
+        "../services/contract-feature-flags"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/folders.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/metadata",
+        "../middleware/cache",
+        "../services/contract-validators",
+        "../services/contract-metrics",
+        "../services/contract-feature-flags"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/root",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/folders.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/metadata",
+        "../middleware/cache",
+        "../services/contract-validators",
+        "../services/contract-metrics",
+        "../services/contract-feature-flags"
+      ],
+      "firestore": [
+        "files",
+        "users",
+        "userSettings"
+      ]
+    },
+    {
+      "endpoint": "/api/github/status",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/github-status.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/health/",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/health.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/horarios/semana-actual",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/horarios.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/horarios/semana-actual",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/horarios.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/api/repository/index",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/repository-index.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-lock",
+        "../services/repository-indexer"
+      ],
+      "firestore": [
+        "apps",
+        "repositories",
+        "brains",
+        "metrics"
+      ]
+    },
+    {
+      "endpoint": "/api/repository/status/:repositoryId",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/repository-index.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-lock",
+        "../services/repository-indexer"
+      ],
+      "firestore": [
+        "apps",
+        "repositories",
+        "brains",
+        "metrics"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token/download",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token/image",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token/image",
+      "methods": [
+        "OPTIONS"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token/increment-counter",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/:token",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/shares.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2",
+        "../middleware/auth",
+        "../services/cloudmersive"
+      ],
+      "firestore": [
+        "files",
+        "shares"
+      ]
+    },
+    {
+      "endpoint": "/api/stores/:storeId/backup",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/stores/sheets.js",
+      "backend": "express",
+      "what": "stores",
+      "services": [],
+      "firestore": [
+        "stores",
+        "products"
+      ]
+    },
+    {
+      "endpoint": "/api/stores/:storeId/products",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/stores/sheets.js",
+      "backend": "express",
+      "what": "stores",
+      "services": [],
+      "firestore": [
+        "stores",
+        "products"
+      ]
+    },
+    {
+      "endpoint": "/api/stores/:storeId/sheets/create",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/stores/sheets.js",
+      "backend": "express",
+      "what": "stores",
+      "services": [],
+      "firestore": [
+        "stores",
+        "products"
+      ]
+    },
+    {
+      "endpoint": "/api/stores/:storeId/sheets/sync",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/stores/sheets.js",
+      "backend": "express",
+      "what": "stores",
+      "services": [],
+      "firestore": [
+        "stores",
+        "products"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/impersonate",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/superdev.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "apps",
+        "owners"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/list-owners",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/superdev.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "apps",
+        "owners"
+      ]
+    },
+    {
+      "endpoint": "/api/test-upload",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/index.js",
+      "backend": "express",
+      "what": "src",
+      "services": [
+        "./middleware/auth",
+        "./middleware/superdev-auth",
+        "./middleware/cache",
+        "./middleware/request-logger"
+      ],
+      "firestore": [
+        "apps"
+      ]
+    },
+    {
+      "endpoint": "/api/users/by-username/:username",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/users.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/users/initialize",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/users.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/users/profile",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/users.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/api/users/profile",
+      "methods": [
+        "PUT"
+      ],
+      "file": "backend/src/routes/users.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [],
+      "firestore": [
+        "users"
+      ]
+    },
+    {
+      "endpoint": "/health",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/index.js",
+      "backend": "express",
+      "what": "src",
+      "services": [
+        "./middleware/auth",
+        "./middleware/superdev-auth",
+        "./middleware/cache",
+        "./middleware/request-logger"
+      ],
+      "firestore": [
+        "apps"
+      ]
+    },
+    {
+      "endpoint": "/repositories/:repositoryId/status",
+      "methods": [
+        "GET"
+      ],
+      "file": "backend/src/routes/repositories.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-store",
+        "../services/repository-indexer-async"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/repositories/index",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/repositories.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/repository-store",
+        "../services/repository-indexer-async"
+      ],
+      "firestore": []
+    },
+    {
+      "endpoint": "/upload/",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/routes/external-upload.js",
+      "backend": "express",
+      "what": "routes",
+      "services": [
+        "../services/b2"
+      ],
+      "firestore": [
+        "files"
+      ]
+    },
+    {
+      "endpoint": "/upload",
+      "methods": [
+        "POST"
+      ],
+      "file": "backend/src/index.js",
+      "backend": "express",
+      "what": "src",
+      "services": [
+        "./middleware/auth",
+        "./middleware/superdev-auth",
+        "./middleware/cache",
+        "./middleware/request-logger"
+      ],
+      "firestore": [
+        "apps"
+      ]
+    }
+  ],
+  "frontendUsage": [
+    {
+      "endpoint": "/api/admin/create-user",
+      "files": [
+        "app/api/admin/create-user/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/admin/create-user/route.ts",
+      "files": [
+        "app/api/admin/create-user/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/info/",
+      "files": [
+        "app/api/audio/master/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/master",
+      "files": [
+        "app/api/audio/master/route.ts",
+        "components/drive/AudioMasteringModal.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/test-ffmpeg",
+      "files": [
+        "app/api/audio/test-ffmpeg/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/audio/test-simple",
+      "files": [
+        "components/drive/AudioMasteringModal.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/billing/checkout",
+      "files": [
+        "app/settings/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/create-user",
+      "files": [
+        "app/api/create-user/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/delete",
+      "files": [
+        "components/drive/ContextMenu.tsx",
+        "components/drive/TrashView.tsx",
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/empty-trash",
+      "files": [
+        "components/drive/TrashView.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/files/list",
+      "files": [
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/presign-get",
+      "files": [
+        "app/api/files/proxy-download/route.ts",
+        "hooks/useContextMenuActions.ts",
+        "hooks/useFileDownloadUrl.ts",
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/proxy-download",
+      "files": [
+        "components/drive/details/FilePreview.tsx",
+        "components/drive/DetailsPanel.tsx",
+        "components/drive/ImageCropModal.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/files/rename",
+      "files": [
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/replace",
+      "files": [
+        "components/drive/details/FilePreview.tsx",
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/files/zip",
+      "files": [
+        "app/api/files/zip/route.ts",
+        "components/drive/DetailsPanel.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/by-slug/",
+      "files": [
+        "app/api/folders/by-slug/[username]/[...path]/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/create",
+      "files": [
+        "app/api/folders/create/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/permanent-delete",
+      "files": [
+        "components/drive/TrashView.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/root",
+      "files": [
+        "app/api/folders/root/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/folders/set-main",
+      "files": [
+        "app/api/folders/create/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/health",
+      "files": [
+        "hooks/useConnectionStatus.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/health/route.ts",
+      "files": [
+        "app/api/health/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/operarios/create",
+      "files": [
+        "app/api/admin/create-user/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/accounts",
+      "files": [
+        "app/api/platform/accounts/route.ts",
+        "app/platform/console/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/accounts/",
+      "files": [
+        "app/api/platform/accounts/[uid]/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/accounts/ensure",
+      "files": [
+        "app/api/platform/accounts/ensure/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/payments",
+      "files": [
+        "app/api/platform/payments/route.ts",
+        "app/platform/console/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/plans",
+      "files": [
+        "app/api/platform/plans/route.ts",
+        "app/platform/console/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/platform/plans/",
+      "files": [
+        "app/api/platform/plans/route.ts",
+        "app/api/platform/plans/[planId]/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/",
+      "files": [
+        "app/api/shares/[token]/download/route.ts",
+        "app/api/shares/[token]/image/route.ts",
+        "app/api/shares/[token]/route.ts",
+        "app/share/[token]/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/shares/create",
+      "files": [
+        "components/drive/FileExplorer.tsx",
+        "hooks/useContextMenuActions.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/impersonate",
+      "files": [
+        "app/api/superdev/impersonate/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/superdev/list-owners",
+      "files": [
+        "app/api/superdev/list-owners/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/confirm",
+      "files": [
+        "app/api/uploads/confirm/route.ts",
+        "app/api/uploads/confirm/route.v2.ts",
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/presign",
+      "files": [
+        "lib/controlfile-sdk.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/uploads/proxy-upload",
+      "files": [
+        "app/api/uploads/proxy-upload/route.ts",
+        "hooks/useProxyUpload.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/user/plan",
+      "files": [
+        "app/settings/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/user/settings",
+      "files": [
+        "app/settings/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/user/taskbar",
+      "files": [
+        "app/api/user/taskbar/route.ts",
+        "hooks/useTaskbar.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/users/initialize",
+      "files": [
+        "app/api/users/initialize/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/users/profile",
+      "files": [
+        "app/api/users/profile/route.ts",
+        "components/user/UserProfile.tsx"
+      ]
+    }
+  ]
+}

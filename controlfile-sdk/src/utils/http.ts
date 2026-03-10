@@ -51,6 +51,7 @@ export class HttpClient {
     // Headers del SDK (internos, no expuestos)
     headers.set('X-SDK-Version', '1.0.0');
     headers.set('X-SDK-Client', '@controlfile/sdk');
+    headers.set('x-request-id', this.createRequestId());
 
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
@@ -179,6 +180,14 @@ export class HttpClient {
   /**
    * Delay para reintentos
    */
+  private createRequestId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    return `sdk-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }

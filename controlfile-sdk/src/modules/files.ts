@@ -65,7 +65,7 @@ export class FilesModule {
     }
 
     const queryString = qs.toString();
-    const path = `/api/files/list${queryString ? `?${queryString}` : ''}`;
+    const path = `/v1/files/list${queryString ? `?${queryString}` : ''}`;
 
     const response = await this.http.call<{
       items?: FileItem[];
@@ -93,7 +93,7 @@ export class FilesModule {
       fileName: string;
       fileSize: number;
       mimeType: string;
-    }>('/api/files/presign-get', {
+    }>('/v1/files/presign-get', {
       method: 'POST',
       body: JSON.stringify({ fileId }),
     });
@@ -130,7 +130,7 @@ export class FilesModule {
     }
 
     const presignResponse = await this.http.call<PresignUploadResponse>(
-      '/api/uploads/presign',
+      '/v1/uploads/presign',
       {
         method: 'POST',
         body: JSON.stringify({
@@ -166,7 +166,7 @@ export class FilesModule {
 
     // Paso 3: Confirmar upload
     const confirmResponse = await this.http.call<ConfirmUploadResponse>(
-      '/api/uploads/confirm',
+      '/v1/uploads/confirm',
       {
         method: 'POST',
         body: JSON.stringify({
@@ -250,7 +250,7 @@ export class FilesModule {
   async delete(fileId: string): Promise<void> {
     validateFileId(fileId);
 
-    await this.http.call('/api/files/delete', {
+    await this.http.call('/v1/files/delete', {
       method: 'POST',
       body: JSON.stringify({ fileId }),
     });
@@ -263,7 +263,7 @@ export class FilesModule {
     validateFileId(fileId);
     validateFileName(newName);
 
-    await this.http.call('/api/files/rename', {
+    await this.http.call('/v1/files/rename', {
       method: 'POST',
       body: JSON.stringify({ fileId, newName }),
     });
@@ -285,7 +285,7 @@ export class FilesModule {
       message: string;
       size: number;
       mime: string;
-    }>('/api/files/replace', {
+    }>('/v1/files/replace', {
       method: 'POST',
       body: formData,
     }, true); // requireAuth
