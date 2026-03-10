@@ -75,6 +75,32 @@ export class ControlFileClient {
     });
   }
 
+  async listPlatformAccounts(params: { status?: string; limit?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.limit) qs.set('limit', String(params.limit));
+    return this.call(`/v1/platform/accounts${qs.toString() ? `?${qs.toString()}` : ''}`, { method: 'GET' });
+  }
+
+  async listPlatformPlans() {
+    return this.call('/v1/platform/plans', { method: 'GET' });
+  }
+
+  async listPlatformPayments(params: { uid?: string; status?: string; limit?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.uid) qs.set('uid', params.uid);
+    if (params.status) qs.set('status', params.status);
+    if (params.limit) qs.set('limit', String(params.limit));
+    return this.call(`/v1/platform/payments${qs.toString() ? `?${qs.toString()}` : ''}`, { method: 'GET' });
+  }
+
+  async createCheckout(planId: string, interval: 'monthly' | 'yearly') {
+    return this.call('/v1/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ planId, interval }),
+    });
+  }
+
   async updateUserPlan(planId: string, interval: 'monthly' | 'yearly') {
     return this.call('/v1/users/plan', {
       method: 'POST',

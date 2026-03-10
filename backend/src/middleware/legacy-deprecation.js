@@ -22,6 +22,16 @@ function legacyDeprecation(req, res, next) {
   res.setHeader('Sunset', sunset);
   res.setHeader('Link', `<${migrationDoc}>; rel="deprecation"; type="text/markdown"`);
 
+  // Minimal telemetry for sunset readiness.
+  const actor = req.user?.uid || req.uid || 'anonymous';
+  console.log('[legacy-api-usage]', JSON.stringify({
+    method: req.method,
+    path: req.path,
+    actor,
+    userAgent: req.headers['user-agent'] || '',
+    at: new Date().toISOString(),
+  }));
+
   return next();
 }
 

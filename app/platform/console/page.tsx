@@ -10,6 +10,7 @@ import type { PlatformPlan } from '@/lib/platform/plans';
 import type { PlatformPayment } from '@/lib/platform/payments';
 import { resolveAccountStates, type ResolvedAccountState } from '@/lib/platform/resolveAccount';
 import { checkPlatformOwnerAccess } from '@/lib/platform/verifyOwner';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 export default function PlatformConsolePage() {
   const { user } = useAuth();
@@ -48,47 +49,21 @@ export default function PlatformConsolePage() {
 
   const loadData = async () => {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const token = await auth?.currentUser?.getIdToken();
-      if (!token) {
-        setError('No autorizado');
-        setLoading(false);
-        return;
-      }
+      const client = createBrowserControlFileClient();
 
-      // Cargar cuentas, planes y pagos en paralelo
-      const [accountsRes, plansRes, paymentsRes] = await Promise.all([
-        fetch('/api/platform/accounts', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('/api/platform/plans', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('/api/platform/payments', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [accountsData, plansData, paymentsData] = await Promise.all([
+        client.listPlatformAccounts({ limit: 100 }) as Promise<{ accounts?: PlatformAccount[] }>,
+        client.listPlatformPlans() as Promise<{ plans?: PlatformPlan[] }>,
+        client.listPlatformPayments({ limit: 100 }) as Promise<{ payments?: PlatformPayment[] }>,
       ]);
-
-      if (!accountsRes.ok || !plansRes.ok || !paymentsRes.ok) {
-        const errorText = await accountsRes.text().catch(() => 'Error desconocido');
-        setError(`Error cargando datos: ${errorText}`);
-        setLoading(false);
-        return;
-      }
-
-      const accountsData = await accountsRes.json();
-      const plansData = await plansRes.json();
-      const paymentsData = await paymentsRes.json();
 
       const accounts: PlatformAccount[] = accountsData.accounts || [];
       const plansList: PlatformPlan[] = plansData.plans || [];
       const paymentsList: PlatformPayment[] = paymentsData.payments || [];
 
-      // Crear mapa de planes para resolución eficiente
       const plansMap = new Map<string, PlatformPlan>();
       plansList.forEach(plan => plansMap.set(plan.planId, plan));
 
-      // Resolver estados de cuentas usando capa de dominio
       const resolved = resolveAccountStates(accounts, plansMap);
 
       setResolvedAccounts(resolved);

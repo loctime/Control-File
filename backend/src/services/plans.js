@@ -24,7 +24,16 @@ function findPlanById(planId) {
   return plans.find((plan) => plan.planId === planId) || null;
 }
 
+function getPlanPrice(plan, interval = 'monthly') {
+  if (!plan) return 0;
+  if (interval === 'yearly') {
+    return plan.yearlyPrice != null ? plan.yearlyPrice : Number(plan.price || 0) * 12;
+  }
+  return Number(plan.price || 0);
+}
+
 module.exports = {
   loadCatalog,
   findPlanById,
+  getPlanPrice,
 };

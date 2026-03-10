@@ -18,6 +18,7 @@ import {
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { getPlansCatalogSync, getRecommendedUpsells, formatPrice, getPlanPrice } from '@/lib/plans';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 export default function SettingsPage() {
   const { user, logOut } = useAuth();
@@ -37,47 +38,30 @@ export default function SettingsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { auth } = await import('@/lib/firebase');
-        const token = await auth?.currentUser?.getIdToken();
-        if (token) {
-          const res = await fetch('/api/user/settings', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.billingInterval === 'monthly' || data?.billingInterval === 'yearly') {
-              setInterval(data.billingInterval);
-            } else {
-              const saved = typeof window !== 'undefined' ? localStorage.getItem('billingInterval') : null;
-              if (saved === 'monthly' || saved === 'yearly') setInterval(saved);
-            }
-          }
+        const client = createBrowserControlFileClient();
+        const data = await client.getUserSettings();
+        if (data?.billingInterval === 'monthly' || data?.billingInterval === 'yearly') {
+          setInterval(data.billingInterval);
+        } else {
+          const saved = typeof window !== 'undefined' ? localStorage.getItem('billingInterval') : null;
+          if (saved === 'monthly' || saved === 'yearly') setInterval(saved);
         }
       } catch {}
     })();
   }, []);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('billingInterval', interval);
     }
     (async () => {
       try {
-        const { auth } = await import('@/lib/firebase');
-        const token = await auth?.currentUser?.getIdToken();
-        if (!token) return;
-        await fetch('/api/user/settings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ billingInterval: interval }),
-        });
+        const client = createBrowserControlFileClient();
+        await client.saveUserSettings(interval);
       } catch {}
     })();
   }, [interval]);
+
   const upsells = getRecommendedUpsells(totalBytes);
 
   const getQuotaColor = (percentage: number) => {
@@ -100,16 +84,8 @@ export default function SettingsPage() {
       const { auth } = await import('@/lib/firebase');
       const token = await auth?.currentUser?.getIdToken();
       if (!token) throw new Error('No autenticado');
-      const res = await fetch('/api/user/plan', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ planId, interval }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error actualizando plan');
+      const client = createBrowserControlFileClient();
+      const data = await client.updateUserPlan(planId, interval);
       // Refrescar datos locales
       if (typeof window !== 'undefined') {
         window.location.reload();
@@ -266,16 +242,8 @@ export default function SettingsPage() {
                               const { auth } = await import('@/lib/firebase');
                               const token = await auth?.currentUser?.getIdToken();
                               if (!token) throw new Error('No autenticado');
-                              const res = await fetch('/api/billing/checkout', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({ planId: plan.planId, interval }),
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Error iniciando checkout');
+                              const client = createBrowserControlFileClient();
+                              const data = await client.createCheckout(plan.planId, interval);
                               if (typeof window !== 'undefined') {
                                 window.location.href = data.url;
                               }
