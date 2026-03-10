@@ -1,58 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { logError } from '@/lib/logger-client';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+function backendUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
+
+function authHeader(request: NextRequest) {
+  return request.headers.get('Authorization') || request.headers.get('authorization') || '';
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    const { fileId } = await request.json();
-    if (!fileId) {
-      return NextResponse.json({ error: 'ID de archivo requerido' }, { status: 400 });
-    }
-
-    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
-
-    // Solicitar al backend la URL de descarga presignada (el backend valida el token)
-    const presignResp = await fetch(`${backendUrl}/api/files/presign-get`, {
+    const body = await request.text();
+    const upstream = await fetch(`${backendUrl()}/v1/files/presign-get`, {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
+        Authorization: authHeader(request),
+        'Content-Type': request.headers.get('content-type') || 'application/json',
       },
-      body: JSON.stringify({ fileId }),
+      body,
     });
 
-    if (!presignResp.ok) {
-      const errBody = await presignResp.json().catch(() => ({}));
-      return NextResponse.json({ error: errBody.error || 'No se pudo generar la URL' }, { status: 502 });
+    const data = await upstream.json();
+    if (!upstream.ok) {
+      return NextResponse.json(data, { status: upstream.status });
     }
 
-    const data = await presignResp.json();
     const url = data.downloadUrl || data.presignedUrl;
     if (!url) {
-      return NextResponse.json({ error: 'Respuesta inválida del backend' }, { status: 502 });
+      return NextResponse.json({ error: 'Respuesta invalida del backend' }, { status: 502 });
     }
 
-    const upstream = await fetch(url);
-    if (!upstream.ok || !upstream.body) {
+    const fileResp = await fetch(url);
+    if (!fileResp.ok || !fileResp.body) {
       return NextResponse.json({ error: 'No se pudo obtener el archivo' }, { status: 502 });
     }
 
-    const headers = new Headers();
-    headers.set('Content-Type', upstream.headers.get('Content-Type') || 'application/octet-stream');
-    headers.set('Cache-Control', 'private, max-age=60');
-
-    return new NextResponse(upstream.body, { status: 200, headers });
-  } catch (error) {
-    logError(error, 'proxying download');
+    return new NextResponse(fileResp.body, {
+      status: 200,
+      headers: {
+        'Content-Type': fileResp.headers.get('Content-Type') || 'application/octet-stream',
+        'Cache-Control': 'private, max-age=60',
+      },
+    });
+  } catch {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
-
-

@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { getAuth } from 'firebase/auth';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 import { FilePreview } from '@/components/drive/details/FilePreview';
 import { AudioMasteringModal } from '@/components/drive/AudioMasteringModal';
 
@@ -28,6 +29,7 @@ import { AudioMasteringModal } from '@/components/drive/AudioMasteringModal';
 export function DetailsPanel() {
   const { currentFolderId, items, selectedItems, getSubfolders } = useDriveStore();
   const { toggleDetailsPanel, addToast } = useUIStore();
+  const sdk = useMemo(() => createBrowserControlFileClient(), []);
   const [isAudioMasteringModalOpen, setIsAudioMasteringModalOpen] = useState(false);
   
   // Obtener archivos directamente del hook useFiles para asegurar sincronización
@@ -66,19 +68,11 @@ export function DetailsPanel() {
         addToast({ type: 'error', title: 'No autenticado', message: 'Inicia sesión para descargar' });
         return;
       }
-      const token = await currentUser.getIdToken();
-      const resp = await fetch('/api/files/proxy-download', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ fileId }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || `Error ${resp.status}`);
-      }
+      const data = await sdk.presignGet(fileId);
+      const urlToFetch = data.downloadUrl || data.presignedUrl;
+      if (!urlToFetch) throw new Error('No se pudo generar la descarga');
+      const resp = await fetch(urlToFetch);
+      if (!resp.ok) throw new Error(`Error ${resp.status}`);
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -180,22 +174,9 @@ export function DetailsPanel() {
                     addToast({ type: 'error', title: 'No autenticado', message: 'Inicia sesión para descargar' });
                     return;
                   }
-                  const token = await currentUser.getIdToken();
                   const fileIds = selectedFiles.filter(f => f.type === 'file').map(f => f.id);
                   if (fileIds.length === 0) return;
-                  const resp = await fetch('/api/files/zip', {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ fileIds, zipName: 'archivos' }),
-                  });
-                  if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    throw new Error(err.error || `Error ${resp.status}`);
-                  }
-                  const blob = await resp.blob();
+                  const blob = await sdk.zip(fileIds, 'archivos');
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
@@ -386,3 +367,5 @@ export function DetailsPanel() {
     </div>
   );
 }
+
+

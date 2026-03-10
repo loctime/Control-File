@@ -28,6 +28,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useUIStore } from '@/lib/stores/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAuth } from 'firebase/auth';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 import { isImageFile, isPDFFile, isVideoFile, isAudioFile, isTextFile, isOfficeFile } from '@/lib/utils';
 
 function ImagePreview({ file }: { file: any }) {
@@ -121,15 +122,12 @@ function ImagePreview({ file }: { file: any }) {
                 const auth = getAuth();
                 const currentUser = auth.currentUser;
                 if (!currentUser) return;
-                const token = await currentUser.getIdToken();
-                const resp = await fetch('/api/files/proxy-download', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ fileId: file.id }),
-                });
+                const sdk = createBrowserControlFileClient();
+                const data = await sdk.presignGet(file.id);
+                const urlToFetch = data.downloadUrl || data.presignedUrl;
+                if (!urlToFetch) throw new Error('No se pudo generar la descarga');
+                const resp = await fetch(urlToFetch);
+                if (!resp.ok) throw new Error(`Error ${resp.status}`);
                 const blob = await resp.blob();
                 const objUrl = URL.createObjectURL(blob);
                 const img = new Image();
@@ -165,7 +163,7 @@ function ImagePreview({ file }: { file: any }) {
                     const filePart = new Blob([outBlob], { type: 'image/png' });
                     form.append('file', filePart, fileName);
                     form.append('fileId', file.id);
-                    const respReplace = await fetch(`${backendUrl}/api/files/replace`, {
+                    const respReplace = await fetch(`${backendUrl}/v1/files/replace`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${token}` },
                       body: form,
@@ -521,5 +519,8 @@ export function FilePreview({ file }: { file: any }) {
     </div>
   );
 }
+
+
+
 
 

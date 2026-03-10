@@ -1,44 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { logger, logError } from '@/lib/logger-client';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+function backendUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
+
+function authHeader(request: NextRequest) {
+  return request.headers.get('Authorization') || request.headers.get('authorization') || '';
+}
 
 export async function POST(request: NextRequest) {
   try {
-    logger.info('Next.js proxy upload endpoint called');
-
-    // Redirigir la petición al backend (configurable por entorno)
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
-    logger.debug('Backend URL', { backendUrl });
-
-    // Reenviar la solicitud como streaming sin parsear el cuerpo para evitar límites
     const headers = new Headers();
-    const auth = request.headers.get('authorization') || request.headers.get('Authorization') || '';
-    const contentType = request.headers.get('content-type') || request.headers.get('Content-Type') || '';
+    const auth = authHeader(request);
     if (auth) headers.set('Authorization', auth);
+    const contentType = request.headers.get('content-type');
     if (contentType) headers.set('Content-Type', contentType);
 
-    const backendResponse = await fetch(`${backendUrl}/api/uploads/proxy-upload`, {
+    const upstream = await fetch(`${backendUrl()}/v1/uploads/proxy-upload`, {
       method: 'POST',
       headers,
       body: request.body as any,
-      // @ts-expect-error: duplex es necesario para streams en Node 18
+      // @ts-expect-error Node stream upload
       duplex: 'half',
     });
 
-    // Passthrough de la respuesta del backend
-    const passthroughHeaders = new Headers();
-    passthroughHeaders.set('Content-Type', backendResponse.headers.get('content-type') || 'application/json');
-    return new NextResponse(backendResponse.body, {
-      status: backendResponse.status,
-      headers: passthroughHeaders,
+    const upstreamType = upstream.headers.get('content-type') || 'application/json';
+    if (upstreamType.includes('application/json')) {
+      const data = await upstream.json();
+      return NextResponse.json(data, { status: upstream.status });
+    }
+
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: { 'Content-Type': upstreamType },
     });
-  } catch (error) {
-    logError(error, 'proxy upload');
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

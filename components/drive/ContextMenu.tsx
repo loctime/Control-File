@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { 
   Download, 
   Share2, 
@@ -24,8 +24,7 @@ import {
 } from '@/components/ui/context-menu';
 import { DeleteConfirmModal } from '@/components/drive/DeleteConfirmModal';
 import { useDriveStore } from '@/lib/stores/drive';
-import { auth, db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 interface ContextMenuProps {
   children: React.ReactNode;
@@ -59,6 +58,7 @@ export function ContextMenu({
   isTrashView = false
 }: ContextMenuProps) {
   const { selectedItems, items, toggleItemSelection, restoreFromTrash, permanentlyDelete, moveToTrash } = useDriveStore();
+  const sdk = useMemo(() => createBrowserControlFileClient(), []);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'file' | 'folder' } | null>(null);
 
@@ -122,88 +122,21 @@ export function ContextMenu({
   const handleConfirmDelete = () => {
     if (itemToDelete) {
       if (isTrashView) {
-        // En vista de papelera, eliminar permanentemente
         (async () => {
           try {
-            const firebaseUser = auth?.currentUser;
-            if (!firebaseUser) throw new Error('Usuario no autenticado');
-            const token = await firebaseUser.getIdToken();
             const targets = hasSelection ? selectedFiles : items.filter(i => i.id === itemToDelete.id);
             const fileTargets = targets.filter(t => t.type === 'file');
             const folderTargets = targets.filter(t => t.type === 'folder');
 
-            // Archivos
-            await Promise.all(
-              fileTargets.map(t =>
-                fetch('/api/files/delete', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                  },
-                  body: JSON.stringify({ fileId: t.id }),
-                }).then(res => {
-                  if (!res.ok) throw new Error('Fallo al eliminar archivo');
-                  return res.json();
-                })
-              )
-            );
+            await Promise.all(fileTargets.map((t) => sdk.permanentDelete(t.id)));
+            await Promise.all(folderTargets.map((t) => sdk.deleteFolderPermanently(t.id)));
 
-            // Carpetas: eliminación recursiva desde cliente vía Firestore + endpoint de archivos
-            const deleteFolderRecursively = async (folderId: string) => {
-              if (!db || !firebaseUser) throw new Error('Firestore no disponible');
-              const userId = firebaseUser.uid;
-
-              // 1) Archivos dentro de la carpeta
-              const filesQ = query(
-                collection(db, 'files'),
-                where('userId', '==', userId),
-                where('parentId', '==', folderId)
-              );
-              const filesSnap = await getDocs(filesQ);
-              await Promise.all(
-                filesSnap.docs.map(async (d) => {
-                  const id = d.id;
-                  const res = await fetch('/api/files/delete', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({ fileId: id }),
-                  });
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err?.error || 'Fallo al eliminar archivo');
-                  }
-                })
-              );
-
-              // 2) Subcarpetas
-              const foldersQ = query(
-                collection(db, 'folders'),
-                where('userId', '==', userId),
-                where('parentId', '==', folderId)
-              );
-              const subSnap = await getDocs(foldersQ);
-              for (const sub of subSnap.docs) {
-                await deleteFolderRecursively(sub.id);
-              }
-
-              // 3) Borrar carpeta
-              await deleteDoc(doc(db, 'folders', folderId));
-            };
-
-            await Promise.all(folderTargets.map(t => deleteFolderRecursively(t.id)));
-
-            // Sincronizar store local
-            targets.forEach(t => permanentlyDelete(t.id));
+            targets.forEach((t) => permanentlyDelete(t.id));
           } catch (e) {
-            console.error('❌ Error en eliminación permanente:', e);
+            console.error('Error en eliminacion permanente:', e);
           }
         })();
       } else {
-        // En vista normal, mover a papelera
         if (hasSelection) {
           selectedFiles.forEach(item => moveToTrash(item.id));
         } else {
@@ -402,3 +335,4 @@ export function ContextMenu({
   </>
   );
 }
+

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { getAuth } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { useUIStore } from '@/lib/stores/ui';
 import { User } from '@/types';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 export function UserProfile() {
   const { user } = useAuth();
   const { addToast } = useUIStore();
+  const sdk = createBrowserControlFileClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     displayName: '',
@@ -50,33 +51,14 @@ export function UserProfile() {
 
     setLoading(true);
     try {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error('Usuario no autenticado');
-      }
-      
-      const response = await fetch('/api/users/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`,
-        },
-        body: JSON.stringify({
+      await sdk.updateProfile({
           displayName: formData.displayName,
           username: formData.username,
           bio: formData.bio,
           website: formData.website,
           location: formData.location,
           isPublic: formData.isPublic,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al actualizar perfil');
-      }
-
+        });
       addToast({
         type: 'success',
         title: 'Perfil actualizado',
@@ -234,3 +216,4 @@ export function UserProfile() {
     </div>
   );
 }
+

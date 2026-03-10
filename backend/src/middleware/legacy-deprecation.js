@@ -21,6 +21,7 @@ function legacyDeprecation(req, res, next) {
   res.setHeader('Deprecation', 'true');
   res.setHeader('Sunset', sunset);
   res.setHeader('Link', `<${migrationDoc}>; rel="deprecation"; type="text/markdown"`);
+  res.setHeader('X-Legacy-Route', 'true');
 
   // Minimal telemetry for sunset readiness.
   const actor = req.user?.uid || req.uid || 'anonymous';
@@ -28,7 +29,9 @@ function legacyDeprecation(req, res, next) {
     method: req.method,
     path: req.path,
     actor,
+    source: req.headers.origin || req.headers.referer || 'unknown',
     userAgent: req.headers['user-agent'] || '',
+    requestId: req.headers['x-request-id'] || null,
     at: new Date().toISOString(),
   }));
 

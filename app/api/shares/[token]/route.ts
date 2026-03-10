@@ -1,38 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { logError } from '@/lib/logger-client';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+function backendUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string } }
 ) {
   try {
-    const { token } = params;
-
-    if (!token) {
-      return NextResponse.json({ error: 'Token requerido' }, { status: 400 });
-    }
-
-    // Redirigir al backend
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
-    const backendResponse = await fetch(`${backendUrl}/api/shares/${token}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const responseData = await backendResponse.json();
-    
-    if (!backendResponse.ok) {
-      return NextResponse.json(
-        { error: responseData.error || 'Error en el servidor backend' },
-        { status: backendResponse.status }
-      );
-    }
-
-    return NextResponse.json(responseData);
-  } catch (error) {
-    logError(error, 'getting share info');
+    const upstream = await fetch(`${backendUrl()}/v1/shares/${params.token}`, { method: 'GET' });
+    const data = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
+  } catch {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

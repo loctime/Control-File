@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 interface ImageCropModalProps {
   isOpen: boolean;
@@ -50,15 +51,11 @@ export function ImageCropModal({ isOpen, onClose, imageUrl, fileId, onConfirm, o
           const auth = getAuth();
           const currentUser = auth.currentUser;
           if (!currentUser) throw new Error('No autenticado');
-          const token = await currentUser.getIdToken();
-          const resp = await fetch('/api/files/proxy-download', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ fileId }),
-          });
+          const sdk = createBrowserControlFileClient();
+          const data = await sdk.presignGet(fileId);
+          const urlToFetch = data.downloadUrl || data.presignedUrl;
+          if (!urlToFetch) throw new Error('No se pudo generar descarga');
+          const resp = await fetch(urlToFetch);
           if (!resp.ok) throw new Error('No se pudo descargar');
           const blob = await resp.blob();
           const objUrl = URL.createObjectURL(blob);
@@ -327,5 +324,6 @@ export function ImageCropModal({ isOpen, onClose, imageUrl, fileId, onConfirm, o
 }
 
 export default ImageCropModal;
+
 
 

@@ -49,8 +49,61 @@ export class ControlFileClient {
     return this.call('/v1/files/delete', { method: 'POST', body: JSON.stringify({ fileId }) });
   }
 
+  async permanentDelete(fileId: string) {
+    return this.call('/v1/files/permanent-delete', { method: 'POST', body: JSON.stringify({ fileId }) });
+  }
+
+  async emptyTrash(fileIds: string[]) {
+    return this.call('/v1/files/empty-trash', { method: 'POST', body: JSON.stringify({ fileIds }) });
+  }
+
   async rename(fileId: string, newName: string) {
     return this.call('/v1/files/rename', { method: 'POST', body: JSON.stringify({ fileId, newName }) });
+  }
+
+  async zip(fileIds: string[], zipName?: string) {
+    const token = await this.getToken();
+    const res = await fetch(`${this.baseUrl}/v1/files/zip`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fileIds, zipName }),
+    });
+    if (!res.ok) {
+      let err: unknown;
+      try { err = await res.json(); } catch { err = { error: res.statusText }; }
+      throw err;
+    }
+    return res.blob();
+  }
+
+  async createShare(fileId: string, expiresIn = 24) {
+    return this.call('/v1/shares/create', { method: 'POST', body: JSON.stringify({ fileId, expiresIn }) });
+  }
+
+  async revokeShare(shareToken: string) {
+    return this.call('/v1/shares/revoke', { method: 'POST', body: JSON.stringify({ shareToken }) });
+  }
+
+  async deleteFolderPermanently(folderId: string) {
+    return this.call('/v1/folders/permanent-delete', { method: 'POST', body: JSON.stringify({ folderId }) });
+  }
+
+  async getProfile() {
+    return this.call('/v1/users/profile', { method: 'GET' });
+  }
+
+  async updateProfile(body: {
+    displayName?: string;
+    username?: string;
+    bio?: string;
+    website?: string;
+    location?: string;
+    isPublic?: boolean;
+  }) {
+    return this.call('/v1/users/profile', { method: 'PUT', body: JSON.stringify(body) });
   }
 
   async getUserSettings() {
@@ -122,5 +175,3 @@ export class ControlFileClient {
     return res.json();
   }
 }
-
-

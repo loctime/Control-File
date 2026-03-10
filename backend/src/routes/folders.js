@@ -20,6 +20,7 @@ const admin = require('../firebaseAdmin');
 const { getFolderDoc } = require('../services/metadata');
 const { cacheFolders, invalidateCache } = require('../middleware/cache');
 const { logger } = require('../utils/logger');
+const { normalizeAppId } = require('../utils/app-ownership');
 const { detectCallerType } = require('../services/contract-validators');
 const { 
   recordRootFolderCreation, 
@@ -917,4 +918,141 @@ router.get('/root', async (req, res) => {
   }
 });
 
+async function deleteFolderRecursive(db, userId, folderId) {
+  const childrenSnapshot = await db
+    .collection('files')
+    .where('userId', '==', userId)
+    .where('parentId', '==', folderId)
+    .get();
+
+  const fileChildren = [];
+  const folderChildren = [];
+
+  childrenSnapshot.forEach((doc) => {
+    const data = doc.data() || {};
+    if (data.type === 'folder') {
+      folderChildren.push(doc.id);
+    } else {
+      fileChildren.push(doc.ref);
+    }
+  });
+
+  if (fileChildren.length > 0) {
+    const batch = db.batch();
+    fileChildren.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+
+  for (const subFolderId of folderChildren) {
+    await deleteFolderRecursive(db, userId, subFolderId);
+  }
+
+  await db.collection('files').doc(folderId).delete();
+}
+
+router.post('/permanent-delete', invalidateCache('delete'), async (req, res) => {
+  try {
+    const uid = req.user?.uid;
+    const folderId = req.body?.folderId;
+
+    if (!folderId || typeof folderId !== 'string') {
+      return res.status(400).json({ error: 'ID de carpeta requerido' });
+    }
+
+    const db = admin.firestore();
+    const folderRef = db.collection('files').doc(folderId);
+    const folderDoc = await folderRef.get();
+
+    if (!folderDoc.exists) {
+      return res.json({ success: true, deletedFolderId: folderId, note: 'Carpeta no encontrada (idempotente)' });
+    }
+
+    const folderData = folderDoc.data() || {};
+    if (folderData.userId !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+    if (folderData.type !== 'folder') {
+      return res.status(400).json({ error: 'El elemento no es una carpeta' });
+    }
+
+    await deleteFolderRecursive(db, uid, folderId);
+    return res.json({ success: true, deletedFolderId: folderId });
+  } catch (error) {
+    logger.error('Error permanently deleting folder', { error: error.message, userId: req.user?.uid, folderId: req.body?.folderId });
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+router.post('/set-main', invalidateCache('update'), async (req, res) => {
+  try {
+    const uid = req.user?.uid;
+    const folderId = req.body?.folderId;
+    const appRaw = req.body?.app;
+
+    if (!folderId || typeof folderId !== 'string') {
+      return res.status(400).json({ error: 'folderId es requerido' });
+    }
+    if (!appRaw || !appRaw.id || typeof appRaw.id !== 'string' || !appRaw.id.trim()) {
+      return res.status(400).json({ error: 'Missing app.id. Every folder or file must belong to an application.' });
+    }
+
+    const appId = normalizeAppId(appRaw.id);
+    const db = admin.firestore();
+    const folderRef = db.collection('files').doc(folderId);
+    const folderDoc = await folderRef.get();
+
+    if (!folderDoc.exists) {
+      return res.status(404).json({ error: 'Carpeta no encontrada' });
+    }
+
+    const folderData = folderDoc.data() || {};
+    if (folderData.userId !== uid) {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+    if (folderData.type !== 'folder') {
+      return res.status(400).json({ error: 'El elemento no es una carpeta' });
+    }
+    if (!folderData.appId) {
+      return res.status(400).json({ error: 'La carpeta no tiene appId. No se puede establecer como principal.' });
+    }
+
+    const folderAppId = normalizeAppId(folderData.appId);
+    if (folderAppId !== appId) {
+      return res.status(400).json({ error: `La carpeta pertenece a la app '${folderData.appId}', pero se solicito '${appRaw.id}'` });
+    }
+
+    const existingMainFolders = await db
+      .collection('files')
+      .where('userId', '==', uid)
+      .where('appId', '==', appId)
+      .where('type', '==', 'folder')
+      .where('metadata.isMainFolder', '==', true)
+      .get();
+
+    await db.runTransaction(async (transaction) => {
+      existingMainFolders.forEach((doc) => {
+        if (doc.id !== folderId) {
+          transaction.update(doc.ref, {
+            'metadata.isMainFolder': false,
+            updatedAt: new Date(),
+          });
+        }
+      });
+
+      transaction.update(folderRef, {
+        'metadata.isMainFolder': true,
+        updatedAt: new Date(),
+      });
+    });
+
+    return res.json({
+      success: true,
+      message: 'Carpeta principal establecida exitosamente',
+      folderId,
+    });
+  } catch (error) {
+    logger.error('Error setting main folder', { error: error.message, userId: req.user?.uid, folderId: req.body?.folderId });
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 module.exports = router;

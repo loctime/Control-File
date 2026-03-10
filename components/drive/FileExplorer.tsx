@@ -26,6 +26,7 @@ import { UploadOverlay } from '@/components/drive/UploadOverlay';
 import { DragDropLoader } from '@/components/drive/DragDropLoader';
 import { useProxyUpload } from '@/hooks/useProxyUpload';
 import { auth } from '@/lib/firebase';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { useExplorerShortcuts } from '@/hooks/useExplorerShortcuts';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -33,6 +34,7 @@ import { useNavigation } from '@/hooks/useNavigation';
 
 
 export function FileExplorer() {
+  const sdk = useMemo(() => createBrowserControlFileClient(), []);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const { syncStateWithUrl, navigateToFolder, navigateToRoot } = useNavigation();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -191,17 +193,7 @@ export function FileExplorer() {
         addToast({ type: 'error', title: 'Debes iniciar sesión para compartir' });
         return;
       }
-      const token = await firebaseUser.getIdToken();
-      const res = await fetch('/api/shares/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ fileId: itemId, expiresIn: 7 }),
-      });
-      if (!res.ok) throw new Error('No se pudo crear el enlace');
-      const data = await res.json();
+      const data = await sdk.createShare(itemId, 7);
       const shareId = data.shareId || data.shareToken; // compatibilidad backend
       const url = `${window.location.origin}/share/${shareId}`;
       await navigator.clipboard.writeText(url).catch(() => {});
@@ -211,7 +203,7 @@ export function FileExplorer() {
       console.error('❌ Error al compartir:', error);
       addToast({ type: 'error', title: 'Error al compartir', message: error?.message || 'Intenta nuevamente' });
     }
-  }, [addToast]);
+  }, [addToast, sdk]);
 
   // Usar handlers centralizados
   const {
@@ -526,4 +518,5 @@ export function FileExplorer() {
     </ContextMenu>
   );
 }
+
 

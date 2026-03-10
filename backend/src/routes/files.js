@@ -551,4 +551,70 @@ router.post('/replace', multer({ storage: multer.memoryStorage() }).single('file
   }
 });
 
+// Permanently delete multiple files from trash
+router.post('/empty-trash', invalidateCache('delete'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds : [];
+    const uid = req.user?.uid;
+
+    if (!fileIds.length) {
+      return res.status(400).json({ error: 'Lista de archivos vacia' });
+    }
+
+    const fileRefs = fileIds.map((id) => admin.firestore().collection('files').doc(id));
+    const fileDocs = await Promise.all(fileRefs.map((ref) => ref.get()));
+
+    const validDocs = [];
+    const notFound = [];
+    const unauthorized = [];
+
+    for (let i = 0; i < fileDocs.length; i++) {
+      const doc = fileDocs[i];
+      const id = fileIds[i];
+      if (!doc.exists) {
+        notFound.push(id);
+        continue;
+      }
+      const data = doc.data() || {};
+      if (data.userId !== uid) {
+        unauthorized.push(id);
+        continue;
+      }
+      validDocs.push({ id, size: data.size || 0, bucketKey: data.bucketKey });
+    }
+
+    await Promise.all(validDocs.map(async ({ bucketKey }) => {
+      try {
+        if (bucketKey) await b2Service.deleteObject(bucketKey);
+      } catch (e) {
+        logger.warn('B2 delete failed in empty-trash', { bucketKey, error: e?.message || e });
+      }
+    }));
+
+    const batch = admin.firestore().batch();
+    validDocs.forEach(({ id }) => {
+      batch.delete(admin.firestore().collection('files').doc(id));
+    });
+    await batch.commit();
+
+    const totalBytes = validDocs.reduce((acc, it) => acc + (typeof it.size === 'number' ? it.size : 0), 0);
+    if (totalBytes) {
+      await admin.firestore().collection('users').doc(uid).update({
+        usedBytes: admin.firestore.FieldValue.increment(-totalBytes),
+      });
+    }
+
+    return res.json({
+      success: true,
+      deletedIds: validDocs.map((d) => d.id),
+      notFound,
+      unauthorized,
+    });
+  } catch (error) {
+    logger.error('Error emptying trash', { error: error?.message || error, userId: req.user?.uid });
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;

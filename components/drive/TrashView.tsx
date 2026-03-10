@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Folder, File, Trash2, RotateCcw, Clock, AlertTriangle } from 'lucide-react';
 import { formatFileSize } from '@/lib/utils';
 import { DeleteConfirmModal } from '@/components/drive/DeleteConfirmModal';
-import { auth, db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 interface TrashViewProps {
   onOpenItem?: (itemId: string) => void;
@@ -51,6 +50,7 @@ export function TrashView({
   } = useDriveStore();
 
   const trashItems = getTrashItems();
+  const sdk = useMemo(() => createBrowserControlFileClient(), []);
 
   // Estado para selección por rango con Shift
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
@@ -146,55 +146,11 @@ export function TrashView({
     const foldersToDelete = selectedTrashItems.filter(item => item.type === 'folder');
     (async () => {
       try {
-        const firebaseUser = auth?.currentUser;
-        if (!firebaseUser) throw new Error('Usuario no autenticado');
-        const token = await firebaseUser.getIdToken();
-
-        // Eliminar archivos
-        await Promise.all(
-          filesToDelete.map(async (item) => {
-            try {
-              const res = await fetch('/api/files/delete', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ fileId: item.id }),
-              });
-              if (!res.ok) throw new Error('server-failed');
-              await res.json().catch(() => ({}));
-            } catch (_) {
-              // Fallback: borrar doc en Firestore
-              try {
-                const fdb = db as any;
-                await deleteDoc(doc(fdb, 'files', item.id));
-              } catch (_) {}
-            }
-          })
-        );
-
-        // Eliminar carpetas
-        await Promise.all(
-          foldersToDelete.map(item =>
-            fetch('/api/folders/permanent-delete', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
-              body: JSON.stringify({ folderId: item.id }),
-            }).then(res => {
-              if (!res.ok) throw new Error('Fallo al eliminar carpeta');
-              return res.json();
-            })
-          )
-        );
-
-        // Actualizar store local
+        await Promise.all(filesToDelete.map((item) => sdk.permanentDelete(item.id)));
+        await Promise.all(foldersToDelete.map((item) => sdk.deleteFolderPermanently(item.id)));
         selectedTrashItems.forEach(item => permanentlyDelete(item.id));
       } catch (e) {
-        console.error('❌ Error en eliminación permanente:', e);
+        console.error('Error en eliminacion permanente:', e);
       } finally {
         setDeleteModalOpen(false);
       }
@@ -203,7 +159,7 @@ export function TrashView({
 
   // Limpiar toda la papelera
   const handleClearTrash = () => {
-    if (!confirm('¿Estás seguro de que quieres vaciar toda la papelera? Esta acción no se puede deshacer.')) {
+    if (!confirm('Estas seguro de que quieres vaciar toda la papelera? Esta accion no se puede deshacer.')) {
       return;
     }
 
@@ -213,97 +169,18 @@ export function TrashView({
 
     (async () => {
       try {
-        const firebaseUser = auth?.currentUser;
-        if (!firebaseUser) throw new Error('Usuario no autenticado');
-        const token = await firebaseUser.getIdToken();
-
-        // Eliminar archivos en servidor si hay
         if (filesToDelete.length > 0) {
-          try {
-            const res = await fetch('/api/files/empty-trash', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
-              body: JSON.stringify({ fileIds: filesToDelete.map((f: any) => f.id) }),
-            });
-            if (!res.ok) throw new Error('server-failed');
-            const data = await res.json();
-            const deletedIds: string[] = data.deletedIds || [];
-            deletedIds.forEach(id => permanentlyDelete(id));
-          } catch (_) {
-            // Fallback: borrar docs individualmente
-            const fdb = db as any;
-            await Promise.all(
-              filesToDelete.map(async (f: any) => {
-                try { await deleteDoc(doc(fdb, 'files', f.id)); } catch (_) {}
-                permanentlyDelete(f.id);
-              })
-            );
-          }
+          const result = await sdk.emptyTrash(filesToDelete.map((f: any) => f.id));
+          const deletedIds: string[] = result.deletedIds || [];
+          deletedIds.forEach((id: string) => permanentlyDelete(id));
         }
 
-        // Eliminar carpetas recursivamente desde Firestore
         if (foldersToDelete.length > 0) {
-          const firebaseUser = auth?.currentUser;
-          if (!db || !firebaseUser) throw new Error('Firestore no disponible');
-          const fdb = db as any; // asegurar tipo en tiempo de compilación
-          const userId = firebaseUser.uid;
-
-          const deleteFolderRecursively = async (folderId: string) => {
-            // 1) Archivos
-            const filesQ = query(
-              collection(fdb, 'files'),
-              where('userId', '==', userId),
-              where('parentId', '==', folderId)
-            );
-            const filesSnap = await getDocs(filesQ);
-            await Promise.all(
-              filesSnap.docs.map(async (d) => {
-                const id = d.id;
-                try {
-                  const res = await fetch('/api/files/delete', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({ fileId: id }),
-                  });
-                  if (!res.ok) throw new Error('server-failed');
-                } catch (_) {
-                  try { await deleteDoc(doc(fdb, 'files', id)); } catch (_) {}
-                }
-              })
-            );
-
-            // 2) Subcarpetas
-            const foldersQ = query(
-              collection(fdb, 'folders'),
-              where('userId', '==', userId),
-              where('parentId', '==', folderId)
-            );
-            const subSnap = await getDocs(foldersQ);
-            for (const sub of subSnap.docs) {
-              await deleteFolderRecursively(sub.id);
-            }
-
-            // 3) Borrar carpeta
-            try {
-              await deleteDoc(doc(fdb, 'folders', folderId));
-            } catch (err) {
-              console.warn('No se pudo borrar carpeta en Firestore (permiso):', folderId, err);
-            }
-          };
-
-          await Promise.all(
-            foldersToDelete.map((folder: any) => deleteFolderRecursively(folder.id))
-          );
+          await Promise.all(foldersToDelete.map((folder: any) => sdk.deleteFolderPermanently(folder.id)));
           foldersToDelete.forEach((folder: any) => permanentlyDelete(folder.id));
         }
       } catch (e) {
-        console.error('❌ Error al vaciar la papelera:', e);
+        console.error('Error al vaciar la papelera:', e);
       }
     })();
   };
@@ -455,3 +332,4 @@ export function TrashView({
     </div>
   );
 }
+
