@@ -6,6 +6,7 @@
  */
 
 import { requireAdminDb } from '@/lib/firebase-admin';
+import type { DocumentData, QueryDocumentSnapshot, QuerySnapshot } from 'firebase-admin/firestore';
 
 const GLOBAL_ACCESS_ROLES = ['admin', 'general', 'report'] as const;
 
@@ -65,8 +66,17 @@ export async function getAccessUser(email: string): Promise<EmailAccessUser | nu
 export async function listVehicles(): Promise<
   Array<{ id: string; plate?: string; responsables?: string[]; responsablesNormalized?: string[] }>
 > {
-  const snap = await VEHICLES_REF().get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as any));
+  type VehicleDoc = {
+    plate?: string;
+    responsables?: string[];
+    responsablesNormalized?: string[];
+  };
+
+  const snap = (await VEHICLES_REF().get()) as QuerySnapshot<DocumentData>;
+  return snap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
+    const data = doc.data() as VehicleDoc;
+    return { id: doc.id, ...data };
+  });
 }
 
 /**
