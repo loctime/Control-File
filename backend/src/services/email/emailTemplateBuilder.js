@@ -236,6 +236,24 @@ function buildGlobalSummaryHeader(meta, dateKey) {
  */
 function buildVehicleSection(doc) {
   const { plate, brand, model, events, summary } = doc;
+
+  const eventWithDriver = Array.isArray(events)
+    ? events.find(
+        (e) =>
+          e &&
+          (e.driverName || (e.rawData && e.rawData.driverName))
+      )
+    : null;
+
+  const driverName =
+    doc.driverName ||
+    (eventWithDriver &&
+      (eventWithDriver.driverName ||
+        eventWithDriver.rawData?.driverName)) ||
+    null;
+
+  const driverText = driverName ? ` – ${escapeHtml(driverName)}` : "";
+
   if (!Array.isArray(events) || events.length === 0) {
     return `<div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
       <div style="background:#f9fafb;padding:10px 12px;font-weight:600;font-size:14px;">${ICONS.vehicle} ${escapeHtml(plate)}</div>
@@ -252,13 +270,15 @@ function buildVehicleSection(doc) {
 
   const rowsHtml = sortedEvents
     .map((e) => {
+      const driver =
+        e.driverName || (e.rawData && e.rawData.driverName) || null;
       let typeLabel;
       const hasReason = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0;
-      const hasDriver = e.driverName && typeof e.driverName === "string" && e.driverName.trim().length > 0;
+      const hasDriver = driver && typeof driver === "string" && driver.trim().length > 0;
       if (hasReason || hasDriver) {
         const parts = [];
         if (hasReason) parts.push(e.reason.trim());
-        if (hasDriver) parts.push(e.driverName.trim());
+        if (hasDriver) parts.push(driver.trim());
         typeLabel = parts.join(" - ") + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
       } else {
         typeLabel = getTypeLabel(e);
@@ -284,10 +304,12 @@ function buildVehicleSection(doc) {
       ? `<div style="font-size:11px;margin-bottom:8px;color:#4b5563;">${typeSummaryParts.join(" | ")}</div>`
       : "";
 
+  const vehicleName = [brand, model].filter(Boolean).join(" ");
+
   return `
   <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
     <div style="background:#fafafa;padding:10px 12px;font-weight:600;font-size:14px;border-bottom:1px solid #e5e7eb;">
-      ${ICONS.vehicle} ${escapeHtml(plate)} – ${escapeHtml(brand || "")} ${escapeHtml(model || "")}
+      ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` – ${escapeHtml(vehicleName)}` : ""}${driverText}
       <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>
     </div>
     ${typeSummaryHtml}
@@ -326,7 +348,15 @@ function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
   ${buildGlobalSummaryHeader(meta, dateKey)}
   ${sections}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
-    <p style="margin:0;color:#6b7280;font-size:12px;">Sistema ControlFlota · Resumen generado el ${today}</p>
+    <div style="font-size:13px;color:#374151;font-weight:600;">
+      Sistema ControlDoc
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+      Reporte automático de eventos de flota
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
+      Generado el ${today}
+    </div>
   </div>
 </body>
 </html>`.trim();
@@ -390,7 +420,6 @@ function buildGeneralGroupsBody(groups, dateKey) {
   <title>Resumen general de operaciones — ${escapeHtml(dateKey)}</title>
 </head>
 <body style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:20px;background:#fff;color:#111;">
-
   <div style="background:#1f2937;color:#fff;padding:20px;border-radius:6px 6px 0 0;">
     <div style="font-size:20px;font-weight:600;">${ICONS.metrics} Resumen general de operaciones</div>
     <div style="font-size:13px;opacity:0.9;margin-top:4px;">${escapeHtml(dateKey)}</div>
@@ -399,7 +428,15 @@ function buildGeneralGroupsBody(groups, dateKey) {
   ${sections}
 
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
-    <p style="margin:0;font-size:12px;color:#6b7280;">Sistema ControlFlota · Resumen generado el ${today}</p>
+    <div style="font-size:13px;color:#374151;font-weight:600;">
+      Sistema ControlDoc
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+      Reporte automático de eventos de flota
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
+      Generado el ${today}
+    </div>
   </div>
 
 </body>
