@@ -237,23 +237,6 @@ function buildGlobalSummaryHeader(meta, dateKey) {
 function buildVehicleSection(doc) {
   const { plate, brand, model, events, summary } = doc;
 
-  const eventWithDriver = Array.isArray(events)
-    ? events.find(
-        (e) =>
-          e &&
-          (e.driverName || (e.rawData && e.rawData.driverName))
-      )
-    : null;
-
-  const driverName =
-    doc.driverName ||
-    (eventWithDriver &&
-      (eventWithDriver.driverName ||
-        eventWithDriver.rawData?.driverName)) ||
-    null;
-
-  const driverText = driverName ? ` – ${escapeHtml(driverName)}` : "";
-
   if (!Array.isArray(events) || events.length === 0) {
     return `<div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
       <div style="background:#f9fafb;padding:10px 12px;font-weight:600;font-size:14px;">${ICONS.vehicle} ${escapeHtml(plate)}</div>
@@ -274,18 +257,15 @@ function buildVehicleSection(doc) {
         e.driverName || (e.rawData && e.rawData.driverName) || null;
       let typeLabel;
       const hasReason = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0;
-      const hasDriver = driver && typeof driver === "string" && driver.trim().length > 0;
-      if (hasReason || hasDriver) {
-        const parts = [];
-        if (hasReason) parts.push(e.reason.trim());
-        if (hasDriver) parts.push(driver.trim());
-        typeLabel = parts.join(" - ") + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
+      if (hasReason) {
+        typeLabel = e.reason.trim() + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
       } else {
         typeLabel = getTypeLabel(e);
       }
       return `
     <tr>
       <td style="padding:6px 8px;font-weight:600;color:${color};font-size:12px;">${escapeHtml(typeLabel)}</td>
+      <td style="padding:6px 8px;font-size:12px;">${escapeHtml(driver || "-")}</td>
       <td style="padding:6px 8px;font-size:12px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
       <td style="padding:6px 8px;font-size:12px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
       <td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicación")}</td>
@@ -309,7 +289,7 @@ function buildVehicleSection(doc) {
   return `
   <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
     <div style="background:#fafafa;padding:10px 12px;font-weight:600;font-size:14px;border-bottom:1px solid #e5e7eb;">
-      ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` – ${escapeHtml(vehicleName)}` : ""}${driverText}
+      ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` – ${escapeHtml(vehicleName)}` : ""}
       <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>
     </div>
     ${typeSummaryHtml}
@@ -317,6 +297,7 @@ function buildVehicleSection(doc) {
       <thead>
         <tr style="background:#f3f4f6;">
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Tipo</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Conductor</th>
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Velocidad</th>
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Fecha/Hora</th>
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Ubicación</th>
