@@ -458,6 +458,8 @@ function buildEventSummary(event) {
     location: event.location || "",
     locationRaw: event.locationRaw || event.location || "",
     severity,
+    driverName: event.driverName || null,
+    keyId: event.keyId || null,
     rawData: {
       brand: event.brand || null,
       model: event.model || null,
