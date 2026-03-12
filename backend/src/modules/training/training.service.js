@@ -84,6 +84,15 @@ function ensureOwnerId(ownerId) {
   if (!ownerId) throw httpError(400, "VALIDATION_ERROR", "ownerId no resuelto");
 }
 
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") return value.toDate();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 async function listCatalog(ownerId, query = {}) {
   ensureOwnerId(ownerId);
   const active = query.active == null ? undefined : query.active === "true";
@@ -594,6 +603,90 @@ async function registerAttendance(ownerId, sessionId, payload = {}) {
   };
 }
 
+async function getDashboard(ownerId) {
+  ensureOwnerId(ownerId);
+  const currentMonth = new Date().getMonth() + 1;
+
+  const [
+    totalPlans,
+    totalItems,
+    completedItems,
+    pendingItems,
+    overdueItems,
+    scheduledSessions,
+    executedSessions,
+  ] = await Promise.all([
+    repo.countCollection(ownerId, "training_plans"),
+    repo.countCollection(ownerId, "training_plan_items"),
+    repo.countPlanItemsByStatus(ownerId, "completed"),
+    repo.countPlanItemsByStatus(ownerId, "pending"),
+    repo.countOverdueItems(ownerId, currentMonth),
+    repo.countSessionsByStatus(ownerId, "planned"),
+    repo.countSessionsByStatus(ownerId, "executed"),
+  ]);
+
+  const complianceRate = totalItems > 0 ? completedItems / totalItems : 0;
+  return {
+    totalPlans,
+    totalItems,
+    completedItems,
+    pendingItems,
+    overdueItems,
+    scheduledSessions,
+    executedSessions,
+    complianceRate,
+  };
+}
+
+async function getEmployeeTrainingStatus(ownerId, employeeId) {
+  ensureOwnerId(ownerId);
+  const normalizedEmployeeId = requireString(employeeId, "employeeId");
+
+  const [catalog, records] = await Promise.all([
+    repo.listCatalog(ownerId),
+    repo.listEmployeeTrainingRecords(ownerId, normalizedEmployeeId),
+  ]);
+
+  const recordByType = new Map();
+  records.forEach((record) => {
+    if (record.trainingTypeId) recordByType.set(record.trainingTypeId, record);
+  });
+
+  const now = new Date();
+  const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  return catalog.map((trainingType) => {
+    const record = recordByType.get(trainingType.id);
+    if (!record) {
+      return {
+        trainingTypeId: trainingType.id,
+        trainingName: trainingType.name || null,
+        lastSessionId: null,
+        lastDate: null,
+        expiryDate: null,
+        status: "never",
+      };
+    }
+
+    const expiryDate = toDate(record.expiryDate);
+    let status = "valid";
+    if (expiryDate && expiryDate < now) {
+      status = "expired";
+    } else if (expiryDate && expiryDate <= in30Days) {
+      status = "expiring";
+    }
+
+    return {
+      trainingTypeId: trainingType.id,
+      trainingName: trainingType.name || null,
+      lastSessionId: record.lastSessionId || null,
+      lastDate: record.lastDate ? repo.serializeDoc({ value: record.lastDate }).value : null,
+      expiryDate: record.expiryDate ? repo.serializeDoc({ value: record.expiryDate }).value : null,
+      status,
+    };
+  });
+}
+
 module.exports = {
   httpError,
   listCatalog,
@@ -611,6 +704,8 @@ module.exports = {
   createSession,
   patchSession,
   registerAttendance,
+  getDashboard,
+  getEmployeeTrainingStatus,
   constants: {
     PLAN_STATUSES: Array.from(PLAN_STATUSES),
     ITEM_STATUSES: Array.from(ITEM_STATUSES),
@@ -619,4 +714,3 @@ module.exports = {
     RECORD_STATUSES: Array.from(RECORD_STATUSES),
   },
 };
-

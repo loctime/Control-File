@@ -186,6 +186,27 @@ async function registerAttendance(req, res) {
   }
 }
 
+async function getDashboard(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    const data = await trainingService.getDashboard(ownerId);
+    return ok(res, data);
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+async function getEmployeeTrainingStatus(req, res) {
+  try {
+    const ownerId = resolveOwnerId(req);
+    const employeeId = req.params.employeeId;
+    const data = await trainingService.getEmployeeTrainingStatus(ownerId, employeeId);
+    return ok(res, data);
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
 module.exports = {
   listCatalog,
   createCatalog,
@@ -202,5 +223,6 @@ module.exports = {
   createSession,
   patchSession,
   registerAttendance,
+  getDashboard,
+  getEmployeeTrainingStatus,
 };
-

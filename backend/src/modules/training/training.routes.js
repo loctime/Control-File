@@ -22,6 +22,7 @@ router.post("/sessions", controller.createSession);
 router.patch("/sessions/:id", controller.patchSession);
 
 router.post("/sessions/:id/attendance", controller.registerAttendance);
+router.get("/dashboard", controller.getDashboard);
+router.get("/employees/:employeeId/status", controller.getEmployeeTrainingStatus);
 
 module.exports = router;
-

@@ -72,6 +72,42 @@ async function listSessions(ownerId, filters = {}) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+async function countQuery(query) {
+  if (typeof query.count === "function") {
+    const snap = await query.count().get();
+    return snap.data().count || 0;
+  }
+  const snap = await query.get();
+  return snap.size;
+}
+
+async function countCollection(ownerId, collectionName) {
+  return countQuery(collection(ownerId, collectionName));
+}
+
+async function countPlanItemsByStatus(ownerId, status) {
+  return countQuery(collection(ownerId, "training_plan_items").where("status", "==", status));
+}
+
+async function countOverdueItems(ownerId, currentMonth) {
+  return countQuery(
+    collection(ownerId, "training_plan_items")
+      .where("status", "in", ["pending", "scheduled", "cancelled"])
+      .where("plannedMonth", "<", Number(currentMonth))
+  );
+}
+
+async function countSessionsByStatus(ownerId, status) {
+  return countQuery(collection(ownerId, "training_sessions").where("status", "==", status));
+}
+
+async function listEmployeeTrainingRecords(ownerId, employeeId) {
+  const snap = await collection(ownerId, "employee_training_records")
+    .where("employeeId", "==", employeeId)
+    .get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 function toIso(value) {
   if (!value) return value;
   if (typeof value.toDate === "function") return value.toDate().toISOString();
@@ -98,6 +134,10 @@ module.exports = {
   listPlans,
   listPlanItems,
   listSessions,
+  countCollection,
+  countPlanItemsByStatus,
+  countOverdueItems,
+  countSessionsByStatus,
+  listEmployeeTrainingRecords,
   serializeDoc,
 };
-
