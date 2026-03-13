@@ -8,6 +8,213 @@ const crypto = require("crypto");
 const admin = require("../firebaseAdmin");
 
 const MAX_BATCH_SIZE = 500;
+const EVENT_SOURCE_RSV = "RSV";
+const EVENT_CATEGORY_DRIVER_IDENTIFICATION = "DRIVER_IDENTIFICATION";
+const EVENT_CATEGORY_SPEEDING = "SPEEDING";
+const EVENT_SUBTYPE_CONTACT_NO_DRIVER = "CONTACT_NO_DRIVER";
+const EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED = "DRIVER_NOT_IDENTIFIED";
+const EVENT_SUBTYPE_UNKNOWN_KEY = "UNKNOWN_KEY";
+const EVENT_SUBTYPE_INACTIVE_DRIVER = "INACTIVE_DRIVER";
+const EVENT_SUBTYPE_NO_KEY_DETECTED = "NO_KEY_DETECTED";
+const EVENT_SUBTYPE_SPEED_EXCESS = "SPEED_EXCESS";
+const SPEED_GROUPING_WINDOW_SECONDS = 180;
+
+function isRsvV2ModelDualWriteEnabled() {
+  return process.env.RSV_V2_EVENT_MODEL_DUAL_WRITE === "true";
+}
+
+function isRsvV2RiskModelEnabled() {
+  return process.env.RSV_V2_RISK_MODEL_ENABLED === "true";
+}
+
+function isRsvV2SpeedEventsEnabled() {
+  return process.env.RSV_V2_SPEED_EVENTS_ENABLED === "true";
+}
+
+function isRsvV2SpeedGroupingEnabled() {
+  return process.env.RSV_V2_SPEED_GROUPING_ENABLED === "true";
+}
+
+function resolveSubtypeFromLegacyType(eventType) {
+  switch (eventType) {
+    case "exceso":
+      return EVENT_SUBTYPE_SPEED_EXCESS;
+    case "contacto":
+      return EVENT_SUBTYPE_CONTACT_NO_DRIVER;
+    case "llave_no_registrada":
+    case "sin_llave":
+      return EVENT_SUBTYPE_UNKNOWN_KEY;
+    case "conductor_inactivo":
+      return EVENT_SUBTYPE_INACTIVE_DRIVER;
+    case "no_identificado":
+    default:
+      return EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED;
+  }
+}
+
+function resolveDateKeyFromTimestamp(eventTimestamp) {
+  if (eventTimestamp && /^\d{4}-\d{2}-\d{2}/.test(String(eventTimestamp))) {
+    return String(eventTimestamp).slice(0, 10);
+  }
+  return formatDateKey(new Date());
+}
+
+function buildIncidentKey(plate, dateKey, eventSubtype) {
+  const normalizedPlate = normalizePlate(plate);
+  const subtype = eventSubtype || EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED;
+  return `${normalizedPlate}_${dateKey}_${subtype}`;
+}
+
+function isSpeedingEvent(event) {
+  return (
+    event?.eventCategory === EVENT_CATEGORY_SPEEDING ||
+    event?.eventSubtype === EVENT_SUBTYPE_SPEED_EXCESS ||
+    (event?.type === "exceso" && typeof event?.speed === "number")
+  );
+}
+
+function normalizeLocationForIncident(location) {
+  return String(location || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function buildSpeedIncidentBaseKey(event) {
+  const plate = normalizePlate(event?.plate || "");
+  const dateKey = resolveDateKeyFromTimestamp(event?.eventTimestamp);
+  const location = normalizeLocationForIncident(event?.locationRaw || event?.location || "");
+  return `${plate}_${dateKey}_${location || "SIN_UBICACION"}_${EVENT_SUBTYPE_SPEED_EXCESS}`;
+}
+
+function toEpochMs(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  const ms = d.getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function getSpeedSeverity(maxSpeed) {
+  if (!Number.isFinite(maxSpeed)) return "low";
+  if (maxSpeed > 150) return "critical";
+  if (maxSpeed > 130) return "high";
+  if (maxSpeed > 110) return "medium";
+  return "low";
+}
+
+function groupSpeedingIncidents(events) {
+  if (!isRsvV2SpeedGroupingEnabled()) return [];
+  const speeding = (Array.isArray(events) ? events : [])
+    .filter((e) => isSpeedingEvent(e) && typeof e.speed === "number")
+    .map((e) => ({
+      ...e,
+      __ts: toEpochMs(e.eventTimestamp),
+      __baseKey: buildSpeedIncidentBaseKey(e),
+    }))
+    .filter((e) => e.__ts != null)
+    .sort((a, b) => a.__ts - b.__ts);
+
+  const groups = [];
+  const countersByBase = new Map();
+  let current = null;
+
+  for (const event of speeding) {
+    if (!current) {
+      current = { baseKey: event.__baseKey, events: [event], firstTs: event.__ts, lastTs: event.__ts };
+      continue;
+    }
+
+    const sameBase = current.baseKey === event.__baseKey;
+    const withinWindow = event.__ts - current.lastTs <= SPEED_GROUPING_WINDOW_SECONDS * 1000;
+
+    if (sameBase && withinWindow) {
+      current.events.push(event);
+      current.lastTs = event.__ts;
+    } else {
+      groups.push(current);
+      current = { baseKey: event.__baseKey, events: [event], firstTs: event.__ts, lastTs: event.__ts };
+    }
+  }
+  if (current) groups.push(current);
+
+  return groups.map((group) => {
+    const idx = countersByBase.get(group.baseKey) || 0;
+    countersByBase.set(group.baseKey, idx + 1);
+    const incidentKey = idx === 0 ? group.baseKey : `${group.baseKey}_G${idx + 1}`;
+    const speeds = group.events.map((e) => e.speed).filter((n) => Number.isFinite(n));
+    const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : null;
+    const avgSpeed = speeds.length > 0 ? Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10 : null;
+    const durationSeconds = Math.max(0, Math.floor((group.lastTs - group.firstTs) / 1000));
+    const driver = group.events.find((e) => e.driverName)?.driverName || null;
+    const keyId = group.events.find((e) => e.keyId)?.keyId || null;
+    const hasNoKeyDetected = group.events.some((e) => e.eventSubtype === EVENT_SUBTYPE_NO_KEY_DETECTED);
+    const hasUnidentifiedDriver = group.events.some((e) => e.eventSubtype === EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED);
+
+    return {
+      incidentKey,
+      eventCategory: EVENT_CATEGORY_SPEEDING,
+      eventSubtype: EVENT_SUBTYPE_SPEED_EXCESS,
+      groupedEventsCount: group.events.length,
+      maxSpeed,
+      avgSpeed,
+      durationSeconds,
+      severity: getSpeedSeverity(maxSpeed),
+      location: group.events[0].locationRaw || group.events[0].location || "",
+      plate: normalizePlate(group.events[0].plate || ""),
+      firstEventAt: group.events[0].eventTimestamp || null,
+      lastEventAt: group.events[group.events.length - 1].eventTimestamp || null,
+      driverName: driver,
+      keyId,
+      causeSubtype: hasNoKeyDetected
+        ? EVENT_SUBTYPE_NO_KEY_DETECTED
+        : hasUnidentifiedDriver
+          ? EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED
+          : null,
+      eventIds: group.events.map((e) => e.eventId).filter(Boolean),
+    };
+  });
+}
+
+function computeIncidentSummary(events) {
+  const bySubtype = {
+    [EVENT_SUBTYPE_CONTACT_NO_DRIVER]: 0,
+    [EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED]: 0,
+    [EVENT_SUBTYPE_UNKNOWN_KEY]: 0,
+    [EVENT_SUBTYPE_INACTIVE_DRIVER]: 0,
+  };
+
+  const seenIncidentKeys = new Set();
+  const speedIncidents = groupSpeedingIncidents(events);
+  for (const event of Array.isArray(events) ? events : []) {
+    if (isSpeedingEvent(event)) continue;
+    const subtype = event.eventSubtype || resolveSubtypeFromLegacyType(event.type);
+    const dateKey = resolveDateKeyFromTimestamp(event.eventTimestamp);
+    const incidentKey = event.incidentKey || buildIncidentKey(event.plate || "", dateKey, subtype);
+    if (!incidentKey || seenIncidentKeys.has(incidentKey)) continue;
+    seenIncidentKeys.add(incidentKey);
+    bySubtype[subtype] = (bySubtype[subtype] || 0) + 1;
+  }
+
+  const totalUniqueIncidents =
+    (bySubtype[EVENT_SUBTYPE_CONTACT_NO_DRIVER] || 0) +
+    (bySubtype[EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED] || 0) +
+    (bySubtype[EVENT_SUBTYPE_UNKNOWN_KEY] || 0) +
+    (bySubtype[EVENT_SUBTYPE_INACTIVE_DRIVER] || 0);
+
+  const uniqueOperationalIncidents =
+    (bySubtype[EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED] || 0) +
+    (bySubtype[EVENT_SUBTYPE_UNKNOWN_KEY] || 0) +
+    (bySubtype[EVENT_SUBTYPE_INACTIVE_DRIVER] || 0);
+
+  return {
+    totalUniqueIncidents,
+    uniqueOperationalIncidents,
+    uniqueTechnicalIncidents: bySubtype[EVENT_SUBTYPE_CONTACT_NO_DRIVER] || 0,
+    bySubtype,
+    totalSpeedIncidents: speedIncidents.length,
+    speedIncidents,
+  };
+}
 
 function getDb() {
   return admin.firestore();
@@ -152,21 +359,42 @@ async function saveVehicleEvents(events, messageId, source) {
       continue;
     }
 
-    const dateKey =
-      event.eventTimestamp && /^\d{4}-\d{2}-\d{2}/.test(String(event.eventTimestamp))
-        ? String(event.eventTimestamp).slice(0, 10)
-        : formatDateKey(new Date());
+    const dateKey = resolveDateKeyFromTimestamp(event.eventTimestamp);
+    const isSpeeding = isSpeedingEvent(event);
+    const eventSubtype = event.eventSubtype || resolveSubtypeFromLegacyType(event.type);
+    const incidentKey = event.incidentKey || (
+      isSpeeding
+        ? buildSpeedIncidentBaseKey(event)
+        : buildIncidentKey(event.plate, dateKey, eventSubtype)
+    );
+    const v2DualWrite = isRsvV2ModelDualWriteEnabled();
 
     const docData = {
       ...event,
-      type: event.type ?? (event.eventCategory === "exceso_velocidad" ? "exceso" : "exceso"),
+      type: event.type ?? (isSpeeding ? "exceso" : "no_identificado"),
       sourceEmailType: event.sourceEmailType ?? "excesos_del_dia",
       reason: event.reason ?? null,
+      reasonRaw: event.reasonRaw ?? event.reason ?? null,
+      rawEventType: event.rawEventType ?? null,
+      speed: typeof event.speed === "number" ? event.speed : null,
+      speedLimit: event.speedLimit ?? null,
+      speedDelta: event.speedDelta ?? null,
+      groupedEventsCount: event.groupedEventsCount ?? (isSpeeding ? 1 : null),
+      maxSpeed: event.maxSpeed ?? (isSpeeding ? (typeof event.speed === "number" ? event.speed : null) : null),
       vehicleRegistered: event.vehicleRegistered ?? true,
       messageId: messageId || null,
       source: source || "outlook-local",
       eventId,
       dateKey,
+      ...(v2DualWrite
+        ? {
+            eventSource: event.eventSource || EVENT_SOURCE_RSV,
+            eventCategory: event.eventCategory || (isSpeeding ? EVENT_CATEGORY_SPEEDING : EVENT_CATEGORY_DRIVER_IDENTIFICATION),
+            eventSubtype,
+            incidentKey,
+            timestampSource: event.timestampSource || "EMAIL_EVENT",
+          }
+        : {}),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -384,6 +612,11 @@ function normalizeEventTypeForSummary(eventType) {
     llave_no_registrada: "llave_sin_cargar",
     sin_llave: "llave_sin_cargar",
     conductor_inactivo: "conductor_inactivo",
+    CONTACT_NO_DRIVER: "contactos",
+    DRIVER_NOT_IDENTIFIED: "no_identificados",
+    UNKNOWN_KEY: "llave_sin_cargar",
+    INACTIVE_DRIVER: "conductor_inactivo",
+    SPEED_EXCESS: "excesos",
   };
   return typeMap[eventType] || "no_identificados";
 }
@@ -411,6 +644,26 @@ function getMetaFieldForType(summaryKey) {
  * @returns {number}
  */
 function computeRiskScore(summary, events) {
+  if (isRsvV2RiskModelEnabled()) {
+    const incidentSummary = computeIncidentSummary(events);
+    const contactIncidents = Math.min(incidentSummary.bySubtype[EVENT_SUBTYPE_CONTACT_NO_DRIVER] || 0, 2);
+    const operationalIncidents =
+      (incidentSummary.bySubtype[EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED] || 0) +
+      (incidentSummary.bySubtype[EVENT_SUBTYPE_UNKNOWN_KEY] || 0) +
+      (incidentSummary.bySubtype[EVENT_SUBTYPE_INACTIVE_DRIVER] || 0);
+
+    const speedScore = (incidentSummary.speedIncidents || []).reduce((acc, incident) => {
+      const severity = incident.severity || getSpeedSeverity(incident.maxSpeed);
+      if (severity === "critical") return acc + 10;
+      if (severity === "high") return acc + 6;
+      if (severity === "medium") return acc + 3;
+      return acc + 1;
+    }, 0);
+
+    const weightedScore = operationalIncidents * 3 + contactIncidents + speedScore;
+    return Math.max(0, weightedScore);
+  }
+
   if (Array.isArray(events) && events.length > 0) {
     return events.length;
   }
@@ -439,20 +692,39 @@ const ALLOWED_EVENT_TYPES = new Set([
 function buildEventSummary(event) {
   let eventType = event.type || "exceso";
   if (!ALLOWED_EVENT_TYPES.has(eventType)) {
-    eventType = "no_identificado";
+    eventType = isSpeedingEvent(event) ? "exceso" : "no_identificado";
   }
   const severity = event.severity || "critico";
   const speedVal = event.speed;
+  const dateKey = resolveDateKeyFromTimestamp(event.eventTimestamp);
+  const eventSubtype = event.eventSubtype || resolveSubtypeFromLegacyType(eventType);
+  const incidentKey = event.incidentKey || (
+    isSpeedingEvent(event)
+      ? buildSpeedIncidentBaseKey(event)
+      : buildIncidentKey(event.plate, dateKey, eventSubtype)
+  );
   const eventId =
     event.eventId ||
     generateDeterministicEventId(event.plate, event.eventTimestamp, event.rawLine || "");
 
   return {
     eventId,
+    plate: event.plate || null,
     type: eventType,
     reason: event.reason || null,
+    reasonRaw: event.reasonRaw || event.reason || null,
+    rawEventType: event.rawEventType || null,
     sourceEmailType: event.sourceEmailType || null,
+    eventSource: event.eventSource || EVENT_SOURCE_RSV,
+    eventCategory: event.eventCategory || (isSpeedingEvent(event) ? EVENT_CATEGORY_SPEEDING : EVENT_CATEGORY_DRIVER_IDENTIFICATION),
+    eventSubtype,
+    incidentKey,
+    timestampSource: event.timestampSource || "EMAIL_EVENT",
     speed: typeof speedVal === "number" ? speedVal : null,
+    speedLimit: event.speedLimit ?? null,
+    speedDelta: event.speedDelta ?? null,
+    groupedEventsCount: event.groupedEventsCount ?? (isSpeedingEvent(event) ? 1 : null),
+    maxSpeed: event.maxSpeed ?? (typeof speedVal === "number" ? speedVal : null),
     hasSpeed: typeof speedVal === "number",
     eventTimestamp: event.eventTimestamp || "",
     location: event.location || "",
@@ -525,9 +797,38 @@ async function updateDailyMetaBatch(dateKey, deltas) {
   if (deltas.vehiclesWithCritical != null && deltas.vehiclesWithCritical > 0) {
     update.vehiclesWithCritical = FieldValue.increment(deltas.vehiclesWithCritical);
   }
+  if (deltas.totalUniqueIncidents != null && deltas.totalUniqueIncidents > 0) {
+    update.totalUniqueIncidents = FieldValue.increment(deltas.totalUniqueIncidents);
+  }
+  if (deltas.totalUniqueOperationalIncidents != null && deltas.totalUniqueOperationalIncidents > 0) {
+    update.totalUniqueOperationalIncidents = FieldValue.increment(deltas.totalUniqueOperationalIncidents);
+  }
+  if (deltas.totalUniqueTechnicalIncidents != null && deltas.totalUniqueTechnicalIncidents > 0) {
+    update.totalUniqueTechnicalIncidents = FieldValue.increment(deltas.totalUniqueTechnicalIncidents);
+  }
+  if (deltas.totalSpeedIncidents != null && deltas.totalSpeedIncidents > 0) {
+    update.totalSpeedIncidents = FieldValue.increment(deltas.totalSpeedIncidents);
+  }
+  if (deltas.vehiclesWithSpeeding != null && deltas.vehiclesWithSpeeding > 0) {
+    update.vehiclesWithSpeeding = FieldValue.increment(deltas.vehiclesWithSpeeding);
+  }
+  if (deltas.driversWithSpeeding != null && deltas.driversWithSpeeding > 0) {
+    update.driversWithSpeeding = FieldValue.increment(deltas.driversWithSpeeding);
+  }
 
-  if (Object.keys(update).length <= 2) return; // solo dateKey y lastUpdatedAt
-  await metaRef.set(update, { merge: true });
+  const shouldUpdateMaxSpeed = deltas.maxSpeedRecorded != null && Number.isFinite(deltas.maxSpeedRecorded);
+
+  if (Object.keys(update).length > 2) {
+    await metaRef.set(update, { merge: true });
+  }
+
+  if (shouldUpdateMaxSpeed) {
+    const currentMeta = await metaRef.get();
+    const currentMax = currentMeta.exists ? Number(currentMeta.data()?.maxSpeedRecorded || 0) : 0;
+    if (deltas.maxSpeedRecorded > currentMax) {
+      await metaRef.set({ maxSpeedRecorded: deltas.maxSpeedRecorded }, { merge: true });
+    }
+  }
 }
 
 /**
@@ -627,7 +928,39 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     summaryCounts[key] = (summaryCounts[key] || 0) + 1;
   }
 
-  const riskScore = computeRiskScore(summaryCounts, mergedEvents);
+  const speedIncidents = groupSpeedingIncidents(mergedEvents);
+  const speedByEventId = new Map();
+  for (const incident of speedIncidents) {
+    for (const eventId of incident.eventIds || []) {
+      speedByEventId.set(eventId, incident);
+    }
+  }
+  const mergedEventsWithSpeedGroups = mergedEvents.map((event) => {
+    const incident = speedByEventId.get(event.eventId);
+    if (!incident) return event;
+    return {
+      ...event,
+      incidentKey: incident.incidentKey,
+      groupedEventsCount: incident.groupedEventsCount,
+      maxSpeed: incident.maxSpeed,
+      speedSeverity: incident.severity,
+    };
+  });
+
+  const riskScore = computeRiskScore(summaryCounts, mergedEventsWithSpeedGroups);
+  const incidentSummary = computeIncidentSummary(mergedEventsWithSpeedGroups);
+  const previousIncidentSummary = existingData?.incidentSummary || {
+    totalUniqueIncidents: 0,
+    uniqueOperationalIncidents: 0,
+    uniqueTechnicalIncidents: 0,
+  };
+  const previousSpeedIncidents = Array.isArray(existingData?.speedIncidents) ? existingData.speedIncidents : [];
+  const previousSpeedIncidentCount = previousSpeedIncidents.length;
+  const previousMaxSpeed = previousSpeedIncidents.reduce((max, s) => Math.max(max, Number(s?.maxSpeed || 0)), 0);
+  const previousSpeedingDrivers = new Set(Array.isArray(existingData?.speedingDrivers) ? existingData.speedingDrivers : []);
+  const currentSpeedingDrivers = new Set(
+    speedIncidents.map((s) => s.driverName).filter((name) => typeof name === "string" && name.trim().length > 0),
+  );
   const isNewVehicle = !docSnap.exists;
 
   const docPayload = {
@@ -643,7 +976,10 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     sentAt: existingData?.sentAt ?? null,
     lastEventAt: now,
     summary: summaryCounts,
-    events: mergedEvents,
+    incidentSummary,
+    speedIncidents,
+    speedingDrivers: Array.from(currentSpeedingDrivers),
+    events: mergedEventsWithSpeedGroups,
     riskScore,
   };
 
@@ -698,6 +1034,19 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     totalAdministrativos: 0,
     totalVehicles: isNewVehicle ? 1 : 0,
     vehiclesWithCritical: isNewVehicle ? 1 : hadCriticalBefore ? 0 : 1,
+    totalUniqueIncidents:
+      (incidentSummary.totalUniqueIncidents || 0) -
+      (previousIncidentSummary.totalUniqueIncidents || 0),
+    totalUniqueOperationalIncidents:
+      (incidentSummary.uniqueOperationalIncidents || 0) -
+      (previousIncidentSummary.uniqueOperationalIncidents || 0),
+    totalUniqueTechnicalIncidents:
+      (incidentSummary.uniqueTechnicalIncidents || 0) -
+      (previousIncidentSummary.uniqueTechnicalIncidents || 0),
+    totalSpeedIncidents: speedIncidents.length - previousSpeedIncidentCount,
+    vehiclesWithSpeeding: previousSpeedIncidentCount === 0 && speedIncidents.length > 0 ? 1 : 0,
+    driversWithSpeeding: Math.max(0, currentSpeedingDrivers.size - previousSpeedingDrivers.size),
+    maxSpeedRecorded: Math.max(previousMaxSpeed, ...speedIncidents.map((s) => Number(s.maxSpeed || 0))),
   };
 
   return { isNewVehicle, metaDeltas };
@@ -750,4 +1099,6 @@ module.exports = {
   normalizePlate,
   isFromAllowedDomain,
   computeRiskScore,
+  groupSpeedingIncidents,
+  getSpeedSeverity,
 };

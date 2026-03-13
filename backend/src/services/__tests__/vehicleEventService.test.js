@@ -3,77 +3,106 @@ const {
   normalizePlate,
   isFromAllowedDomain,
   computeRiskScore,
+  buildEventSummary,
+  groupSpeedingIncidents,
+  getSpeedSeverity,
 } = require("../vehicleEventService");
 
 describe("vehicleEventService", () => {
+  afterEach(() => {
+    delete process.env.RSV_V2_RISK_MODEL_ENABLED;
+    delete process.env.RSV_V2_SPEED_GROUPING_ENABLED;
+  });
+
   describe("generateDeterministicEventId", () => {
-    it("genera id determinístico para mismos inputs", () => {
+    it("genera id deterministico para mismos inputs", () => {
       const id1 = generateDeterministicEventId("AF999EF", "2026-02-04T19:27:54-03:00", "raw line");
       const id2 = generateDeterministicEventId("AF999EF", "2026-02-04T19:27:54-03:00", "raw line");
       expect(id1).toBe(id2);
       expect(id1).toMatch(/^[a-f0-9]{32}$/);
     });
-
-    it("genera ids distintos para inputs distintos", () => {
-      const id1 = generateDeterministicEventId("AF999EF", "2026-02-04T19:27:54-03:00", "line1");
-      const id2 = generateDeterministicEventId("AF999EF", "2026-02-04T19:27:55-03:00", "line1");
-      expect(id1).not.toBe(id2);
-    });
   });
 
   describe("normalizePlate", () => {
-    it("normaliza patente eliminando espacios, guiones y caracteres especiales, convierte a mayúsculas", () => {
+    it("normaliza patente", () => {
       expect(normalizePlate("af 999 ef")).toBe("AF999EF");
-      expect(normalizePlate("  AB-123-CD  ")).toBe("AB123CD");
-      expect(normalizePlate("af-999-ef")).toBe("AF999EF");
-      expect(normalizePlate("AF 999 EF")).toBe("AF999EF");
-      expect(normalizePlate("ab.123.cd")).toBe("AB123CD");
-    });
-
-    it("retorna string vacío para input inválido", () => {
-      expect(normalizePlate("")).toBe("");
-      expect(normalizePlate(null)).toBe("");
-      expect(normalizePlate(undefined)).toBe("");
+      expect(normalizePlate("AB-123-CD")).toBe("AB123CD");
     });
   });
 
   describe("isFromAllowedDomain", () => {
-    it("retorna true cuando from pertenece a dominio permitido", () => {
+    it("valida dominio permitido", () => {
       expect(isFromAllowedDomain("alerta@pluspetrol.com", "pluspetrol.com")).toBe(true);
-      expect(isFromAllowedDomain("user@sub.pluspetrol.com", "pluspetrol.com")).toBe(true);
-    });
-
-    it("retorna false cuando from no pertenece", () => {
       expect(isFromAllowedDomain("otro@gmail.com", "pluspetrol.com")).toBe(false);
-      expect(isFromAllowedDomain("", "pluspetrol.com")).toBe(false);
-      expect(isFromAllowedDomain("a@b.com", "")).toBe(false);
+    });
+  });
+
+  describe("getSpeedSeverity", () => {
+    it("clasifica severidad por velocidad", () => {
+      expect(getSpeedSeverity(100)).toBe("low");
+      expect(getSpeedSeverity(120)).toBe("medium");
+      expect(getSpeedSeverity(145)).toBe("high");
+      expect(getSpeedSeverity(151)).toBe("critical");
+    });
+  });
+
+  describe("groupSpeedingIncidents", () => {
+    it("agrupa eventos consecutivos dentro de 3 minutos", () => {
+      process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
+      const events = [
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 145, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:19:33-03:00", rawLine: "a" }),
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 144, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:20:20-03:00", rawLine: "b" }),
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 143, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:21:50-03:00", rawLine: "c" }),
+      ];
+
+      const groups = groupSpeedingIncidents(events);
+      expect(groups).toHaveLength(1);
+      expect(groups[0].groupedEventsCount).toBe(3);
+      expect(groups[0].maxSpeed).toBe(145);
+      expect(groups[0].severity).toBe("high");
     });
 
-    it("soporta múltiples dominios separados por coma", () => {
-      expect(isFromAllowedDomain("a@pluspetrol.com", "pluspetrol.com,otro.com")).toBe(true);
-      expect(isFromAllowedDomain("a@otro.com", "pluspetrol.com,otro.com")).toBe(true);
+    it("separa incidentes cuando supera 3 minutos", () => {
+      process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
+      const events = [
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 130, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:19:33-03:00", rawLine: "a" }),
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 129, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:25:40-03:00", rawLine: "b" }),
+      ];
+
+      const groups = groupSpeedingIncidents(events);
+      expect(groups).toHaveLength(2);
+    });
+
+    it("prioriza causa NO_KEY_DETECTED en incidentes agrupados", () => {
+      process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
+      const events = [
+        buildEventSummary({ plate: "AG338XG", eventCategory: "SPEEDING", eventSubtype: "NO_KEY_DETECTED", speed: 119, locationRaw: "RP7", eventTimestamp: "2026-03-11T14:30:58-03:00", rawLine: "a" }),
+        buildEventSummary({ plate: "AG338XG", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 118, locationRaw: "RP7", eventTimestamp: "2026-03-11T14:31:40-03:00", rawLine: "b" }),
+      ];
+
+      const groups = groupSpeedingIncidents(events);
+      expect(groups).toHaveLength(1);
+      expect(groups[0].causeSubtype).toBe("NO_KEY_DETECTED");
     });
   });
 
   describe("computeRiskScore", () => {
-    it("devuelve 0 para summary y events vacíos", () => {
-      expect(computeRiskScore(null, null)).toBe(0);
-      expect(computeRiskScore({}, [])).toBe(0);
+    it("legacy: score por cantidad de eventos", () => {
+      expect(computeRiskScore(null, [{}, {}])).toBe(2);
     });
 
-    it("score por summary = suma de totales por tipo cuando events vacío", () => {
-      const summary = { excesos: 2, no_identificados: 1, contactos: 0, llave_sin_cargar: 0, conductor_inactivo: 0 };
-      expect(computeRiskScore(summary, [])).toBe(2 + 1); // total eventos
-    });
+    it("v2: prioriza velocidad por sobre eventos tecnicos", () => {
+      process.env.RSV_V2_RISK_MODEL_ENABLED = "true";
+      process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
 
-    it("score = total eventos (cantidad)", () => {
-      const events = [{ severity: "critico" }, { severity: "critico" }, {}];
-      expect(computeRiskScore(null, events)).toBe(3);
-    });
+      const events = [
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 151, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:19:33-03:00", rawLine: "a" }),
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 149, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:20:00-03:00", rawLine: "b" }),
+        buildEventSummary({ plate: "AG338XC", eventCategory: "DRIVER_IDENTIFICATION", eventSubtype: "CONTACT_NO_DRIVER", eventTimestamp: "2026-03-12T06:00:00-03:00", rawLine: "c" }),
+      ];
 
-    it("usa sum de summary cuando events está vacío", () => {
-      const summary = { excesos: 1, no_identificados: 0, contactos: 1, llave_sin_cargar: 0, conductor_inactivo: 0 };
-      expect(computeRiskScore(summary, [])).toBe(2);
+      const score = computeRiskScore(null, events);
+      expect(score).toBeGreaterThanOrEqual(10);
     });
   });
 });

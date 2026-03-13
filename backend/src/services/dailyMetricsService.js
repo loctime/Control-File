@@ -33,6 +33,13 @@ async function getDailyTotalsByType(dateKey) {
       totalAdvertencias: 0,
       totalAdministrativos: 0,
       vehiclesWithCritical: 0,
+      totalUniqueIncidents: 0,
+      totalUniqueOperationalIncidents: 0,
+      totalUniqueTechnicalIncidents: 0,
+      totalSpeedIncidents: 0,
+      maxSpeedRecorded: 0,
+      vehiclesWithSpeeding: 0,
+      driversWithSpeeding: 0,
     };
   }
 
@@ -55,6 +62,13 @@ async function getDailyTotalsByType(dateKey) {
       totalAdvertencias: 0,
       totalAdministrativos: 0,
       vehiclesWithCritical: 0,
+      totalUniqueIncidents: 0,
+      totalUniqueOperationalIncidents: 0,
+      totalUniqueTechnicalIncidents: 0,
+      totalSpeedIncidents: 0,
+      maxSpeedRecorded: 0,
+      vehiclesWithSpeeding: 0,
+      driversWithSpeeding: 0,
     };
   }
 
@@ -71,6 +85,13 @@ async function getDailyTotalsByType(dateKey) {
     totalAdvertencias: meta.totalAdvertencias ?? 0,
     totalAdministrativos: meta.totalAdministrativos ?? 0,
     vehiclesWithCritical: meta.vehiclesWithCritical ?? 0,
+    totalUniqueIncidents: meta.totalUniqueIncidents ?? 0,
+    totalUniqueOperationalIncidents: meta.totalUniqueOperationalIncidents ?? 0,
+    totalUniqueTechnicalIncidents: meta.totalUniqueTechnicalIncidents ?? 0,
+    totalSpeedIncidents: meta.totalSpeedIncidents ?? 0,
+    maxSpeedRecorded: meta.maxSpeedRecorded ?? 0,
+    vehiclesWithSpeeding: meta.vehiclesWithSpeeding ?? 0,
+    driversWithSpeeding: meta.driversWithSpeeding ?? 0,
     lastUpdatedAt: meta.lastUpdatedAt ?? null,
   };
 }

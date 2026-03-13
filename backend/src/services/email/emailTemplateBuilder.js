@@ -1,37 +1,24 @@
 /**
- * Generador de plantillas HTML para emails de alertas diarias.
- * UTF-8, estilos inline únicamente, max-width 640px, compatible Gmail/Outlook.
- * Iconos: 🚗 vehículo, ⚠ alerta, 📊 métricas, 📡 contacto, 🔑 llave, 🪪 no identificado.
+ * HTML templates for daily fleet alerts.
  */
 
 const ICONS = {
-  vehicle: "🚗",
-  alert: "⚠",
-  metrics: "📊",
-  contact: "📡",
-  key: "🔑",
-  noIdentificado: "🪪",
+  vehicle: "\uD83D\uDE97",
+  alert: "\u26A0",
+  metrics: "\uD83D\uDCCA",
+  speed: "\uD83D\uDCA8",
 };
 
-/**
- * Escapa caracteres HTML para prevenir inyección.
- */
+function isRsvV2TemplateDetailsEnabled() {
+  return process.env.RSV_V2_TEMPLATE_DETAILS_ENABLED === "true";
+}
+
 function escapeHtml(text) {
   if (!text || typeof text !== "string") return "";
-  const map = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  };
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
-/**
- * Formatea fecha/hora en formato argentino (DD/MM/YYYY HH:mm).
- * Compatible con Firestore Timestamp e ISO con offset.
- */
 function formatDateTimeArgentina(timestamp) {
   if (!timestamp) return "-";
   try {
@@ -50,14 +37,14 @@ function formatDateTimeArgentina(timestamp) {
         })
         .replace(/,/g, "");
     }
+
     const str = typeof timestamp === "string" ? timestamp.trim() : String(timestamp);
-    const isoMatch = str.match(
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:[.]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i
-    );
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:[.]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
     if (isoMatch) {
       const [, y, m, d, hh, mm] = isoMatch;
       return `${d}/${m}/${y} ${hh}:${mm}`;
     }
+
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return "-";
     return date
@@ -76,33 +63,53 @@ function formatDateTimeArgentina(timestamp) {
   }
 }
 
-/**
- * Mapea type del evento a etiqueta legible para el email (UTF-8).
- */
+function getHumanExplanation(eventSubtype) {
+  switch (eventSubtype) {
+    case "UNKNOWN_KEY":
+      return "La llave utilizada no está registrada en el sistema RSV.";
+    case "DRIVER_NOT_IDENTIFIED":
+      return "El conductor no se identificó utilizando su llave RSV.";
+    case "CONTACT_NO_DRIVER":
+      return "El vehículo registró movimiento sin conductor identificado.";
+    case "INACTIVE_DRIVER":
+      return "La llave utilizada pertenece a un conductor inactivo en el sistema RSV.";
+    case "NO_KEY_DETECTED":
+      return "El vehículo circuló sin una llave de identificación detectada por el sistema RSV.";
+    default:
+      return "";
+  }
+}
+
 function getTypeLabel(e) {
+  if (e.eventCategory === "SPEEDING" || e.eventSubtype === "SPEED_EXCESS") return "Exceso de velocidad";
+
+  switch (e.eventSubtype) {
+    case "CONTACT_NO_DRIVER":
+      return "Contacto sin identificacion";
+    case "DRIVER_NOT_IDENTIFIED":
+      return "No identificado";
+    case "UNKNOWN_KEY":
+      return "Llave no registrada";
+    case "INACTIVE_DRIVER":
+      return "Conductor inactivo";
+    default:
+      break;
+  }
+
   switch (e.type) {
-    case "sin_llave":
-      return "SIN LLAVE";
+    case "contacto":
+      return "Contacto sin identificacion";
+    case "no_identificado":
+      return "No identificado";
     case "llave_no_registrada":
       return "Llave no registrada";
     case "conductor_inactivo":
       return "Conductor inactivo";
-    case "no_identificado":
-      return "No identificado";
-    case "contacto":
-      return "Contacto sin identificación";
     default:
-      return "Exceso de velocidad";
+      return "Evento";
   }
 }
 
-function getSeverityColor() {
-  return "#b91c1c";
-}
-
-/**
- * Métricas por tipo desde meta del día.
- */
 function getMetricsByTypeFromMeta(meta) {
   if (!meta) {
     return {
@@ -111,6 +118,10 @@ function getMetricsByTypeFromMeta(meta) {
       contactos: 0,
       llave_sin_cargar: 0,
       conductor_inactivo: 0,
+      totalSpeedIncidents: 0,
+      maxSpeedRecorded: 0,
+      vehiclesWithSpeeding: 0,
+      driversWithSpeeding: 0,
     };
   }
   return {
@@ -119,13 +130,13 @@ function getMetricsByTypeFromMeta(meta) {
     contactos: meta.totalContactos ?? 0,
     llave_sin_cargar: meta.totalLlaveSinCargar ?? 0,
     conductor_inactivo: meta.totalConductorInactivo ?? 0,
+    totalSpeedIncidents: meta.totalSpeedIncidents ?? 0,
+    maxSpeedRecorded: meta.maxSpeedRecorded ?? 0,
+    vehiclesWithSpeeding: meta.vehiclesWithSpeeding ?? 0,
+    driversWithSpeeding: meta.driversWithSpeeding ?? 0,
   };
 }
 
-/**
- * Genera meta a partir de documentos de vehículos (totales por tipo).
- * Exportado para uso en rutas.
- */
 function buildMetaFromVehicleDocs(vehicleDocs) {
   if (!Array.isArray(vehicleDocs) || vehicleDocs.length === 0) {
     return {
@@ -137,29 +148,55 @@ function buildMetaFromVehicleDocs(vehicleDocs) {
       totalContactos: 0,
       totalLlaveSinCargar: 0,
       totalConductorInactivo: 0,
+      totalUniqueIncidents: 0,
+      totalUniqueOperationalIncidents: 0,
+      totalUniqueTechnicalIncidents: 0,
+      totalSpeedIncidents: 0,
+      maxSpeedRecorded: 0,
+      vehiclesWithSpeeding: 0,
+      driversWithSpeeding: 0,
     };
   }
+
   let totalEvents = 0;
   let vehiclesWithCritical = 0;
-  const byType = {
-    excesos: 0,
-    no_identificados: 0,
-    contactos: 0,
-    llave_sin_cargar: 0,
-    conductor_inactivo: 0,
-  };
+  let totalUniqueIncidents = 0;
+  let totalUniqueOperationalIncidents = 0;
+  let totalUniqueTechnicalIncidents = 0;
+  let totalSpeedIncidents = 0;
+  let maxSpeedRecorded = 0;
+  let vehiclesWithSpeeding = 0;
+  const speedingDrivers = new Set();
+
+  const byType = { excesos: 0, no_identificados: 0, contactos: 0, llave_sin_cargar: 0, conductor_inactivo: 0 };
+
   for (const doc of vehicleDocs) {
     const events = Array.isArray(doc.events) ? doc.events : [];
     const n = events.length;
     totalEvents += n;
     if (n > 0) vehiclesWithCritical += 1;
+
     const s = doc.summary || {};
     byType.excesos += s.excesos ?? 0;
     byType.no_identificados += s.no_identificados ?? 0;
     byType.contactos += s.contactos ?? 0;
     byType.llave_sin_cargar += s.llave_sin_cargar ?? 0;
     byType.conductor_inactivo += s.conductor_inactivo ?? 0;
+
+    const incidentSummary = doc.incidentSummary || {};
+    totalUniqueIncidents += incidentSummary.totalUniqueIncidents ?? 0;
+    totalUniqueOperationalIncidents += incidentSummary.uniqueOperationalIncidents ?? 0;
+    totalUniqueTechnicalIncidents += incidentSummary.uniqueTechnicalIncidents ?? 0;
+
+    const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
+    if (speedIncidents.length > 0) vehiclesWithSpeeding += 1;
+    totalSpeedIncidents += speedIncidents.length;
+    for (const si of speedIncidents) {
+      maxSpeedRecorded = Math.max(maxSpeedRecorded, Number(si?.maxSpeed || 0));
+      if (si?.driverName) speedingDrivers.add(si.driverName);
+    }
   }
+
   return {
     totalVehicles: vehicleDocs.length,
     totalEvents,
@@ -169,73 +206,76 @@ function buildMetaFromVehicleDocs(vehicleDocs) {
     totalContactos: byType.contactos,
     totalLlaveSinCargar: byType.llave_sin_cargar,
     totalConductorInactivo: byType.conductor_inactivo,
+    totalUniqueIncidents,
+    totalUniqueOperationalIncidents,
+    totalUniqueTechnicalIncidents,
+    totalSpeedIncidents,
+    maxSpeedRecorded,
+    vehiclesWithSpeeding,
+    driversWithSpeeding: speedingDrivers.size,
   };
 }
 
-/**
- * Ordena documentos por criticidad (riskScore desc, luego patente).
- * Exportado para uso en rutas.
- */
 function sortVehiclesByCriticity(docs) {
   if (!Array.isArray(docs) || docs.length <= 1) return docs;
   return [...docs].sort((a, b) => {
     const scoreA = typeof a.riskScore === "number" ? a.riskScore : 0;
     const scoreB = typeof b.riskScore === "number" ? b.riskScore : 0;
     if (scoreB !== scoreA) return scoreB - scoreA;
-    const plateA = (a.plate || a.id || "").toString();
-    const plateB = (b.plate || b.id || "").toString();
-    return plateA.localeCompare(plateB);
+    return (a.plate || a.id || "").toString().localeCompare((b.plate || b.id || "").toString());
   });
 }
 
-/**
- * Encabezado global del email: título, fecha y resumen de métricas (UTF-8).
- */
 function buildGlobalSummaryHeader(meta, dateKey) {
   const totalVehicles = meta ? meta.totalVehicles ?? 0 : 0;
   const totalEvents = meta ? meta.totalEvents ?? 0 : 0;
   const vehiclesWithCritical = meta ? meta.vehiclesWithCritical ?? 0 : 0;
   const byType = getMetricsByTypeFromMeta(meta);
 
-  const hasByType =
-    byType.excesos > 0 ||
-    byType.no_identificados > 0 ||
-    byType.contactos > 0 ||
-    byType.llave_sin_cargar > 0 ||
-    byType.conductor_inactivo > 0;
-
-  const metricsByTypeHtml = hasByType
-    ? `<div style="font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid #93c5fd;">
-        <strong>Por tipo:</strong>
-        ${byType.excesos > 0 ? ` ${ICONS.alert} Excesos de velocidad: ${byType.excesos}` : ""}
-        ${byType.no_identificados > 0 ? ` | ${ICONS.noIdentificado} No identificados: ${byType.no_identificados}` : ""}
-        ${byType.contactos > 0 ? ` | ${ICONS.contact} Contacto sin identificación: ${byType.contactos}` : ""}
-        ${byType.llave_sin_cargar > 0 ? ` | ${ICONS.key} Llave sin cargar: ${byType.llave_sin_cargar}` : ""}
-        ${byType.conductor_inactivo > 0 ? ` | Conductor inactivo: ${byType.conductor_inactivo}` : ""}
-      </div>`
-    : "";
-
   return `
   <div style="background:#1f2937;color:#fff;padding:20px;border-radius:6px 6px 0 0;">
     <div style="font-size:20px;font-weight:600;">${ICONS.vehicle} Alertas de flota</div>
-    <div style="font-size:13px;opacity:0.9;margin-top:4px;">Resumen diario — ${escapeHtml(dateKey)}</div>
+    <div style="font-size:13px;opacity:0.9;margin-top:4px;">Resumen diario - ${escapeHtml(dateKey)}</div>
   </div>
   <div style="background:#eff6ff;padding:16px;border:1px solid #bfdbfe;border-top:none;">
     <div style="font-size:14px;line-height:1.6;">
-      <strong>Vehículos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
+      <strong>Vehiculos con alertas:</strong> ${totalVehicles} &nbsp;|&nbsp;
       <strong>Total eventos:</strong> ${totalEvents}
-      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color:#b91c1c;font-weight:600;">${ICONS.alert} Vehículos con eventos: ${vehiclesWithCritical}</span>` : ""}
+      ${vehiclesWithCritical > 0 ? ` &nbsp;|&nbsp; <span style="color:#b91c1c;font-weight:600;">${ICONS.alert} Vehiculos con eventos: ${vehiclesWithCritical}</span>` : ""}
     </div>
-    ${totalEvents > 0 ? `<div style="font-size:13px;margin-top:8px;color:#1e40af;">${ICONS.alert} ${totalEvents} eventos</div>` : ""}
-    ${metricsByTypeHtml}
+    <div style="font-size:13px;margin-top:8px;color:#1e40af;">
+      ${ICONS.speed} Incidentes de velocidad: ${byType.totalSpeedIncidents} | Maxima: ${byType.maxSpeedRecorded || 0} km/h | Vehiculos con exceso: ${byType.vehiclesWithSpeeding} | Conductores: ${byType.driversWithSpeeding}
+    </div>
   </div>`;
 }
 
-/**
- * Sección HTML por vehículo: patente, marca/modelo, resumen por tipo, tabla de eventos (UTF-8).
- */
+function buildSpeedIncidentCards(doc) {
+  const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
+  if (speedIncidents.length === 0) return "";
+
+  const cards = speedIncidents
+    .map((incident) => {
+      const causeSubtype = incident.causeSubtype || (incident.driverName ? null : "NO_KEY_DETECTED");
+      const causeText = causeSubtype ? getHumanExplanation(causeSubtype) : "";
+      return `
+      <div style="margin-top:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;background:#fff7ed;">
+        <div style="font-size:13px;font-weight:700;color:#9a3412;">Exceso de velocidad detectado</div>
+        <div style="font-size:12px;margin-top:6px;">Velocidad maxima: <strong>${incident.maxSpeed ?? "-"} km/h</strong></div>
+        <div style="font-size:12px;">Cantidad de eventos: <strong>${incident.groupedEventsCount ?? 0}</strong></div>
+        <div style="font-size:12px;">Duracion estimada: <strong>${Math.round((incident.durationSeconds || 0) / 60)} minutos</strong></div>
+        <div style="font-size:12px;">Ubicacion: <strong>${escapeHtml(incident.location || "Sin ubicacion")}</strong></div>
+        <div style="font-size:12px;">Conductor: <strong>${escapeHtml(incident.driverName || "No identificado")}</strong></div>
+        ${causeText ? `<div style="font-size:12px;margin-top:6px;"><strong>Causa probable:</strong> ${escapeHtml(causeText)}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+
+  return `<div style="margin-top:10px;">${cards}</div>`;
+}
+
 function buildVehicleSection(doc) {
   const { plate, brand, model, events, summary } = doc;
+  const detailsEnabled = isRsvV2TemplateDetailsEnabled();
 
   if (!Array.isArray(events) || events.length === 0) {
     return `<div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
@@ -247,149 +287,119 @@ function buildVehicleSection(doc) {
   const sortedEvents = events
     .filter((e) => e && e.eventTimestamp)
     .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
-  const totalEventos = sortedEvents.length;
-  const summaryByType = summary || {};
-  const color = getSeverityColor();
 
-  const rowsHtml = sortedEvents
+  const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
+  const hasGroupedSpeedIncidents = speedIncidents.length > 0;
+  const tableEvents = hasGroupedSpeedIncidents
+    ? sortedEvents.filter((e) => !(e.eventCategory === "SPEEDING" || e.eventSubtype === "SPEED_EXCESS" || e.type === "exceso"))
+    : sortedEvents;
+  const displayedEventsCount = tableEvents.length + speedIncidents.length;
+
+  const rowsHtml = tableEvents
     .map((e) => {
-      const driver =
-        e.driverName || (e.rawData && e.rawData.driverName) || null;
-      let typeLabel;
-      const hasReason = e.reason && typeof e.reason === "string" && e.reason.trim().length > 0;
-      if (hasReason) {
-        typeLabel = e.reason.trim() + (e.speed != null && e.hasSpeed ? " - Exceso de velocidad" : "");
-      } else {
-        typeLabel = getTypeLabel(e);
-      }
+      const typeLabel = getTypeLabel(e);
+      const explanation = getHumanExplanation(e.eventSubtype);
+      const reason = e.reasonRaw || e.reason || null;
       return `
-    <tr>
-      <td style="padding:6px 8px;font-weight:600;color:${color};font-size:12px;">${escapeHtml(typeLabel)}</td>
-      <td style="padding:6px 8px;font-size:12px;">${escapeHtml(driver || "-")}</td>
-      <td style="padding:6px 8px;font-size:12px;">${e.speed != null ? e.speed + " km/h" : "-"}</td>
-      <td style="padding:6px 8px;font-size:12px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
-      <td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicación")}</td>
-    </tr>`;
+      <tr>
+        <td style="padding:6px 8px;font-weight:600;font-size:12px;color:#b91c1c;">${escapeHtml(typeLabel)}</td>
+        <td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.driverName || "-")}</td>
+        ${detailsEnabled ? `<td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.keyId || "-")}</td>` : ""}
+        <td style="padding:6px 8px;font-size:12px;">${e.speed != null ? `${e.speed} km/h` : "-"}</td>
+        <td style="padding:6px 8px;font-size:12px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
+        <td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicacion")}</td>
+      </tr>
+      ${(reason || explanation) ? `<tr><td colspan="${detailsEnabled ? 6 : 5}" style="padding:4px 8px 8px 8px;font-size:11px;color:#374151;">${escapeHtml(reason || explanation)}</td></tr>` : ""}`;
     })
     .join("");
 
+  const summaryByType = summary || {};
   const typeSummaryParts = [];
   if (summaryByType.excesos > 0) typeSummaryParts.push(`Excesos: ${summaryByType.excesos}`);
   if (summaryByType.no_identificados > 0) typeSummaryParts.push(`No identificados: ${summaryByType.no_identificados}`);
   if (summaryByType.contactos > 0) typeSummaryParts.push(`Contactos: ${summaryByType.contactos}`);
   if (summaryByType.llave_sin_cargar > 0) typeSummaryParts.push(`Llave sin cargar: ${summaryByType.llave_sin_cargar}`);
   if (summaryByType.conductor_inactivo > 0) typeSummaryParts.push(`Conductor inactivo: ${summaryByType.conductor_inactivo}`);
-  const typeSummaryHtml =
-    typeSummaryParts.length > 0
-      ? `<div style="font-size:11px;margin-bottom:8px;color:#4b5563;">${typeSummaryParts.join(" | ")}</div>`
-      : "";
 
-  const vehicleName = [brand, model].filter(Boolean).join(" ");
-
-  return `
-  <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
-    <div style="background:#fafafa;padding:10px 12px;font-weight:600;font-size:14px;border-bottom:1px solid #e5e7eb;">
-      ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` – ${escapeHtml(vehicleName)}` : ""}
-      <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${totalEventos} ${totalEventos === 1 ? "evento" : "eventos"}</span>
-    </div>
-    ${typeSummaryHtml}
-    <table style="width:100%;border-collapse:collapse;font-size:12px;" cellpadding="0" cellspacing="0">
+  const speedCards = buildSpeedIncidentCards(doc);
+  const tableHtml = tableEvents.length > 0
+    ? `<table style="width:100%;border-collapse:collapse;font-size:12px;" cellpadding="0" cellspacing="0">
       <thead>
         <tr style="background:#f3f4f6;">
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Tipo</th>
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Conductor</th>
+          ${detailsEnabled ? '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Llave</th>' : ""}
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Velocidad</th>
           <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Fecha/Hora</th>
-          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Ubicación</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Ubicacion</th>
         </tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
-    </table>
+    </table>`
+    : "";
+  const vehicleName = [brand, model].filter(Boolean).join(" ");
+
+  return `
+  <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+      <div style="background:#fafafa;padding:10px 12px;font-weight:600;font-size:14px;border-bottom:1px solid #e5e7eb;">
+      ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` - ${escapeHtml(vehicleName)}` : ""}
+      <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${displayedEventsCount} ${displayedEventsCount === 1 ? "evento" : "eventos"}</span>
+    </div>
+    ${typeSummaryParts.length > 0 ? `<div style="font-size:11px;margin:8px;color:#4b5563;">${typeSummaryParts.join(" | ")}</div>` : ""}
+    ${speedCards}
+    ${tableHtml}
   </div>`;
 }
 
-/**
- * Cuerpo consolidado: encabezado global + secciones por vehículo. Max-width 640px, estilos inline.
- */
 function buildConsolidatedBody(meta, vehicleDocs, dateKey) {
   const sections = vehicleDocs.map((doc) => buildVehicleSection(doc)).join("");
-  const today = new Date().toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const today = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Resumen diario de flota — ${escapeHtml(dateKey)}</title>
+  <title>Resumen diario de flota - ${escapeHtml(dateKey)}</title>
 </head>
 <body style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#fff;color:#111;">
   ${buildGlobalSummaryHeader(meta, dateKey)}
   ${sections}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
-    <div style="font-size:13px;color:#374151;font-weight:600;">
-      Sistema ControlDoc
-    </div>
-    <div style="font-size:12px;color:#6b7280;margin-top:4px;">
-      Reporte automático de eventos de flota
-    </div>
-    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
-      Generado el ${today}
-    </div>
+    <div style="font-size:13px;color:#374151;font-weight:600;">Sistema ControlDoc</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:4px;">Reporte automatico de eventos de flota</div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">Generado el ${today}</div>
   </div>
 </body>
 </html>`.trim();
 }
 
-/**
- * Cuerpo del email general por grupos operativos (todas las operaciones en un solo HTML).
- */
 function buildGeneralGroupsBody(groups, dateKey) {
   if (!Array.isArray(groups) || groups.length === 0) {
     return `<!DOCTYPE html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Resumen general — ${escapeHtml(dateKey)}</title>
-</head>
+<head><meta charset="utf-8"><title>Resumen general - ${escapeHtml(dateKey)}</title></head>
 <body style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:20px;">
-  <div style="text-align:center;padding:24px;">
-    <h2 style="font-size:18px;color:#374151;">No hay alertas pendientes.</h2>
-  </div>
+  <div style="text-align:center;padding:24px;"><h2 style="font-size:18px;color:#374151;">No hay alertas pendientes.</h2></div>
 </body>
 </html>`.trim();
   }
 
-  const today = new Date().toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
+  const today = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sections = groups
     .map((group) => {
       const sortedDocs = sortVehiclesByCriticity(group.docs);
       const meta = buildMetaFromVehicleDocs(sortedDocs);
-      const operationName = (
-        sortedDocs[0]?.operationName ||
-        sortedDocs[0]?.operacion ||
-        "Operación no asignada"
-      ).toUpperCase();
+      const operationName = (sortedDocs[0]?.operationName || sortedDocs[0]?.operacion || "Operacion no asignada").toUpperCase();
       const responsablesText = (group.responsableEmails || []).join(", ");
-
       return `
-  <div style="margin-top:24px;border-top:2px solid #1f2937;padding-top:12px;">
-    <h2 style="margin:0;font-size:16px;color:#111;font-weight:600;">
-      ${ICONS.metrics} Operación ${escapeHtml(operationName)}
-    </h2>
-    <div style="font-size:12px;color:#4b5563;margin:6px 0 12px 0;">
-      Responsables: ${escapeHtml(responsablesText)}<br>
-      Vehículos con eventos: ${meta.totalVehicles} | Total eventos: ${meta.totalEvents}
-    </div>
-  </div>
-  ${sortedDocs.map((doc) => buildVehicleSection(doc)).join("")}`.trim();
+      <div style="margin-top:24px;border-top:2px solid #1f2937;padding-top:12px;">
+        <h2 style="margin:0;font-size:16px;color:#111;font-weight:600;">${ICONS.metrics} Operacion ${escapeHtml(operationName)}</h2>
+        <div style="font-size:12px;color:#4b5563;margin:6px 0 12px 0;">
+          Responsables: ${escapeHtml(responsablesText)}<br>
+          Vehiculos con eventos: ${meta.totalVehicles} | Total eventos: ${meta.totalEvents}
+        </div>
+      </div>
+      ${sortedDocs.map((doc) => buildVehicleSection(doc)).join("")}`.trim();
     })
     .join("");
 
@@ -398,51 +408,33 @@ function buildGeneralGroupsBody(groups, dateKey) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Resumen general de operaciones — ${escapeHtml(dateKey)}</title>
+  <title>Resumen general de operaciones - ${escapeHtml(dateKey)}</title>
 </head>
 <body style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:20px;background:#fff;color:#111;">
   <div style="background:#1f2937;color:#fff;padding:20px;border-radius:6px 6px 0 0;">
     <div style="font-size:20px;font-weight:600;">${ICONS.metrics} Resumen general de operaciones</div>
     <div style="font-size:13px;opacity:0.9;margin-top:4px;">${escapeHtml(dateKey)}</div>
   </div>
-
   ${sections}
-
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
-    <div style="font-size:13px;color:#374151;font-weight:600;">
-      Sistema ControlDoc
-    </div>
-    <div style="font-size:12px;color:#6b7280;margin-top:4px;">
-      Reporte automático de eventos de flota
-    </div>
-    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
-      Generado el ${today}
-    </div>
+    <div style="font-size:13px;color:#374151;font-weight:600;">Sistema ControlDoc</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:4px;">Reporte automatico de eventos de flota</div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">Generado el ${today}</div>
   </div>
-
 </body>
 </html>`.trim();
 }
 
-/**
- * Asunto del email consolidado por día (UTF-8).
- */
 function buildConsolidatedSubject(dateKey) {
-  return `${ICONS.vehicle} Resumen diario de flota — ${dateKey}`;
+  return `${ICONS.vehicle} Resumen diario de flota - ${dateKey}`;
 }
 
-/**
- * Asunto del email general (últimos N días).
- */
 function buildGeneralSubjectLastDays(days) {
-  return `${ICONS.metrics} Resumen general de operaciones (últimos ${days} días)`;
+  return `${ICONS.metrics} Resumen general de operaciones (ultimos ${days} dias)`;
 }
 
-/**
- * Asunto del email general (una sola fecha).
- */
 function buildGeneralSubjectSingleDate(dateKey) {
-  return `${ICONS.metrics} Resumen general de operaciones — ${dateKey}`;
+  return `${ICONS.metrics} Resumen general de operaciones - ${dateKey}`;
 }
 
 module.exports = {
@@ -455,4 +447,5 @@ module.exports = {
   buildGeneralSubjectSingleDate,
   buildMetaFromVehicleDocs,
   sortVehiclesByCriticity,
+  getHumanExplanation,
 };

@@ -113,7 +113,11 @@ router.post("/email-local-ingest", async (req, res) => {
     const bodyText = body_text || "";
     const { events: rawEvents, sourceEmailType, operationName: operationNameFromEmail } = parseVehicleEventsFromEmail(
       emailData.subject || "",
-      bodyText
+      bodyText,
+      {
+        parserV2Enabled: process.env.RSV_V2_PARSER_ENABLED === "true",
+        fallbackTimestamp: emailData.received_at || emailData.ingested_at || new Date().toISOString(),
+      }
     );
 
     const isDev = process.env.NODE_ENV !== "production";
@@ -374,6 +378,18 @@ router.post("/email-local-ingest", async (req, res) => {
                 totalAdvertencias: (prev.totalAdvertencias || 0) + (d.totalAdvertencias || 0),
                 totalAdministrativos: (prev.totalAdministrativos || 0) + (d.totalAdministrativos || 0),
                 vehiclesWithCritical: (prev.vehiclesWithCritical || 0) + (d.vehiclesWithCritical || 0),
+                totalUniqueIncidents: (prev.totalUniqueIncidents || 0) + (d.totalUniqueIncidents || 0),
+                totalUniqueOperationalIncidents:
+                  (prev.totalUniqueOperationalIncidents || 0) + (d.totalUniqueOperationalIncidents || 0),
+                totalUniqueTechnicalIncidents:
+                  (prev.totalUniqueTechnicalIncidents || 0) + (d.totalUniqueTechnicalIncidents || 0),
+                totalSpeedIncidents: (prev.totalSpeedIncidents || 0) + (d.totalSpeedIncidents || 0),
+                vehiclesWithSpeeding: (prev.vehiclesWithSpeeding || 0) + (d.vehiclesWithSpeeding || 0),
+                driversWithSpeeding: (prev.driversWithSpeeding || 0) + (d.driversWithSpeeding || 0),
+                maxSpeedRecorded: Math.max(
+                  prev.maxSpeedRecorded || 0,
+                  d.maxSpeedRecorded || 0
+                ),
               });
             }
           } catch (err) {
