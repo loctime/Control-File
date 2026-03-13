@@ -23,9 +23,18 @@ router.post("/debug/simulate-alert", async (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
+    console.error("[debug/simulate-alert] Error simulando alerta RSV", {
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      subject: req?.body?.subject,
+      hasBody: typeof req?.body?.body === "string",
+      received_at: req?.body?.received_at,
+    });
+
     return res.status(500).json({
       error: "error interno",
-      message: process.env.NODE_ENV === "development" ? error.message : undefined,
+      // Esta ruta es solo de debug, devolvemos el mensaje SIEMPRE
+      message: error?.message || "Error desconocido en simulateAlertFromEmail",
     });
   }
 });
