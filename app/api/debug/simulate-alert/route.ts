@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const { simulateAlertFromEmail } = require("../../../../backend/src/services/alertSimulationService.js");
-
 export async function POST(request: NextRequest) {
   try {
+    // Carga diferida para evitar inicializar Firebase Admin durante el build
+    const {
+      simulateAlertFromEmail,
+    } = require("../../../../backend/src/services/alertSimulationService.js");
+
     const payload = await request.json();
     const subject = typeof payload?.subject === "string" ? payload.subject : "";
     const body = typeof payload?.body === "string" ? payload.body : "";
