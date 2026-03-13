@@ -168,7 +168,30 @@ export default function AlertSimulatorPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "No se pudo simular la alerta");
+        const backendMessage =
+          typeof data?.message === "string" && data.message.trim().length > 0
+            ? ` (${data.message})`
+            : "";
+        const composed =
+          (typeof data?.error === "string" && data.error) ||
+          "No se pudo simular la alerta";
+
+        const finalMessage = `${composed}${backendMessage}`;
+
+        // Log detallado para depurar sin usar pestaña Network
+        console.error("[AlertSimulator] Error al simular alerta", {
+          status: response.status,
+          statusText: response.statusText,
+          url: "/api/debug/simulate-alert",
+          payload: {
+            subject: effectiveSubject,
+            body: effectiveBody,
+            received_at: effectiveReceivedAt,
+          },
+          response: data,
+        });
+
+        throw new Error(finalMessage);
       }
 
       setResult(data);
