@@ -168,10 +168,18 @@ export default function AlertSimulatorPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        const backendMessage =
+        const explicitMessage =
           typeof data?.message === "string" && data.message.trim().length > 0
-            ? ` (${data.message})`
+            ? data.message.trim()
             : "";
+
+        const jsonDetails =
+          data && typeof data === "object"
+            ? ` Detalle JSON: ${JSON.stringify(data)}`
+            : "";
+
+        const backendMessage =
+          explicitMessage.length > 0 ? ` (${explicitMessage})` : jsonDetails;
         const composed =
           (typeof data?.error === "string" && data.error) ||
           "No se pudo simular la alerta";
