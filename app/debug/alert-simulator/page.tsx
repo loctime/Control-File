@@ -63,10 +63,74 @@ function JsonPanel({ title, data }: { title: string; data: unknown }) {
   );
 }
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function detectEmailTypeFromBody(body: string): string | undefined {
+  const normalized = normalizeText(body);
+
+  if (normalized.includes("excesos del dia")) {
+    return "Excesos del día";
+  }
+
+  if (normalized.includes("no identificados del dia")) {
+    return "No identificados del día";
+  }
+
+  if (normalized.includes("contacto sin identificacion del dia")) {
+    return "Contacto sin identificación del día";
+  }
+
+  return undefined;
+}
+
+function parseFullEmail(raw: string): {
+  subject?: string;
+  body: string;
+  receivedAt?: string;
+} {
+  const lines = raw.split(/\r?\n/);
+  let subject: string | undefined;
+  let receivedAt: string | undefined;
+  let bodyStartIndex = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower.startsWith("subject:") || lower.startsWith("asunto:")) {
+      const separatorIndex = trimmed.indexOf(":");
+      subject = trimmed.slice(separatorIndex + 1).trim();
+    } else if (lower.startsWith("date:") || lower.startsWith("fecha:")) {
+      const separatorIndex = trimmed.indexOf(":");
+      receivedAt = trimmed.slice(separatorIndex + 1).trim();
+    }
+
+    if (trimmed === "") {
+      bodyStartIndex = i + 1;
+      break;
+    }
+  }
+
+  const body = lines.slice(bodyStartIndex).join("\n").trim();
+
+  return {
+    subject,
+    body: body || raw,
+    receivedAt,
+  };
+}
+
 export default function AlertSimulatorPage() {
   const [subject, setSubject] = useState(sampleSubject);
   const [body, setBody] = useState(sampleBody);
-  const [receivedAt, setReceivedAt] = useState("");
+  const [fullEmail, setFullEmail] = useState("");
+  const [inputMode, setInputMode] = useState<"separate" | "fullEmail">("fullEmail");
   const [result, setResult] = useState<SimulationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,15 +140,29 @@ export default function AlertSimulatorPage() {
     setError(null);
 
     try {
+      const parsed =
+        inputMode === "fullEmail" && fullEmail.trim().length > 0
+          ? parseFullEmail(fullEmail)
+          : undefined;
+
+      const effectiveBody =
+        parsed?.body && parsed.body.length > 0 ? parsed.body : body;
+
+      const effectiveSubject =
+        (subject || parsed?.subject) || detectEmailTypeFromBody(effectiveBody);
+
+      const effectiveReceivedAt =
+        parsed?.receivedAt || new Date().toISOString();
+
       const response = await fetch("/api/debug/simulate-alert", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          subject,
-          body,
-          received_at: receivedAt || undefined,
+          subject: effectiveSubject,
+          body: effectiveBody,
+          received_at: effectiveReceivedAt,
         }),
       });
 
@@ -137,39 +215,87 @@ export default function AlertSimulatorPage() {
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(340px,420px)_minmax(0,1fr)]">
             <section className="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Subject
-                </label>
-                <Input
-                  value={subject}
-                  onChange={(event) => setSubject(event.target.value)}
-                  placeholder="Excesos del dia"
-                />
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                  Modo de entrada
+                </span>
+                <div className="ml-auto inline-flex items-center gap-1 rounded-full bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setInputMode("fullEmail")}
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      inputMode === "fullEmail"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Pegar email completo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputMode("separate")}
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      inputMode === "separate"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    Campos separados
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Received at
-                </label>
-                <Input
-                  value={receivedAt}
-                  onChange={(event) => setReceivedAt(event.target.value)}
-                  placeholder="2026-03-13T09:00:00-03:00"
-                />
-              </div>
+              {inputMode === "fullEmail" ? (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Pega el email RSV completo
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    Incluye encabezados como <code>Subject:</code> y <code>Date:</code>. El
+                    simulador extrae asunto, fecha y cuerpo automáticamente. Si no hay
+                    subject, se intenta detectar el tipo desde el cuerpo.
+                  </p>
+                  <Textarea
+                    value={fullEmail}
+                    onChange={(event) => setFullEmail(event.target.value)}
+                    className="min-h-[420px] bg-white font-mono text-xs leading-6"
+                    placeholder={`Subject: Excesos del día
+Date: 2026-03-13T09:00:00-03:00
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  RSV email body
-                </label>
-                <Textarea
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  className="min-h-[420px] bg-white font-mono text-xs leading-6"
-                  placeholder="Pegue aqui el cuerpo del email RSV"
-                />
-              </div>
+Operacion: Demo
+145 Km/h ...`}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Subject (opcional)
+                    </label>
+                    <Input
+                      value={subject}
+                      onChange={(event) => setSubject(event.target.value)}
+                      placeholder="Excesos del día / No identificados del día / Contacto sin identificación del día"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Si lo dejas vacío, se intenta inferir el tipo desde el cuerpo del
+                      email.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Cuerpo del email RSV
+                    </label>
+                    <Textarea
+                      value={body}
+                      onChange={(event) => setBody(event.target.value)}
+                      className="min-h-[420px] bg-white font-mono text-xs leading-6"
+                      placeholder="Pega aquí el cuerpo del email RSV"
+                    />
+                  </div>
+                </>
+              )}
             </section>
 
             <section className="space-y-6">
