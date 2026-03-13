@@ -38,13 +38,6 @@ function formatDateTimeArgentina(timestamp) {
         .replace(/,/g, "");
     }
 
-    const str = typeof timestamp === "string" ? timestamp.trim() : String(timestamp);
-    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:[.]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
-    if (isoMatch) {
-      const [, y, m, d, hh, mm] = isoMatch;
-      return `${d}/${m}/${y} ${hh}:${mm}`;
-    }
-
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return "-";
     return date
@@ -61,6 +54,15 @@ function formatDateTimeArgentina(timestamp) {
   } catch {
     return "-";
   }
+}
+
+function buildExplanationText(eventSubtype, rawReason) {
+  const explanation = getHumanExplanation(eventSubtype);
+  const detail = typeof rawReason === "string" ? rawReason.trim() : "";
+  if (explanation && detail) {
+    return `${explanation} Detalle RSV: ${detail}`;
+  }
+  return explanation || detail || "";
 }
 
 function getHumanExplanation(eventSubtype) {
@@ -172,7 +174,7 @@ function buildMetaFromVehicleDocs(vehicleDocs) {
 
   for (const doc of vehicleDocs) {
     const events = Array.isArray(doc.events) ? doc.events : [];
-    const n = events.length;
+    const n = Number.isFinite(doc?.totalEventsCount) ? Number(doc.totalEventsCount) : events.length;
     totalEvents += n;
     if (n > 0) vehiclesWithCritical += 1;
 
@@ -250,7 +252,9 @@ function buildGlobalSummaryHeader(meta, dateKey) {
 }
 
 function buildSpeedIncidentCards(doc) {
-  const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
+  const speedIncidents = Array.isArray(doc.speedIncidents)
+    ? [...doc.speedIncidents].sort((a, b) => new Date(b?.lastEventAt || 0) - new Date(a?.lastEventAt || 0))
+    : [];
   if (speedIncidents.length === 0) return "";
 
   const cards = speedIncidents
@@ -289,17 +293,16 @@ function buildVehicleSection(doc) {
     .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
 
   const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
-  const hasGroupedSpeedIncidents = speedIncidents.length > 0;
-  const tableEvents = hasGroupedSpeedIncidents
-    ? sortedEvents.filter((e) => !(e.eventCategory === "SPEEDING" || e.eventSubtype === "SPEED_EXCESS" || e.type === "exceso"))
-    : sortedEvents;
+  const groupedSpeedEventIds = new Set(
+    speedIncidents.flatMap((incident) => (Array.isArray(incident?.eventIds) ? incident.eventIds : [])),
+  );
+  const tableEvents = sortedEvents.filter((e) => !groupedSpeedEventIds.has(e.eventId));
   const displayedEventsCount = tableEvents.length + speedIncidents.length;
 
   const rowsHtml = tableEvents
     .map((e) => {
       const typeLabel = getTypeLabel(e);
-      const explanation = getHumanExplanation(e.eventSubtype);
-      const reason = e.reasonRaw || e.reason || null;
+      const explanationText = buildExplanationText(e.eventSubtype, e.reasonRaw || e.reason || null);
       return `
       <tr>
         <td style="padding:6px 8px;font-weight:600;font-size:12px;color:#b91c1c;">${escapeHtml(typeLabel)}</td>
@@ -309,7 +312,7 @@ function buildVehicleSection(doc) {
         <td style="padding:6px 8px;font-size:12px;">${formatDateTimeArgentina(e.eventTimestamp)}</td>
         <td style="padding:6px 8px;font-size:12px;">${escapeHtml(e.locationRaw || e.location || "Sin ubicacion")}</td>
       </tr>
-      ${(reason || explanation) ? `<tr><td colspan="${detailsEnabled ? 6 : 5}" style="padding:4px 8px 8px 8px;font-size:11px;color:#374151;">${escapeHtml(reason || explanation)}</td></tr>` : ""}`;
+      ${explanationText ? `<tr><td colspan="${detailsEnabled ? 6 : 5}" style="padding:4px 8px 8px 8px;font-size:11px;color:#374151;">${escapeHtml(explanationText)}</td></tr>` : ""}`;
     })
     .join("");
 

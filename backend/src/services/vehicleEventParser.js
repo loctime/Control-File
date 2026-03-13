@@ -4,6 +4,7 @@
 
 const DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires";
 const ARGENTINA_OFFSET = "-03:00";
+const ARGENTINA_OFFSET_MINUTES = -3 * 60;
 
 const EMAIL_TYPE_EXCESOS = "excesos";
 const EMAIL_TYPE_NO_IDENTIFICADOS = "no_identificados";
@@ -62,6 +63,35 @@ function formatLocalTimestamp(year, month, day, hh, min, ss) {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hh).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(ss).padStart(2, "0")}${ARGENTINA_OFFSET}`;
 }
 
+function toArgentinaIsoFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const adjusted = new Date(date.getTime() + ARGENTINA_OFFSET_MINUTES * 60 * 1000);
+  return formatLocalTimestamp(
+    adjusted.getUTCFullYear(),
+    adjusted.getUTCMonth() + 1,
+    adjusted.getUTCDate(),
+    adjusted.getUTCHours(),
+    adjusted.getUTCMinutes(),
+    adjusted.getUTCSeconds(),
+  );
+}
+
+function isValidLocalTimestampParts(year, month, day, hh, min, ss) {
+  const iso = formatLocalTimestamp(year, month, day, hh, min, ss);
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  const adjusted = new Date(parsed.getTime() + ARGENTINA_OFFSET_MINUTES * 60 * 1000);
+  return (
+    adjusted.getUTCFullYear() === year &&
+    adjusted.getUTCMonth() + 1 === month &&
+    adjusted.getUTCDate() === day &&
+    adjusted.getUTCHours() === hh &&
+    adjusted.getUTCMinutes() === min &&
+    adjusted.getUTCSeconds() === ss
+  );
+}
+
 function parseDateTimeToIso(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
   let day;
@@ -84,6 +114,7 @@ function parseDateTimeToIso(dateStr, timeStr) {
 
   const [hh, min, ss] = timeStr.split(":").map((v) => parseInt(v, 10));
   if ([day, month, year, hh, min, ss].some((n) => Number.isNaN(n))) return null;
+  if (!isValidLocalTimestampParts(year, month, day, hh, min, ss)) return null;
   return formatLocalTimestamp(year, month, day, hh, min, ss);
 }
 
@@ -92,15 +123,9 @@ function buildFallbackTimestamp(fallbackTimestamp) {
   const raw = String(fallbackTimestamp).trim();
   if (!raw) return null;
 
-  const withOffset = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/i);
-  if (withOffset) {
-    const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) return raw;
-  }
-
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
+  return toArgentinaIsoFromDate(parsed);
 }
 
 function classifyReason(reason) {
@@ -305,7 +330,7 @@ function buildCommonEvent(raw) {
   };
 }
 
-function parseExcesos(bodyText) {
+function parseExcesos(bodyText, options = {}) {
   if (!bodyText || typeof bodyText !== "string") return [];
 
   const regex = /^(\d+)\s*Km\/h\s+(\d{2}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.+?)\s*-\s+(.+)$/i;
@@ -317,7 +342,11 @@ function parseExcesos(bodyText) {
       if (!match) return null;
 
       const speed = parseInt(match[1], 10);
-      const eventTimestamp = parseDateTimeToIso(match[2], match[3]);
+      const parsedTimestamp = parseDateTimeToIso(match[2], match[3]);
+      const fallbackTimestamp = parsedTimestamp ? null : buildFallbackTimestamp(options.fallbackTimestamp);
+      const eventTimestamp = parsedTimestamp || fallbackTimestamp;
+      const timestampSource = parsedTimestamp ? "EMAIL_EVENT" : fallbackTimestamp ? "INGEST_FALLBACK" : null;
+      if (!eventTimestamp || !timestampSource) return null;
       const plateRaw = match[4].trim();
       const rest = match[5].trim();
 
@@ -342,6 +371,7 @@ function parseExcesos(bodyText) {
         locationRaw,
         location: locationRaw || locationShort || "",
         eventTimestamp,
+        timestampSource,
         rawLine: line,
       });
     })
@@ -373,6 +403,10 @@ function parseNoIdentificadosLine(line, opts = {}) {
     plateRaw = plateMatch[1];
     vehiclePart = restAfterTime.slice(separatorIdx + 3).trim();
     eventTimestamp = parseDateTimeToIso(datePart, timePart);
+    if (!eventTimestamp) {
+      eventTimestamp = buildFallbackTimestamp(opts.fallbackTimestamp);
+      timestampSource = eventTimestamp ? "INGEST_FALLBACK" : "EMAIL_EVENT";
+    }
     if (!eventTimestamp) return null;
   } else {
     if (!opts.allowSummaryFormat) return null;
@@ -427,7 +461,7 @@ function parseNoIdentificados(bodyText, options = {}) {
     .filter(Boolean);
 }
 
-function parseContactoSinIdentificacion(bodyText) {
+function parseContactoSinIdentificacion(bodyText, options = {}) {
   if (!bodyText || typeof bodyText !== "string") return [];
 
   const regex = /^(.*?)\s{2,}(.*?)\s{2,}([A-Z0-9\-\s]+?)\s{2,}(\d{2}-\d{2}-\d{4})\s+(\d{2}:\d{2}:\d{2})$/i;
@@ -438,7 +472,11 @@ function parseContactoSinIdentificacion(bodyText) {
       if (!match) return null;
 
       const [, brand, model, plateGroup, datePart, timePart] = match;
-      const eventTimestamp = parseDateTimeToIso(datePart, timePart);
+      const parsedTimestamp = parseDateTimeToIso(datePart, timePart);
+      const fallbackTimestamp = parsedTimestamp ? null : buildFallbackTimestamp(options.fallbackTimestamp);
+      const eventTimestamp = parsedTimestamp || fallbackTimestamp;
+      const timestampSource = parsedTimestamp ? "EMAIL_EVENT" : fallbackTimestamp ? "INGEST_FALLBACK" : null;
+      if (!eventTimestamp || !timestampSource) return null;
 
       let plateRaw = plateGroup.trim();
       const plateMatch = plateRaw.match(PLATE_REGEX);
@@ -456,6 +494,7 @@ function parseContactoSinIdentificacion(bodyText) {
         locationShort: null,
         locationRaw: null,
         eventTimestamp,
+        timestampSource,
         rawLine: line,
       });
     })
@@ -516,15 +555,15 @@ function parseVehicleEventsFromEmail(subject, bodyText, options = {}) {
   };
 
   if (sourceEmailType === EMAIL_TYPE_EXCESOS) {
-    rawEvents = parseExcesos(bodyText);
+    rawEvents = parseExcesos(bodyText, parserOptions);
   } else if (sourceEmailType === EMAIL_TYPE_NO_IDENTIFICADOS) {
     rawEvents = parseNoIdentificados(bodyText, parserOptions);
   } else if (sourceEmailType === EMAIL_TYPE_CONTACTO) {
-    rawEvents = parseContactoSinIdentificacion(bodyText);
+    rawEvents = parseContactoSinIdentificacion(bodyText, parserOptions);
   } else {
-    const excesos = parseExcesos(bodyText);
+    const excesos = parseExcesos(bodyText, parserOptions);
     const noIds = parseNoIdentificados(bodyText, parserOptions);
-    const contactos = parseContactoSinIdentificacion(bodyText);
+    const contactos = parseContactoSinIdentificacion(bodyText, parserOptions);
     if (excesos.length >= noIds.length && excesos.length >= contactos.length) {
       rawEvents = excesos;
       detectedType = EMAIL_TYPE_EXCESOS;
