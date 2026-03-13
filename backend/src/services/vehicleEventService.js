@@ -901,14 +901,20 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
 
     const docSnap = await tx.get(vehiclesRef);
     const existingData = docSnap.exists ? docSnap.data() : null;
-    const existingEvents = Array.isArray(existingData?.events) ? existingData.events : [];
-    const existingEventIds = new Set([
-      ...existingEvents.map((e) => e.eventId).filter(Boolean),
-      ...(Array.isArray(existingData?.eventIdsSeen) ? existingData.eventIdsSeen.filter(Boolean) : []),
-    ]);
+    const projection = buildDailyAlertVehicleProjection({
+      dateKey,
+      plate: normalized,
+      vehicle: {
+        ...vehicle,
+        responsables,
+        responsablesNormalized,
+      },
+      existingData,
+      eventSummaries,
+      nowValue: now,
+    });
 
-    const newSummaries = eventSummaries.filter((es) => !existingEventIds.has(es.eventId));
-    if (newSummaries.length === 0) {
+    if (!projection.metaDeltas) {
       return {
         isNewVehicle: false,
         metaDeltas: null,
@@ -916,142 +922,14 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
         alertSent: existingData?.alertSent ?? false,
       };
     }
-
-    const mergedEvents = [...existingEvents];
-    const summaryCounts = {
-      excesos: existingData?.summary?.excesos ?? 0,
-      no_identificados: existingData?.summary?.no_identificados ?? 0,
-      contactos: existingData?.summary?.contactos ?? 0,
-      llave_sin_cargar: existingData?.summary?.llave_sin_cargar ?? 0,
-      conductor_inactivo: existingData?.summary?.conductor_inactivo ?? 0,
-    };
-
-    const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
-    const newCount = newSummaries.length;
-
-    for (const es of newSummaries) {
-      mergedEvents.push(es);
-      const key = normalizeEventTypeForSummary(es.type);
-      summaryCounts[key] = (summaryCounts[key] || 0) + 1;
-    }
-    const eventIdsSeen = Array.from(
-      new Set([
-        ...existingEventIds,
-        ...newSummaries.map((es) => es.eventId).filter(Boolean),
-      ]),
-    );
-
-    const speedIncidents = groupSpeedingIncidents(mergedEvents);
-    const speedByEventId = new Map();
-    for (const incident of speedIncidents) {
-      for (const eventId of incident.eventIds || []) {
-        speedByEventId.set(eventId, incident);
-      }
-    }
-    const mergedEventsWithSpeedGroups = mergedEvents.map((event) => {
-      const incident = speedByEventId.get(event.eventId);
-      if (!incident) {
-        if (event?.groupedSpeedIncidentKey) {
-          const { groupedSpeedIncidentKey, ...rest } = event;
-          return rest;
-        }
-        return event;
-      }
-      return {
-        ...event,
-        incidentKey: incident.incidentKey,
-        groupedEventsCount: incident.groupedEventsCount,
-        maxSpeed: incident.maxSpeed,
-        speedSeverity: incident.severity,
-        groupedSpeedIncidentKey: incident.incidentKey,
-      };
-    });
-
-    const { storedEvents, wasTruncated, truncatedCount } = trimStoredEvents(
-      mergedEventsWithSpeedGroups,
-      normalized,
-      dateKey,
-    );
-    const riskScore = computeRiskScore(summaryCounts, mergedEventsWithSpeedGroups);
-    const incidentSummary = computeIncidentSummary(mergedEventsWithSpeedGroups);
-    const previousIncidentSummary = existingData?.incidentSummary || {
-      totalUniqueIncidents: 0,
-      uniqueOperationalIncidents: 0,
-      uniqueTechnicalIncidents: 0,
-    };
-    const previousSpeedIncidents = Array.isArray(existingData?.speedIncidents) ? existingData.speedIncidents : [];
-    const previousSpeedIncidentCount = previousSpeedIncidents.length;
-    const previousMaxSpeed = previousSpeedIncidents.reduce((max, s) => Math.max(max, Number(s?.maxSpeed || 0)), 0);
-    const previousSpeedingDrivers = new Set(Array.isArray(existingData?.speedingDrivers) ? existingData.speedingDrivers : []);
-    const currentSpeedingDrivers = new Set(
-      speedIncidents.map((s) => s.driverName).filter((name) => typeof name === "string" && name.trim().length > 0),
-    );
-    const isNewVehicle = !docSnap.exists;
-
-    const docPayload = {
-      plate: normalized,
-      dateKey,
-      brand: vehicle.brand || "",
-      model: vehicle.model || "",
-      operationName: vehicle.operationName || vehicle.operacion || null,
-      operacion: vehicle.operationName || vehicle.operacion || null,
-      responsables,
-      responsablesNormalized,
-      alertSent: existingData?.alertSent ?? false,
-      sentAt: existingData?.sentAt ?? null,
-      lastEventAt: now,
-      summary: summaryCounts,
-      incidentSummary,
-      speedIncidents,
-      speedingDrivers: Array.from(currentSpeedingDrivers),
-      events: storedEvents,
-      eventIdsSeen,
-      totalEventsCount: mergedEventsWithSpeedGroups.length,
-      storedEventsCount: storedEvents.length,
-      eventsTruncated: wasTruncated,
-      truncatedEventsCount: truncatedCount,
-      riskScore,
-    };
-
-    if (isNewVehicle) {
-      docPayload.createdAt = now;
-    }
-
-    tx.set(vehiclesRef, docPayload, { merge: true });
+    tx.set(vehiclesRef, projection.docPayload, { merge: true });
     tx.set(dayRef, { lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
 
-    const metaDeltas = {
-      totalEvents: newCount,
-      totalExcesos: summaryCounts.excesos - (existingData?.summary?.excesos ?? 0),
-      totalNoIdentificados: summaryCounts.no_identificados - (existingData?.summary?.no_identificados ?? 0),
-      totalContactos: summaryCounts.contactos - (existingData?.summary?.contactos ?? 0),
-      totalLlaveSinCargar: summaryCounts.llave_sin_cargar - (existingData?.summary?.llave_sin_cargar ?? 0),
-      totalConductorInactivo: summaryCounts.conductor_inactivo - (existingData?.summary?.conductor_inactivo ?? 0),
-      totalCriticos: newCount,
-      totalAdvertencias: 0,
-      totalAdministrativos: 0,
-      totalVehicles: isNewVehicle ? 1 : 0,
-      vehiclesWithCritical: isNewVehicle ? 1 : hadCriticalBefore ? 0 : 1,
-      totalUniqueIncidents:
-        (incidentSummary.totalUniqueIncidents || 0) -
-        (previousIncidentSummary.totalUniqueIncidents || 0),
-      totalUniqueOperationalIncidents:
-        (incidentSummary.uniqueOperationalIncidents || 0) -
-        (previousIncidentSummary.uniqueOperationalIncidents || 0),
-      totalUniqueTechnicalIncidents:
-        (incidentSummary.uniqueTechnicalIncidents || 0) -
-        (previousIncidentSummary.uniqueTechnicalIncidents || 0),
-      totalSpeedIncidents: speedIncidents.length - previousSpeedIncidentCount,
-      vehiclesWithSpeeding: previousSpeedIncidentCount === 0 && speedIncidents.length > 0 ? 1 : 0,
-      driversWithSpeeding: Math.max(0, currentSpeedingDrivers.size - previousSpeedingDrivers.size),
-      maxSpeedRecorded: Math.max(previousMaxSpeed, ...speedIncidents.map((s) => Number(s.maxSpeed || 0))),
-    };
-
     return {
-      isNewVehicle,
-      metaDeltas,
-      riskScore,
-      alertSent: docPayload.alertSent === true,
+      isNewVehicle: projection.isNewVehicle,
+      metaDeltas: projection.metaDeltas,
+      riskScore: projection.riskScore,
+      alertSent: projection.alertSent === true,
     };
   });
 
@@ -1088,6 +966,200 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   return {
     isNewVehicle: result.isNewVehicle,
     metaDeltas: result.metaDeltas,
+  };
+}
+
+function createSummaryCounts(summary = {}) {
+  return {
+    excesos: summary?.excesos ?? 0,
+    no_identificados: summary?.no_identificados ?? 0,
+    contactos: summary?.contactos ?? 0,
+    llave_sin_cargar: summary?.llave_sin_cargar ?? 0,
+    conductor_inactivo: summary?.conductor_inactivo ?? 0,
+  };
+}
+
+function buildDailyAlertVehicleProjection({
+  dateKey,
+  plate,
+  vehicle = {},
+  existingData = null,
+  eventSummaries = [],
+  nowValue = null,
+}) {
+  const normalized = normalizePlate(plate);
+  const existingEvents = Array.isArray(existingData?.events) ? existingData.events : [];
+  const existingEventIds = new Set([
+    ...existingEvents.map((e) => e.eventId).filter(Boolean),
+    ...(Array.isArray(existingData?.eventIdsSeen) ? existingData.eventIdsSeen.filter(Boolean) : []),
+  ]);
+  const newSummaries = (Array.isArray(eventSummaries) ? eventSummaries : []).filter(
+    (eventSummary) => !existingEventIds.has(eventSummary.eventId),
+  );
+
+  if (newSummaries.length === 0) {
+    return {
+      normalizedPlate: normalized,
+      isNewVehicle: false,
+      newSummaries: [],
+      mergedEvents: existingEvents,
+      speedIncidents: Array.isArray(existingData?.speedIncidents) ? existingData.speedIncidents : [],
+      summaryCounts: createSummaryCounts(existingData?.summary),
+      incidentSummary: existingData?.incidentSummary || computeIncidentSummary(existingEvents),
+      riskScore: existingData?.riskScore ?? 0,
+      docPayload: existingData,
+      metaDeltas: null,
+      alertSent: existingData?.alertSent === true,
+      eventIdsSeen: Array.isArray(existingData?.eventIdsSeen) ? existingData.eventIdsSeen : [],
+    };
+  }
+
+  const mergedEvents = [...existingEvents];
+  const summaryCounts = createSummaryCounts(existingData?.summary);
+  const hadCriticalBefore = existingEvents.some((e) => e.severity === "critico");
+
+  for (const eventSummary of newSummaries) {
+    mergedEvents.push(eventSummary);
+    const key = normalizeEventTypeForSummary(eventSummary.type);
+    summaryCounts[key] = (summaryCounts[key] || 0) + 1;
+  }
+
+  const eventIdsSeen = Array.from(
+    new Set([
+      ...existingEventIds,
+      ...newSummaries.map((eventSummary) => eventSummary.eventId).filter(Boolean),
+    ]),
+  );
+
+  const speedIncidents = groupSpeedingIncidents(mergedEvents);
+  const speedByEventId = new Map();
+  for (const incident of speedIncidents) {
+    for (const eventId of incident.eventIds || []) {
+      speedByEventId.set(eventId, incident);
+    }
+  }
+
+  const mergedEventsWithSpeedGroups = mergedEvents.map((event) => {
+    const incident = speedByEventId.get(event.eventId);
+    if (!incident) {
+      if (event?.groupedSpeedIncidentKey) {
+        const { groupedSpeedIncidentKey, ...rest } = event;
+        return rest;
+      }
+      return event;
+    }
+    return {
+      ...event,
+      incidentKey: incident.incidentKey,
+      groupedEventsCount: incident.groupedEventsCount,
+      maxSpeed: incident.maxSpeed,
+      speedSeverity: incident.severity,
+      groupedSpeedIncidentKey: incident.incidentKey,
+    };
+  });
+
+  const { storedEvents, wasTruncated, truncatedCount } = trimStoredEvents(
+    mergedEventsWithSpeedGroups,
+    normalized,
+    dateKey,
+  );
+  const riskScore = computeRiskScore(summaryCounts, mergedEventsWithSpeedGroups);
+  const incidentSummary = computeIncidentSummary(mergedEventsWithSpeedGroups);
+  const previousIncidentSummary = existingData?.incidentSummary || {
+    totalUniqueIncidents: 0,
+    uniqueOperationalIncidents: 0,
+    uniqueTechnicalIncidents: 0,
+  };
+  const previousSpeedIncidents = Array.isArray(existingData?.speedIncidents) ? existingData.speedIncidents : [];
+  const previousSpeedIncidentCount = previousSpeedIncidents.length;
+  const previousMaxSpeed = previousSpeedIncidents.reduce((max, speedIncident) => {
+    return Math.max(max, Number(speedIncident?.maxSpeed || 0));
+  }, 0);
+  const previousSpeedingDrivers = new Set(Array.isArray(existingData?.speedingDrivers) ? existingData.speedingDrivers : []);
+  const currentSpeedingDrivers = new Set(
+    speedIncidents.map((incident) => incident.driverName).filter((name) => typeof name === "string" && name.trim().length > 0),
+  );
+  const isNewVehicle = !existingData;
+  const incomingResponsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
+  const persistedResponsables = Array.isArray(existingData?.responsables) ? existingData.responsables : [];
+  const incomingResponsablesNormalized =
+    Array.isArray(vehicle.responsablesNormalized) && vehicle.responsablesNormalized.length > 0
+      ? vehicle.responsablesNormalized
+      : normalizeEmailArray(incomingResponsables);
+  const persistedResponsablesNormalized = Array.isArray(existingData?.responsablesNormalized)
+    ? existingData.responsablesNormalized
+    : normalizeEmailArray(persistedResponsables);
+
+  const docPayload = {
+    plate: normalized,
+    dateKey,
+    brand: vehicle.brand || existingData?.brand || "",
+    model: vehicle.model || existingData?.model || "",
+    operationName: vehicle.operationName || vehicle.operacion || existingData?.operationName || existingData?.operacion || null,
+    operacion: vehicle.operationName || vehicle.operacion || existingData?.operationName || existingData?.operacion || null,
+    responsables: incomingResponsables.length > 0 ? incomingResponsables : persistedResponsables,
+    responsablesNormalized:
+      incomingResponsablesNormalized.length > 0 ? incomingResponsablesNormalized : persistedResponsablesNormalized,
+    alertSent: existingData?.alertSent ?? false,
+    sentAt: existingData?.sentAt ?? null,
+    lastEventAt: nowValue,
+    summary: summaryCounts,
+    incidentSummary,
+    speedIncidents,
+    speedingDrivers: Array.from(currentSpeedingDrivers),
+    events: storedEvents,
+    eventIdsSeen,
+    totalEventsCount: mergedEventsWithSpeedGroups.length,
+    storedEventsCount: storedEvents.length,
+    eventsTruncated: wasTruncated,
+    truncatedEventsCount: truncatedCount,
+    riskScore,
+  };
+
+  if (isNewVehicle) {
+    docPayload.createdAt = nowValue;
+  }
+
+  const metaDeltas = {
+    totalEvents: newSummaries.length,
+    totalExcesos: summaryCounts.excesos - (existingData?.summary?.excesos ?? 0),
+    totalNoIdentificados: summaryCounts.no_identificados - (existingData?.summary?.no_identificados ?? 0),
+    totalContactos: summaryCounts.contactos - (existingData?.summary?.contactos ?? 0),
+    totalLlaveSinCargar: summaryCounts.llave_sin_cargar - (existingData?.summary?.llave_sin_cargar ?? 0),
+    totalConductorInactivo: summaryCounts.conductor_inactivo - (existingData?.summary?.conductor_inactivo ?? 0),
+    totalCriticos: newSummaries.length,
+    totalAdvertencias: 0,
+    totalAdministrativos: 0,
+    totalVehicles: isNewVehicle ? 1 : 0,
+    vehiclesWithCritical: isNewVehicle ? 1 : hadCriticalBefore ? 0 : 1,
+    totalUniqueIncidents:
+      (incidentSummary.totalUniqueIncidents || 0) -
+      (previousIncidentSummary.totalUniqueIncidents || 0),
+    totalUniqueOperationalIncidents:
+      (incidentSummary.uniqueOperationalIncidents || 0) -
+      (previousIncidentSummary.uniqueOperationalIncidents || 0),
+    totalUniqueTechnicalIncidents:
+      (incidentSummary.uniqueTechnicalIncidents || 0) -
+      (previousIncidentSummary.uniqueTechnicalIncidents || 0),
+    totalSpeedIncidents: speedIncidents.length - previousSpeedIncidentCount,
+    vehiclesWithSpeeding: previousSpeedIncidentCount === 0 && speedIncidents.length > 0 ? 1 : 0,
+    driversWithSpeeding: Math.max(0, currentSpeedingDrivers.size - previousSpeedingDrivers.size),
+    maxSpeedRecorded: Math.max(previousMaxSpeed, ...speedIncidents.map((incident) => Number(incident.maxSpeed || 0))),
+  };
+
+  return {
+    normalizedPlate: normalized,
+    isNewVehicle,
+    newSummaries,
+    mergedEvents: mergedEventsWithSpeedGroups,
+    speedIncidents,
+    summaryCounts,
+    incidentSummary,
+    riskScore,
+    docPayload,
+    metaDeltas,
+    alertSent: docPayload.alertSent === true,
+    eventIdsSeen,
   };
 }
 
@@ -1138,6 +1210,8 @@ module.exports = {
   normalizePlate,
   isFromAllowedDomain,
   computeRiskScore,
+  computeIncidentSummary,
   groupSpeedingIncidents,
   getSpeedSeverity,
+  buildDailyAlertVehicleProjection,
 };
