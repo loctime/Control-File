@@ -893,12 +893,7 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
   const responsablesNormalized = normalizeEmailArray(responsables);
 
   const result = await db.runTransaction(async (tx) => {
-    tx.set(dayRef, {
-      dateKey,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-
+    // Firestore exige que todas las lecturas ocurran antes de cualquier escritura
     const docSnap = await tx.get(vehiclesRef);
     const existingData = docSnap.exists ? docSnap.data() : null;
     const projection = buildDailyAlertVehicleProjection({
@@ -922,6 +917,17 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
         alertSent: existingData?.alertSent ?? false,
       };
     }
+
+    tx.set(
+      dayRef,
+      {
+        dateKey,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
     tx.set(vehiclesRef, projection.docPayload, { merge: true });
     tx.set(dayRef, { lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
 
