@@ -1,3 +1,23 @@
+let dbMock;
+const firebaseAdminPath = require.resolve("../../firebaseAdmin");
+
+require.cache[firebaseAdminPath] = {
+  id: firebaseAdminPath,
+  filename: firebaseAdminPath,
+  loaded: true,
+  exports: {
+    firestore: Object.assign(
+      () => dbMock,
+      {
+        FieldValue: {
+          serverTimestamp: () => "SERVER_TIMESTAMP",
+          increment: (value) => ({ __increment: value }),
+        },
+      },
+    ),
+  },
+};
+
 const {
   generateDeterministicEventId,
   normalizePlate,
@@ -6,12 +26,26 @@ const {
   buildEventSummary,
   groupSpeedingIncidents,
   getSpeedSeverity,
+  upsertDailyAlertBatch,
 } = require("../vehicleEventService");
+
+function createRef(path = []) {
+  return {
+    path,
+    collection(name) {
+      return createRef([...path, name]);
+    },
+    doc(name) {
+      return createRef([...path, name]);
+    },
+  };
+}
 
 describe("vehicleEventService", () => {
   afterEach(() => {
     delete process.env.RSV_V2_RISK_MODEL_ENABLED;
     delete process.env.RSV_V2_SPEED_GROUPING_ENABLED;
+    dbMock = null;
   });
 
   describe("generateDeterministicEventId", () => {
@@ -47,6 +81,16 @@ describe("vehicleEventService", () => {
   });
 
   describe("groupSpeedingIncidents", () => {
+    it("no crea incidente para un solo evento de velocidad", () => {
+      process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
+      const events = [
+        buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 145, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:19:33-03:00", rawLine: "a" }),
+      ];
+
+      const groups = groupSpeedingIncidents(events);
+      expect(groups).toHaveLength(0);
+    });
+
     it("agrupa eventos consecutivos dentro de 3 minutos", () => {
       process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
       const events = [
@@ -62,7 +106,7 @@ describe("vehicleEventService", () => {
       expect(groups[0].severity).toBe("high");
     });
 
-    it("separa incidentes cuando supera 3 minutos", () => {
+    it("no crea incidentes separados cuando solo hay eventos aislados", () => {
       process.env.RSV_V2_SPEED_GROUPING_ENABLED = "true";
       const events = [
         buildEventSummary({ plate: "AG338XC", eventCategory: "SPEEDING", eventSubtype: "SPEED_EXCESS", speed: 130, locationRaw: "RP51", eventTimestamp: "2026-03-12T05:19:33-03:00", rawLine: "a" }),
@@ -70,7 +114,7 @@ describe("vehicleEventService", () => {
       ];
 
       const groups = groupSpeedingIncidents(events);
-      expect(groups).toHaveLength(2);
+      expect(groups).toHaveLength(0);
     });
 
     it("prioriza causa NO_KEY_DETECTED en incidentes agrupados", () => {
@@ -103,6 +147,54 @@ describe("vehicleEventService", () => {
 
       const score = computeRiskScore(null, events);
       expect(score).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  describe("upsertDailyAlertBatch", () => {
+    it("deduplica contra eventIdsSeen aunque el evento ya no este en events por truncamiento", async () => {
+      const tx = {
+        get: vi.fn(async () => ({
+          exists: true,
+          data: () => ({
+            events: [],
+            eventIdsSeen: ["evt-1"],
+            summary: {
+              excesos: 0,
+              no_identificados: 0,
+              contactos: 0,
+              llave_sin_cargar: 0,
+              conductor_inactivo: 0,
+            },
+            riskScore: 4,
+            alertSent: false,
+          }),
+        })),
+        set: vi.fn(),
+      };
+
+      dbMock = {
+        collection: vi.fn(() => createRef(["apps"])),
+        runTransaction: vi.fn(async (callback) => callback(tx)),
+      };
+
+      const result = await upsertDailyAlertBatch(
+        "2026-03-12",
+        "AG338XC",
+        { brand: "Nissan", model: "Frontier", responsables: [] },
+        [{
+          eventId: "evt-1",
+          plate: "AG338XC",
+          type: "exceso",
+          eventCategory: "SPEEDING",
+          eventSubtype: "SPEED_EXCESS",
+          speed: 145,
+          eventTimestamp: "2026-03-12T05:19:33-03:00",
+          locationRaw: "RP51",
+        }],
+      );
+
+      expect(result.metaDeltas).toBe(null);
+      expect(tx.set).toHaveBeenCalledTimes(1);
     });
   });
 });

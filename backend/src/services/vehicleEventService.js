@@ -178,7 +178,9 @@ function groupSpeedingIncidents(events) {
   }
   if (current) groups.push(current);
 
-  return groups.map((group) => {
+  return groups
+    .filter((group) => group.events.length > 1)
+    .map((group) => {
     const idx = countersByBase.get(group.baseKey) || 0;
     countersByBase.set(group.baseKey, idx + 1);
     const incidentKey = idx === 0 ? group.baseKey : `${group.baseKey}_G${idx + 1}`;
@@ -191,29 +193,29 @@ function groupSpeedingIncidents(events) {
     const hasNoKeyDetected = group.events.some((e) => e.eventSubtype === EVENT_SUBTYPE_NO_KEY_DETECTED);
     const hasUnidentifiedDriver = group.events.some((e) => e.eventSubtype === EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED);
 
-    return {
-      incidentKey,
-      eventCategory: EVENT_CATEGORY_SPEEDING,
-      eventSubtype: EVENT_SUBTYPE_SPEED_EXCESS,
-      groupedEventsCount: group.events.length,
-      maxSpeed,
-      avgSpeed,
-      durationSeconds,
-      severity: getSpeedSeverity(maxSpeed),
-      location: group.events[0].locationRaw || group.events[0].location || "",
-      plate: normalizePlate(group.events[0].plate || ""),
-      firstEventAt: group.events[0].eventTimestamp || null,
-      lastEventAt: group.events[group.events.length - 1].eventTimestamp || null,
-      driverName: driver,
-      keyId,
-      causeSubtype: hasNoKeyDetected
-        ? EVENT_SUBTYPE_NO_KEY_DETECTED
-        : hasUnidentifiedDriver
-          ? EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED
-          : null,
-      eventIds: group.events.map((e) => e.eventId).filter(Boolean),
-    };
-  });
+      return {
+        incidentKey,
+        eventCategory: EVENT_CATEGORY_SPEEDING,
+        eventSubtype: EVENT_SUBTYPE_SPEED_EXCESS,
+        groupedEventsCount: group.events.length,
+        maxSpeed,
+        avgSpeed,
+        durationSeconds,
+        severity: getSpeedSeverity(maxSpeed),
+        location: group.events[0].locationRaw || group.events[0].location || "",
+        plate: normalizePlate(group.events[0].plate || ""),
+        firstEventAt: group.events[0].eventTimestamp || null,
+        lastEventAt: group.events[group.events.length - 1].eventTimestamp || null,
+        driverName: driver,
+        keyId,
+        causeSubtype: hasNoKeyDetected
+          ? EVENT_SUBTYPE_NO_KEY_DETECTED
+          : hasUnidentifiedDriver
+            ? EVENT_SUBTYPE_DRIVER_NOT_IDENTIFIED
+            : null,
+        eventIds: group.events.map((e) => e.eventId).filter(Boolean),
+      };
+    });
 }
 
 function computeIncidentSummary(events) {
@@ -900,7 +902,10 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
     const docSnap = await tx.get(vehiclesRef);
     const existingData = docSnap.exists ? docSnap.data() : null;
     const existingEvents = Array.isArray(existingData?.events) ? existingData.events : [];
-    const existingEventIds = new Set(existingEvents.map((e) => e.eventId));
+    const existingEventIds = new Set([
+      ...existingEvents.map((e) => e.eventId).filter(Boolean),
+      ...(Array.isArray(existingData?.eventIdsSeen) ? existingData.eventIdsSeen.filter(Boolean) : []),
+    ]);
 
     const newSummaries = eventSummaries.filter((es) => !existingEventIds.has(es.eventId));
     if (newSummaries.length === 0) {
@@ -929,6 +934,12 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
       const key = normalizeEventTypeForSummary(es.type);
       summaryCounts[key] = (summaryCounts[key] || 0) + 1;
     }
+    const eventIdsSeen = Array.from(
+      new Set([
+        ...existingEventIds,
+        ...newSummaries.map((es) => es.eventId).filter(Boolean),
+      ]),
+    );
 
     const speedIncidents = groupSpeedingIncidents(mergedEvents);
     const speedByEventId = new Map();
@@ -994,6 +1005,7 @@ async function upsertDailyAlertBatch(dateKey, plate, vehicle, eventSummaries) {
       speedIncidents,
       speedingDrivers: Array.from(currentSpeedingDrivers),
       events: storedEvents,
+      eventIdsSeen,
       totalEventsCount: mergedEventsWithSpeedGroups.length,
       storedEventsCount: storedEvents.length,
       eventsTruncated: wasTruncated,

@@ -4,6 +4,7 @@ const {
   parseNoIdentificados,
   parseContactoSinIdentificacion,
   parseVehicleEventsFromEmail,
+  parseLine,
   EMAIL_TYPE_EXCESOS,
   EMAIL_TYPE_NO_IDENTIFICADOS,
   EMAIL_TYPE_CONTACTO,
@@ -93,5 +94,13 @@ AG-572-HF - Toyota Hilux (No identificado)`;
     expect(events[0].eventSubtype).toBe("NO_KEY_DETECTED");
     expect(events[0].driverName).toBe(null);
     expect(events[0].keyId).toBe(null);
+  });
+
+  it("rechaza formatos de fecha y hora invalidos dentro del parser", () => {
+    const badTime = parseLine("120 Km/h 12/03/26 5:19:33 AG-338-XC - Nissan Frontier RP51");
+    const badDate = parseLine("120 Km/h 12-03-2026 05:19:33 AG-338-XC - Nissan Frontier RP51");
+
+    expect(badTime).toBe(null);
+    expect(badDate).toBe(null);
   });
 });

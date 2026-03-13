@@ -72,7 +72,7 @@ function getHumanExplanation(eventSubtype) {
     case "DRIVER_NOT_IDENTIFIED":
       return "El conductor no se identificó utilizando su llave RSV.";
     case "CONTACT_NO_DRIVER":
-      return "El vehículo registró movimiento sin conductor identificado.";
+      return "El sistema detectó contacto con el vehículo sin que se identificara una llave o conductor registrado.";
     case "INACTIVE_DRIVER":
       return "La llave utilizada pertenece a un conductor inactivo en el sistema RSV.";
     case "NO_KEY_DETECTED":
@@ -298,6 +298,11 @@ function buildVehicleSection(doc) {
   );
   const tableEvents = sortedEvents.filter((e) => !groupedSpeedEventIds.has(e.eventId));
   const displayedEventsCount = tableEvents.length + speedIncidents.length;
+  const totalEventsCount = Number.isFinite(doc?.totalEventsCount) ? Number(doc.totalEventsCount) : displayedEventsCount;
+  const storedEventsCount = Number.isFinite(doc?.storedEventsCount) ? Number(doc.storedEventsCount) : events.length;
+  const headerCountLabel = doc?.eventsTruncated
+    ? `${totalEventsCount} ${totalEventsCount === 1 ? "evento" : "eventos"} (mostrando ${storedEventsCount} recientes)`
+    : `${totalEventsCount} ${totalEventsCount === 1 ? "evento" : "eventos"}`;
 
   const rowsHtml = tableEvents
     .map((e) => {
@@ -346,7 +351,7 @@ function buildVehicleSection(doc) {
   <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
       <div style="background:#fafafa;padding:10px 12px;font-weight:600;font-size:14px;border-bottom:1px solid #e5e7eb;">
       ${ICONS.vehicle} ${escapeHtml(plate)}${vehicleName ? ` - ${escapeHtml(vehicleName)}` : ""}
-      <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${displayedEventsCount} ${displayedEventsCount === 1 ? "evento" : "eventos"}</span>
+      <span style="color:#b91c1c;margin-left:8px;font-size:13px;">${ICONS.alert} ${headerCountLabel}</span>
     </div>
     ${typeSummaryParts.length > 0 ? `<div style="font-size:11px;margin:8px;color:#4b5563;">${typeSummaryParts.join(" | ")}</div>` : ""}
     ${speedCards}

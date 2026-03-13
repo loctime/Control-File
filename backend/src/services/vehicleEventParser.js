@@ -94,17 +94,22 @@ function isValidLocalTimestampParts(year, month, day, hh, min, ss) {
 
 function parseDateTimeToIso(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
+  const normalizedDate = String(dateStr).trim();
+  const normalizedTime = String(timeStr).trim();
+  if (!/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(normalizedDate)) return null;
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(normalizedTime)) return null;
+
   let day;
   let month;
   let year;
 
-  if (/^\d{2}\/\d{2}\/\d{2}$/.test(dateStr)) {
-    const [dd, mm, yy] = dateStr.split("/").map((v) => parseInt(v, 10));
+  if (/^\d{2}\/\d{2}\/\d{2}$/.test(normalizedDate)) {
+    const [dd, mm, yy] = normalizedDate.split("/").map((v) => parseInt(v, 10));
     day = dd;
     month = mm;
     year = 2000 + yy;
-  } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-    const [dd, mm, yyyy] = dateStr.split("-").map((v) => parseInt(v, 10));
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(normalizedDate)) {
+    const [dd, mm, yyyy] = normalizedDate.split("/").map((v) => parseInt(v, 10));
     day = dd;
     month = mm;
     year = yyyy;
@@ -112,7 +117,7 @@ function parseDateTimeToIso(dateStr, timeStr) {
     return null;
   }
 
-  const [hh, min, ss] = timeStr.split(":").map((v) => parseInt(v, 10));
+  const [hh, min, ss] = normalizedTime.split(":").map((v) => parseInt(v, 10));
   if ([day, month, year, hh, min, ss].some((n) => Number.isNaN(n))) return null;
   if (!isValidLocalTimestampParts(year, month, day, hh, min, ss)) return null;
   return formatLocalTimestamp(year, month, day, hh, min, ss);
@@ -472,7 +477,7 @@ function parseContactoSinIdentificacion(bodyText, options = {}) {
       if (!match) return null;
 
       const [, brand, model, plateGroup, datePart, timePart] = match;
-      const parsedTimestamp = parseDateTimeToIso(datePart, timePart);
+      const parsedTimestamp = parseDateTimeToIso(datePart.replace(/-/g, "/"), timePart);
       const fallbackTimestamp = parsedTimestamp ? null : buildFallbackTimestamp(options.fallbackTimestamp);
       const eventTimestamp = parsedTimestamp || fallbackTimestamp;
       const timestampSource = parsedTimestamp ? "EMAIL_EVENT" : fallbackTimestamp ? "INGEST_FALLBACK" : null;
