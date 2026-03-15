@@ -1,10 +1,15 @@
 {
   "name": "@controlfile/sdk",
   "version": "1.0.9",
+  "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/node/index.js",
   "module": "./dist/browser/index.js",
   "types": "./dist/node/index.d.ts",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     ".": {
       "browser": {
@@ -30,12 +35,21 @@
     "@types/node": "^20.0.0"
   },
   "scripts": {
-    "build": "npm run build:browser && npm run build:node",
+    "sync-meta": "node ./scripts/sync-sdk-meta.cjs",
+    "build": "npm run clean && npm run sync-meta && npm run build:browser && npm run build:node",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:node": "tsc -p tsconfig.node.json",
     "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\" || true",
-    "prepublishOnly": "npm run clean && npm run build",
+    "test": "npm run build && node ./test/smoke.test.mjs",
+    "prepublishOnly": "npm run build",
     "sdk-go": "npm run build && git add -A && (git commit -m \"chore: build before release\" || git diff --quiet) && npm version patch --force && git push --follow-tags"
   },
-  "repository": "https://github.com/loctime/controlfile-sdk"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loctime/controlfile-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/loctime/controlfile-sdk/issues"
+  },
+  "homepage": "https://github.com/loctime/controlfile-sdk#readme"
 }

@@ -2,9 +2,7 @@
  * Export principal del SDK @controlfile/sdk
  */
 
-export { ControlFileClient } from './client';
-export { AppFilesModule } from './modules/app-files';
-export { UsersModule } from './modules/users';
+export { ControlFileClient } from './client.js';
 
 export type {
   File,
@@ -31,13 +29,19 @@ export type {
   CreateFolderResponse,
   UserSettingsResponse,
   TaskbarItem,
+  UserProfile,
+  UserProfileResponse,
+  UpdateUserProfileResponse,
+  InitializeUserResponse,
+  UpdateTaskbarResponse,
+  SuccessResponse,
   ControlFileClientConfig,
   ControlFileClientOptions,
   AppFilesContext,
   AppListFilesParams,
   AppEnsurePathParams,
   AppUploadFileParams,
-} from './types';
+} from './types.js';
 
 export {
   ControlFileError,
@@ -48,4 +52,4 @@ export {
   ValidationError,
   NetworkError,
   ServerError,
-} from './errors';
+} from './errors.js';

@@ -7,8 +7,8 @@
  * @see CONTRACT-folders.md para más detalles sobre el contrato
  */
 
-import { HttpClient } from '../../utils/http';
-import type { Folder } from '../../types';
+import { HttpClient } from '../../utils/http.js';
+import type { Folder } from '../../types.js';
 
 /**
  * Normaliza una respuesta de carpeta del backend para usar siempre 'id'

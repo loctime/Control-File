@@ -1,48 +1,82 @@
-import { HttpClient } from '../utils/http';
+import { NotFoundError } from '../errors.js';
 import type {
+  InitializeUserResponse,
+  SuccessResponse,
   TaskbarItem,
+  UpdateTaskbarResponse,
   UpdateUserProfileInput,
+  UpdateUserProfileResponse,
   UpdateUserSettingsInput,
+  UserProfileResponse,
   UserSettingsResponse,
-} from '../types';
+} from '../types.js';
+import { HttpClient } from '../utils/http.js';
+
+const USERS_BASE_PATH = '/api/users';
 
 export class UsersModule {
   constructor(private http: HttpClient) {}
 
-  async getProfile() {
-    return this.http.call('/api/users/profile', { method: 'GET' });
+  async getProfile(): Promise<UserProfileResponse> {
+    return this.http.call<UserProfileResponse>(`${USERS_BASE_PATH}/profile`, { method: 'GET' });
   }
 
-  async updateProfile(body: UpdateUserProfileInput) {
-    return this.http.call('/api/users/profile', {
+  async updateProfile(body: UpdateUserProfileInput): Promise<UpdateUserProfileResponse> {
+    return this.http.call<UpdateUserProfileResponse>(`${USERS_BASE_PATH}/profile`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   }
 
-  async initialize() {
-    return this.http.call('/api/users/initialize', { method: 'POST' });
+  async initialize(): Promise<InitializeUserResponse> {
+    return this.http.call<InitializeUserResponse>(`${USERS_BASE_PATH}/initialize`, {
+      method: 'POST',
+    });
   }
 
   async getSettings(): Promise<UserSettingsResponse> {
-    return this.http.call<UserSettingsResponse>('/api/user/settings', { method: 'GET' });
+    return this.callUsersRoute<UserSettingsResponse>('/settings', { method: 'GET' }, '/api/user/settings');
   }
 
-  async updateSettings(input: UpdateUserSettingsInput) {
-    return this.http.call('/api/user/settings', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
+  async updateSettings(input: UpdateUserSettingsInput): Promise<SuccessResponse> {
+    return this.callUsersRoute<SuccessResponse>(
+      '/settings',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+      '/api/user/settings'
+    );
   }
 
   async getTaskbar(): Promise<{ items: TaskbarItem[] }> {
-    return this.http.call<{ items: TaskbarItem[] }>('/api/user/taskbar', { method: 'GET' });
+    return this.callUsersRoute<{ items: TaskbarItem[] }>('/taskbar', { method: 'GET' }, '/api/user/taskbar');
   }
 
-  async updateTaskbar(items: TaskbarItem[]) {
-    return this.http.call('/api/user/taskbar', {
-      method: 'POST',
-      body: JSON.stringify({ items }),
-    });
+  async updateTaskbar(items: TaskbarItem[]): Promise<UpdateTaskbarResponse> {
+    return this.callUsersRoute<UpdateTaskbarResponse>(
+      '/taskbar',
+      {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      },
+      '/api/user/taskbar'
+    );
+  }
+
+  private async callUsersRoute<T>(
+    path: string,
+    init: RequestInit,
+    legacyPath?: string
+  ): Promise<T> {
+    try {
+      return await this.http.call<T>(`${USERS_BASE_PATH}${path}`, init);
+    } catch (error) {
+      if (legacyPath && error instanceof NotFoundError) {
+        return this.http.call<T>(legacyPath, init);
+      }
+
+      throw error;
+    }
   }
 }

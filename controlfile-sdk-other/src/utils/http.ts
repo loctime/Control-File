@@ -1,9 +1,19 @@
 /**
  * Cliente HTTP interno del SDK
- * No expuesto públicamente
+ * No expuesto publicamente
  */
 
-import { ControlFileError, AuthenticationError, NotFoundError, ForbiddenError, QuotaExceededError, ValidationError, NetworkError, ServerError } from '../errors';
+import {
+  AuthenticationError,
+  ControlFileError,
+  ForbiddenError,
+  NetworkError,
+  NotFoundError,
+  QuotaExceededError,
+  ServerError,
+  ValidationError,
+} from '../errors.js';
+import { SDK_VERSION } from '../internal/sdk-meta.js';
 
 export interface HttpClientConfig {
   baseUrl: string;
@@ -25,9 +35,6 @@ export class HttpClient {
     this.retries = config.retries ?? 3;
   }
 
-  /**
-   * Realiza una llamada HTTP autenticada
-   */
   async call<T>(
     path: string,
     init: RequestInit = {},
@@ -40,7 +47,7 @@ export class HttpClient {
         const token = await this.getAuthToken();
         headers.set('Authorization', `Bearer ${token}`);
       } catch (error) {
-        throw new AuthenticationError('Error al obtener token de autenticación', error);
+        throw new AuthenticationError('Error al obtener token de autenticacion', error);
       }
     }
 
@@ -48,18 +55,17 @@ export class HttpClient {
       headers.set('Content-Type', 'application/json');
     }
 
-    // Headers del SDK (internos, no expuestos)
-    headers.set('X-SDK-Version', '1.0.0');
+    headers.set('X-SDK-Version', SDK_VERSION);
     headers.set('X-SDK-Client', '@controlfile/sdk');
     headers.set('x-request-id', this.createRequestId());
 
     const url = `${this.baseUrl}${path}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
       try {
         const response = await fetch(url, {
           ...init,
@@ -73,7 +79,6 @@ export class HttpClient {
           throw await this.handleErrorResponse(response);
         }
 
-        // Si la respuesta está vacía (status 204, etc.)
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
           return {} as T;
@@ -87,31 +92,27 @@ export class HttpClient {
           throw error;
         }
 
-        // Errores de red o timeout - reintentar si quedan intentos
         if (attempt < this.retries && this.isRetryableError(error)) {
           lastError = error as Error;
-          await this.delay(1000 * (attempt + 1)); // Backoff exponencial
+          await this.delay(1000 * (attempt + 1));
           continue;
         }
 
         if (error instanceof Error && error.name === 'AbortError') {
-          throw new NetworkError(`Timeout después de ${this.timeout}ms`, error);
+          throw new NetworkError(`Timeout despues de ${this.timeout}ms`, error);
         }
 
         if (error instanceof Error && error.message.includes('fetch')) {
-          throw new NetworkError('Error de conexión con el servidor', error);
+          throw new NetworkError('Error de conexion con el servidor', error);
         }
 
         throw error;
       }
     }
 
-    throw new NetworkError('Error después de múltiples intentos', lastError || undefined);
+    throw new NetworkError('Error despues de multiples intentos', lastError || undefined);
   }
 
-  /**
-   * Maneja errores de respuesta HTTP y los normaliza
-   */
   private async handleErrorResponse(response: Response): Promise<ControlFileError> {
     let errorData: any;
     try {
@@ -151,12 +152,8 @@ export class HttpClient {
     }
   }
 
-  /**
-   * Determina si un error es recuperable (se puede reintentar)
-   */
   private isRetryableError(error: unknown): boolean {
     if (error instanceof ControlFileError) {
-      // Solo errores de red o servidor son recuperables
       return (
         error instanceof NetworkError ||
         error instanceof ServerError ||
@@ -165,7 +162,6 @@ export class HttpClient {
     }
 
     if (error instanceof Error) {
-      // Errores de fetch (red, timeout, etc.)
       return (
         error.name === 'TypeError' ||
         error.name === 'AbortError' ||
@@ -177,9 +173,6 @@ export class HttpClient {
     return false;
   }
 
-  /**
-   * Delay para reintentos
-   */
   private createRequestId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();

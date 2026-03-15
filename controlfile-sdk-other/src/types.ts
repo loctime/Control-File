@@ -17,17 +17,6 @@ export interface File {
   deletedAt?: Date | string | null;
 }
 
-/**
- * Carpeta en el sistema de archivos
- * 
- * Nota: Las carpetas y archivos comparten la misma colección (files) diferenciados por el campo 'type'.
- * Esto permite:
- * - Árbol unificado de archivos y carpetas
- * - UI tipo Explorer
- * - Permisos por nodo
- * 
- * El backend debe tener un índice único (userId, parentId, name) para garantizar idempotencia.
- */
 export interface Folder {
   id: string;
   userId: string;
@@ -42,10 +31,6 @@ export interface Folder {
   deletedAt?: Date | string | null;
 }
 
-/**
- * Unión de archivo o carpeta
- * Permite trabajar con ambos tipos de forma unificada en el árbol de archivos
- */
 export type FileItem = File | Folder;
 
 export interface Share {
@@ -67,31 +52,6 @@ export interface ShareInfo {
   expiresAt: Date | string | null;
   downloadCount: number;
 }
-
-/**
- * Tipos de cuenta
- */
-
-export type AccountStatus = 'active' | 'trial' | 'expired' | 'suspended';
-
-export interface Account {
-  uid: string;
-  email: string;
-  status: AccountStatus;
-  planId: string;
-  limits: {
-    storageBytes: number;
-  };
-  enabledApps: Record<string, boolean>;
-  paidUntil: string | null;
-  trialEndsAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Tipos de parámetros para métodos del SDK
- */
 
 export interface ListFilesParams {
   parentId?: string | null;
@@ -141,7 +101,7 @@ export type FileInput = globalThis.File | Blob;
 
 export interface CreateShareParams {
   fileId: string;
-  expiresIn?: number; // horas, default: 24
+  expiresIn?: number;
 }
 
 export interface CreateShareResponse {
@@ -192,6 +152,11 @@ export interface CreateFolderResponse {
   message?: string;
 }
 
+export interface SuccessResponse {
+  success: boolean;
+  message?: string;
+}
+
 export interface UserSettingsResponse {
   billingInterval: 'monthly' | 'yearly' | null;
 }
@@ -220,9 +185,41 @@ export interface UpdateUserProfileInput {
   customFields?: Record<string, unknown>;
 }
 
-/**
- * Configuración del cliente
- */
+export interface UserProfileMetadata {
+  bio?: string;
+  website?: string;
+  location?: string;
+  isPublic?: boolean;
+  customFields?: Record<string, unknown>;
+}
+
+export interface UserProfile {
+  uid: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  username?: string;
+  planQuotaBytes?: number;
+  usedBytes?: number;
+  pendingBytes?: number;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  metadata?: UserProfileMetadata;
+}
+
+export interface UserProfileResponse extends SuccessResponse {
+  user: UserProfile;
+}
+
+export interface UpdateUserProfileResponse extends SuccessResponse {}
+
+export interface InitializeUserResponse extends SuccessResponse {
+  user: UserProfile;
+}
+
+export interface UpdateTaskbarResponse extends SuccessResponse {
+  items: TaskbarItem[];
+}
 
 export interface ControlFileClientOptions {
   timeout?: number;
@@ -235,109 +232,23 @@ export interface ControlFileClientConfig {
   options?: ControlFileClientOptions;
 }
 
-/**
- * Respuestas internas de la API (antes de normalización)
- */
-
-export interface PresignUploadResponse {
-  success: boolean;
-  uploadSessionId: string;
-  uploadUrl: string;
-  method?: string;
-  headers?: Record<string, string>;
-  fields?: Record<string, string>;
-  fileKey: string;
-}
-
-export interface ConfirmUploadResponse {
-  success: boolean;
-  fileId: string;
-  message: string;
-}
-
-export interface ShareCreateApiResponse {
-  shareToken: string;
-  shareUrl: string;
-  expiresAt: Date | string;
-  fileName: string;
-}
-
-export interface ShareInfoApiResponse {
-  fileName: string;
-  fileSize: number;
-  mime: string;
-  expiresAt: Date | string | null;
-  downloadCount: number;
-}
-
-/**
- * ============================================================================
- * API CONTRACTUAL v1 - Tipos para aplicaciones externas
- * ============================================================================
- * 
- * Estos tipos implementan el contrato App ↔ ControlFile v1.
- * Las apps deben usar estos tipos en lugar de los tipos legacy que exponen parentId.
- * 
- * @see CONTRACT-folders.md para más detalles sobre el contrato
- */
-
-/**
- * Parámetros para listar archivos usando paths relativos al app root
- * 
- * ⚠️ CONTRACTUAL: No expone parentId. Usa paths relativos al app root.
- */
 export interface AppListFilesParams {
-  /**
-   * Path relativo al app root (ej: 'documentos/2024' o ['documentos', '2024'])
-   * Si es vacío o undefined, lista el contenido del app root
-   */
   path?: string | string[];
   pageSize?: number;
   cursor?: string;
 }
 
-/**
- * Parámetros para asegurar un path relativo al app root
- * 
- * ⚠️ CONTRACTUAL: No permite crear carpetas raíz (parentId = null).
- * Todos los paths son relativos al app root.
- */
 export interface AppEnsurePathParams {
-  /**
-   * Path relativo al app root (ej: 'documentos/aprobados' o ['documentos', 'aprobados'])
-   * No puede estar vacío
-   */
   path: string | string[];
 }
 
-/**
- * Parámetros para subir un archivo usando path relativo al app root
- * 
- * ⚠️ CONTRACTUAL: No expone parentId. Usa paths relativos al app root.
- */
 export interface AppUploadFileParams {
   file: globalThis.File | Blob;
-  /**
-   * Path relativo al app root donde se subirá el archivo
-   * (ej: 'documentos/2024' o ['documentos', '2024'])
-   */
   path?: string | string[];
   onProgress?: (progress: number) => void;
 }
 
-/**
- * Contexto de aplicación para operaciones contractuales
- * 
- * Este contexto encapsula el appId y userId, permitiendo operaciones
- * que son relativas al app root sin exponer parentId.
- */
 export interface AppFilesContext {
-  /**
-   * ID de la aplicación (ej: 'controldoc', 'controlaudit')
-   */
   appId: string;
-  /**
-   * ID del usuario autenticado
-   */
   userId: string;
 }

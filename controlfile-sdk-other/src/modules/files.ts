@@ -1,56 +1,29 @@
 /**
- * Módulo de archivos
- * 
- * ⚠️ LEGACY: Este módulo expone APIs legacy que violan el contrato App ↔ ControlFile v1.
- * 
- * Las aplicaciones externas NO deben usar este módulo directamente para operaciones
- * que involucren carpetas o parentId.
- * 
- * Para operaciones contractuales, usar `client.forApp(appId, userId)` que devuelve
- * un módulo que cumple con el contrato v1.
- * 
- * Este módulo se mantiene por compatibilidad hacia atrás y será deprecado parcialmente
- * en el futuro (solo los métodos que exponen parentId).
- * 
- * @see CONTRACT-folders.md para más detalles sobre el contrato
+ * Modulo de archivos.
+ * Mantiene las APIs legacy por compatibilidad con integraciones existentes.
  */
 
-import { HttpClient } from '../utils/http';
-import {
-  validateFileId,
-  validateFileName,
-  validatePageSize,
-  validateFile,
-} from '../utils/validation';
-import { ensurePath } from './folders/ensurePath';
+import { uploadToStorage as uploadFileToStorage } from '../internal/uploader.js';
+import type { ConfirmUploadResponse, PresignUploadResponse } from '../internal/api-types.js';
 import type {
-  ListFilesParams,
-  ListFilesResponse,
-  GetDownloadUrlResponse,
-  UploadParams,
-  UploadResponse,
-  UploadFileParams,
-  FileResponse,
-  ReplaceFileResponse,
-  PresignUploadResponse,
-  ConfirmUploadResponse,
   EmptyTrashResponse,
   FileItem,
-} from '../types';
+  FileResponse,
+  GetDownloadUrlResponse,
+  ListFilesParams,
+  ListFilesResponse,
+  ReplaceFileResponse,
+  UploadFileParams,
+  UploadParams,
+  UploadResponse,
+} from '../types.js';
+import { validateFile, validateFileId, validateFileName, validatePageSize } from '../utils/validation.js';
+import { ensurePath } from './folders/ensurePath.js';
+import { HttpClient } from '../utils/http.js';
 
 export class FilesModule {
   constructor(private http: HttpClient) {}
 
-  /**
-   * Lista archivos y carpetas
-   * 
-   * ⚠️ LEGACY: Este método expone parentId, lo cual viola el contrato App ↔ ControlFile v1.
-   * 
-   * Las apps deben usar `client.forApp(appId, userId).listFiles({ path })` en su lugar,
-   * que usa paths relativos al app root y no expone parentId.
-   * 
-   * @deprecated Para apps, usar `client.forApp(appId, userId).listFiles()` en su lugar
-   */
   async list(params: ListFilesParams = {}): Promise<ListFilesResponse> {
     validatePageSize(params.pageSize);
 
@@ -74,17 +47,12 @@ export class FilesModule {
       nextPage?: string | null;
     }>(path);
 
-    // Manejar diferentes formatos de respuesta (con/sin cache)
-    const items = response.items || response.data || [];
     return {
-      items,
+      items: response.items || response.data || [],
       nextPage: response.nextPage || null,
     };
   }
 
-  /**
-   * Obtiene URL de descarga presignada (expira en 5 minutos)
-   */
   async getDownloadUrl(fileId: string): Promise<GetDownloadUrlResponse> {
     validateFileId(fileId);
 
@@ -127,16 +95,6 @@ export class FilesModule {
     });
   }
 
-  /**
-   * Sube un archivo (flujo completo: presign → upload → confirm)
-   * 
-   * ⚠️ LEGACY: Este método expone parentId, lo cual viola el contrato App ↔ ControlFile v1.
-   * 
-   * Las apps deben usar `client.forApp(appId, userId).uploadFile({ file, path })` en su lugar,
-   * que usa paths relativos al app root y no expone parentId.
-   * 
-   * @deprecated Para apps, usar `client.forApp(appId, userId).uploadFile()` en su lugar
-   */
   async upload(params: UploadParams): Promise<UploadResponse> {
     validateFile(params.file);
     validateFileName(params.name);
@@ -145,7 +103,6 @@ export class FilesModule {
     const fileSize = fileBlob.size;
     const mime = fileBlob.type || 'application/octet-stream';
 
-    // Paso 1: Presign
     if (params.onProgress) {
       params.onProgress(5);
     }
@@ -167,17 +124,11 @@ export class FilesModule {
       params.onProgress(10);
     }
 
-    // Paso 2: Upload al storage usando uploadUrl, method y headers del backend
-    const uploadUrl = presignResponse.uploadUrl;
-    const method = presignResponse.method || 'PUT';
-    const headers = presignResponse.headers || {};
-
-    // Upload con tracking de progreso
     await this.uploadToStorage(
-      uploadUrl,
+      presignResponse.uploadUrl,
       fileBlob,
-      method,
-      headers,
+      presignResponse.method || 'PUT',
+      presignResponse.headers || {},
       params.onProgress
     );
 
@@ -185,7 +136,6 @@ export class FilesModule {
       params.onProgress(90);
     }
 
-    // Paso 3: Confirmar upload
     const confirmResponse = await this.http.call<ConfirmUploadResponse>(
       '/api/uploads/confirm',
       {
@@ -202,7 +152,7 @@ export class FilesModule {
     );
 
     if (!confirmResponse.fileId) {
-      throw new Error('La respuesta de confirmación no incluye fileId');
+      throw new Error('La respuesta de confirmacion no incluye fileId');
     }
 
     if (params.onProgress) {
@@ -216,16 +166,6 @@ export class FilesModule {
     };
   }
 
-  /**
-   * Sube el archivo al storage usando uploadUrl, method y headers del backend
-   * 
-   * ⚠️ IMPORTANTE: En browser, NO enviamos Content-Type por defecto para evitar preflight OPTIONS.
-   * Esto es necesario para compatibilidad con Backblaze B2 y otros storage S3-compatible que
-   * bloquean preflight cuando Content-Type no está firmado en el presign.
-   * 
-   * Solo se envían headers que están explícitamente incluidos en el presign (SignedHeaders).
-   * Si el backend envía Content-Type pero no está firmado, se filtra automáticamente.
-   */
   private async uploadToStorage(
     url: string,
     fileBlob: globalThis.File | Blob,
@@ -233,89 +173,17 @@ export class FilesModule {
     headers: Record<string, string> = {},
     onProgress?: (progress: number) => void
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable && onProgress) {
-          // Progreso del 10% al 90% (el resto es para presign y confirm)
-          const uploadProgress = (event.loaded / event.total) * 80 + 10;
-          onProgress(Math.min(uploadProgress, 90));
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
-        }
-      });
-
-      xhr.addEventListener('error', () => {
-        reject(new Error('Upload failed due to network error'));
-      });
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload was aborted'));
-      });
-
-      xhr.open(method, url);
-
-      // Filtrar headers problemáticos en browser para evitar preflight OPTIONS
-      // No enviamos Content-Type a menos que esté explícitamente firmado en el presign
-      // Esto previene preflight CORS que Backblaze B2 y otros storage S3-compatible bloquean
-      const filteredHeaders = this.filterHeadersForBrowser(headers);
-
-      // Aplicar headers filtrados del backend
-      Object.entries(filteredHeaders).forEach(([key, value]) => {
-        xhr.setRequestHeader(key, value);
-      });
-
-      // Enviar el archivo directamente como Blob/File (sin Content-Type explícito)
-      xhr.send(fileBlob);
+    await uploadFileToStorage({
+      url,
+      file: fileBlob,
+      method,
+      headers,
+      onProgress,
+      progressStart: 10,
+      progressEnd: 90,
     });
   }
 
-  /**
-   * Filtra headers para evitar preflight OPTIONS en browser
-   * 
-   * Remueve Content-Type si no está explícitamente firmado en el presign.
-   * Esto es necesario porque:
-   * - Los browsers disparan preflight cuando se envía Content-Type en PUT
-   * - Backblaze B2 y otros storage S3-compatible bloquean preflight si Content-Type no está en SignedHeaders
-   * - El default seguro es NO enviar Content-Type a menos que el presign lo incluya explícitamente
-   * 
-   * @param headers Headers recibidos del backend
-   * @returns Headers filtrados seguros para browser
-   */
-  private filterHeadersForBrowser(headers: Record<string, string>): Record<string, string> {
-    const filtered: Record<string, string> = {};
-    
-    // En browser, solo enviamos headers que están explícitamente firmados
-    // Si el backend envía Content-Type pero no está en SignedHeaders del presign,
-    // lo filtramos para evitar preflight OPTIONS
-    Object.entries(headers).forEach(([key, value]) => {
-      const lowerKey = key.toLowerCase();
-      
-      // Filtrar Content-Type por defecto (solo enviar si está explícitamente firmado)
-      // Nota: El backend debería incluir Content-Type en SignedHeaders si quiere que se envíe
-      if (lowerKey === 'content-type') {
-        // Por ahora, filtramos Content-Type siempre para evitar preflight
-        // En el futuro, podríamos verificar si está en SignedHeaders del presign
-        return;
-      }
-      
-      // Permitir otros headers que vengan del backend (ej: x-amz-* si están firmados)
-      filtered[key] = value;
-    });
-    
-    return filtered;
-  }
-
-  /**
-   * Elimina un archivo (soft delete)
-   */
   async delete(fileId: string): Promise<void> {
     validateFileId(fileId);
 
@@ -325,9 +193,6 @@ export class FilesModule {
     });
   }
 
-  /**
-   * Renombra un archivo
-   */
   async rename(fileId: string, newName: string): Promise<void> {
     validateFileId(fileId);
     validateFileName(newName);
@@ -338,9 +203,6 @@ export class FilesModule {
     });
   }
 
-  /**
-   * Reemplaza el contenido de un archivo existente
-   */
   async replace(fileId: string, file: globalThis.File | Blob): Promise<ReplaceFileResponse> {
     validateFileId(fileId);
     validateFile(file);
@@ -357,7 +219,7 @@ export class FilesModule {
     }>('/api/files/replace', {
       method: 'POST',
       body: formData,
-    }, true); // requireAuth
+    });
 
     return {
       fileId,
@@ -366,28 +228,17 @@ export class FilesModule {
     };
   }
 
-  /**
-   * Sube un archivo asegurando primero que la ruta de carpetas exista
-   * 
-   * ⚠️ LEGACY: Este método usa ensurePath legacy que puede crear carpetas raíz,
-   * lo cual viola el contrato App ↔ ControlFile v1.
-   * 
-   * Las apps deben usar `client.forApp(appId, userId).uploadFile({ file, path })` en su lugar,
-   * que resuelve paths relativos al app root y cumple con el contrato v1.
-   * 
-   * @deprecated Para apps, usar `client.forApp(appId, userId).uploadFile()` en su lugar
-   */
   async uploadFile(params: UploadFileParams): Promise<FileResponse> {
     const { file, path, userId, onProgress } = params;
 
-    if (!file || !(file instanceof File || file instanceof Blob)) {
-      throw new Error('El parámetro file debe ser un File o Blob válido');
-    }
+    validateFile(file);
 
-    const fileName = file instanceof File ? file.name : 'archivo';
+    const fileName = typeof (file as { name?: unknown }).name === 'string'
+      ? (file as { name: string }).name
+      : 'archivo';
 
     if (!fileName || fileName.trim() === '') {
-      throw new Error('El archivo debe tener un nombre válido');
+      throw new Error('El archivo debe tener un nombre valido');
     }
 
     const folderId = await ensurePath(this.http, { path, userId });

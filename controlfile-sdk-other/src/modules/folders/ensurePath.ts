@@ -11,8 +11,8 @@
  * @deprecated Esta función es legacy y será reemplazada por la API contractual
  */
 
-import { HttpClient } from '../../utils/http';
-import type { EnsurePathParams, Folder } from '../../types';
+import { HttpClient } from '../../utils/http.js';
+import type { EnsurePathParams, Folder } from '../../types.js';
 
 /**
  * Normaliza una respuesta de carpeta del backend para usar siempre 'id'

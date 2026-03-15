@@ -12,9 +12,9 @@
  * @see CONTRACT-folders.md para más detalles sobre el contrato
  */
 
-import { HttpClient } from '../../utils/http';
-import { ensurePath as ensurePathFn } from './ensurePath';
-import type { CreateFolderParams, CreateFolderResponse, EnsurePathParams } from '../../types';
+import { HttpClient } from '../../utils/http.js';
+import { ensurePath as ensurePathFn } from './ensurePath.js';
+import type { CreateFolderParams, CreateFolderResponse, EnsurePathParams } from '../../types.js';
 
 export class FoldersModule {
   constructor(private http: HttpClient) {}

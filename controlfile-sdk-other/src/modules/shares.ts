@@ -1,23 +1,18 @@
 /**
- * Módulo de shares (enlaces públicos)
+ * Modulo de shares (enlaces publicos)
  */
 
-import { HttpClient } from '../utils/http';
-import {
-  validateFileId,
-  validateToken,
-  validateExpiresIn,
-} from '../utils/validation';
-import { buildShareUrl, buildImageUrl } from '../helpers/url-builder';
+import type { ShareCreateApiResponse, ShareInfoApiResponse } from '../internal/api-types.js';
+import { buildImageUrl, buildShareUrl } from '../helpers/url-builder.js';
 import type {
   CreateShareParams,
   CreateShareResponse,
-  ShareInfo,
-  ShareDownloadResponse,
   Share,
-  ShareCreateApiResponse,
-  ShareInfoApiResponse,
-} from '../types';
+  ShareDownloadResponse,
+  ShareInfo,
+} from '../types.js';
+import { HttpClient } from '../utils/http.js';
+import { validateExpiresIn, validateFileId, validateToken } from '../utils/validation.js';
 
 export class SharesModule {
   private baseUrl: string;
@@ -29,25 +24,18 @@ export class SharesModule {
     this.baseUrl = baseUrl;
   }
 
-  /**
-   * Crea un share link con expiración configurable (requiere auth)
-   */
   async create(params: CreateShareParams): Promise<CreateShareResponse> {
     validateFileId(params.fileId);
     validateExpiresIn(params.expiresIn);
 
-    const expiresIn = params.expiresIn ?? 24; // default: 24 horas
-
-    const response = await this.http.call<ShareCreateApiResponse>(
-      '/api/shares/create',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          fileId: params.fileId,
-          expiresIn,
-        }),
-      }
-    );
+    const expiresIn = params.expiresIn ?? 24;
+    const response = await this.http.call<ShareCreateApiResponse>('/api/shares/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileId: params.fileId,
+        expiresIn,
+      }),
+    });
 
     return {
       shareToken: response.shareToken,
@@ -57,18 +45,13 @@ export class SharesModule {
     };
   }
 
-  /**
-   * Obtiene información de un share (público, sin auth)
-   */
   async getInfo(token: string): Promise<ShareInfo> {
     validateToken(token);
 
     const response = await this.http.call<ShareInfoApiResponse>(
       `/api/shares/${token}`,
-      {
-        method: 'GET',
-      },
-      false // no requiere auth
+      { method: 'GET' },
+      false
     );
 
     return {
@@ -84,18 +67,13 @@ export class SharesModule {
     return this.getInfo(token);
   }
 
-  /**
-   * Obtiene URL de descarga desde share token (público, sin auth)
-   */
   async getDownloadUrl(token: string): Promise<ShareDownloadResponse> {
     validateToken(token);
 
     return this.http.call<ShareDownloadResponse>(
       `/api/shares/${token}/download`,
-      {
-        method: 'POST',
-      },
-      false // no requiere auth
+      { method: 'POST' },
+      false
     );
   }
 
@@ -103,17 +81,11 @@ export class SharesModule {
     return this.getDownloadUrl(token);
   }
 
-  /**
-   * Genera URL de imagen directa para usar en <img> tags (helper)
-   */
   getImageUrl(token: string, baseUrl?: string): string {
     validateToken(token);
     return buildImageUrl(token, baseUrl || this.baseUrl);
   }
 
-  /**
-   * Revoca un share link (requiere auth)
-   */
   async revoke(token: string): Promise<void> {
     validateToken(token);
 
@@ -123,9 +95,6 @@ export class SharesModule {
     });
   }
 
-  /**
-   * Lista los shares del usuario autenticado (requiere auth)
-   */
   async list(): Promise<Share[]> {
     const response = await this.http.call<{
       shares: Array<{
@@ -137,16 +106,14 @@ export class SharesModule {
         downloadCount: number;
         shareUrl?: string;
       }>;
-    }>('/api/shares/', {
-      method: 'GET',
-    });
+    }>('/api/shares/', { method: 'GET' });
 
     return response.shares.map((share) => ({
       token: share.token,
-      fileId: '', // No viene en la respuesta del listado
+      fileId: '',
       fileName: share.fileName,
       fileSize: share.fileSize,
-      mime: '', // No viene en la respuesta del listado
+      mime: '',
       expiresAt: share.expiresAt ? new Date(share.expiresAt) : null,
       createdAt: new Date(share.createdAt),
       downloadCount: share.downloadCount,
@@ -154,17 +121,11 @@ export class SharesModule {
     }));
   }
 
-  /**
-   * Construye URL pública de share (helper)
-   */
   buildShareUrl(token: string): string {
     validateToken(token);
     return buildShareUrl(token, this.baseUrl);
   }
 
-  /**
-   * Construye URL de imagen de share (helper)
-   */
   buildImageUrl(token: string): string {
     validateToken(token);
     return buildImageUrl(token, this.baseUrl);
