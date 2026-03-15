@@ -152,26 +152,11 @@ function ImagePreview({ file }: { file: any }) {
                 canvas.toBlob(async (outBlob) => {
                   if (!outBlob) return;
                   try {
-                    const auth = getAuth();
-                    const currentUser = auth.currentUser;
-                    if (!currentUser) throw new Error('No autenticado');
-                    const token = await currentUser.getIdToken();
-                    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
-                    const form = new FormData();
+                    const sdk = createBrowserControlFileClient();
                     const baseName = (file.name || 'imagen').replace(/\.[^.]+$/, '');
                     const fileName = `${baseName}.png`;
-                    const filePart = new Blob([outBlob], { type: 'image/png' });
-                    form.append('file', filePart, fileName);
-                    form.append('fileId', file.id);
-                    const respReplace = await fetch(`${backendUrl}/v1/files/replace`, {
-                      method: 'POST',
-                      headers: { 'Authorization': `Bearer ${token}` },
-                      body: form,
-                    });
-                    if (!respReplace.ok) {
-                      const err = await respReplace.json().catch(() => ({}));
-                      throw new Error(err.error || `Error ${respReplace.status}`);
-                    }
+                    const filePart = new File([outBlob], fileName, { type: 'image/png' });
+                    await sdk.files.replace(file.id, filePart);
                     useUIStore.getState().addToast({ type: 'success', title: 'Imagen actualizada', message: 'Se reemplazó la imagen original' });
                     useDriveStore.getState().updateItem(file.id, { modifiedAt: new Date(), mime: 'image/png' });
                     // Invalidar todas las URLs presignadas en caché para refrescar íconos y previews

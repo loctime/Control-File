@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiCall } from '@/lib/utils';
 import { toast } from 'sonner';
 import { fileQueryKeys } from './useFiles';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 interface CreateFolderFormData {
   name: string;
@@ -24,10 +25,8 @@ export function useCreateFolderForm(parentId: string | null, onSuccess?: () => v
         throw new Error('No hay conexión a internet. No se puede crear la carpeta.');
       }
       
-      return apiCall('/folders/create', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      const client = createBrowserControlFileClient();
+      return client.folders.create(data);
     },
     onSuccess: () => {
       toast.success('Carpeta creada exitosamente');
@@ -82,10 +81,8 @@ export function useRenameForm(itemId: string, currentName: string, onSuccess?: (
         throw new Error('No hay conexión a internet. No se puede renombrar el elemento.');
       }
       
-      return apiCall('/files/rename', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      const client = createBrowserControlFileClient();
+      return client.files.rename(data.itemId, data.newName);
     },
     onSuccess: () => {
       toast.success('Elemento renombrado exitosamente');

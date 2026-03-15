@@ -4,16 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useDriveStore } from '@/lib/stores/drive';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserControlFileClient } from '@/lib/controlfile-client';
-
-interface TaskbarItem {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  type: 'folder' | 'app';
-  isCustom?: boolean;
-  folderId?: string;
-}
+import type { TaskbarItem } from '@/controlfile-sdk-other/src';
 
 export function useTaskbar() {
   const { items } = useDriveStore();

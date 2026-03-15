@@ -17,6 +17,7 @@ import { useDriveStore } from '@/lib/stores/drive';
 import { useAuthStore } from '@/lib/stores/auth';
 import { apiCall } from '@/lib/utils';
 import { toast } from 'sonner';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 // Query keys centralizadas para mejor invalidación
 export const fileQueryKeys = {
@@ -114,10 +115,8 @@ export function useFiles(folderId: string | null = null) {
         throw new Error('No hay conexión a internet. No se puede crear la carpeta.');
       }
       
-      return apiCall('/folders/create', {
-        method: 'POST',
-        body: JSON.stringify({ name, parentId: folderId }),
-      });
+      const client = createBrowserControlFileClient();
+      return client.folders.create({ name, parentId: folderId });
     },
     onMutate: async (name: string) => {
       // Cancelar queries en progreso
@@ -173,12 +172,8 @@ export function useFiles(folderId: string | null = null) {
         throw new Error('No hay conexión a internet. No se pueden eliminar los elementos.');
       }
       
-      const promises = itemIds.map(id => 
-        apiCall('/files/delete', {
-          method: 'POST',
-          body: JSON.stringify({ fileId: id }),
-        })
-      );
+      const client = createBrowserControlFileClient();
+      const promises = itemIds.map(id => client.files.delete(id));
       await Promise.all(promises);
     },
     onMutate: async (itemIds: string[]) => {
@@ -217,10 +212,8 @@ export function useFiles(folderId: string | null = null) {
         throw new Error('No hay conexión a internet. No se puede renombrar el elemento.');
       }
       
-      return apiCall('/files/rename', {
-        method: 'POST',
-        body: JSON.stringify({ fileId: itemId, newName }),
-      });
+      const client = createBrowserControlFileClient();
+      return client.files.rename(itemId, newName);
     },
     onMutate: async ({ itemId, newName }) => {
       await queryClient.cancelQueries({ queryKey: fileQueryKeys.list(user?.uid || 'no-user', folderId) });

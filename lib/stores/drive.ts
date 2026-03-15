@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { useAuthStore } from '@/lib/stores/auth';
 import { apiCall } from '@/lib/utils';
 import { DriveItem, ViewMode, BreadcrumbItem, SearchFilters } from '@/types';
+import { createBrowserControlFileClient } from '@/lib/controlfile-client';
 
 interface DriveState {
   items: any[];
@@ -216,16 +217,14 @@ export const useDriveStore = create<DriveState>()(
         
         try {
           // Persistir en backend y esperar respuesta
-          await apiCall('/folders/create', {
-            method: 'POST',
-            body: JSON.stringify({
-              id: newFolder.id,
-              name: newFolder.name,
-              parentId: newFolder.parentId,
-              icon: newFolder.metadata.icon,
-              color: newFolder.metadata.color,
-              source: newFolder.metadata.source,
-            }),
+          const client = createBrowserControlFileClient();
+          await client.folders.create({
+            id: newFolder.id,
+            name: newFolder.name,
+            parentId: newFolder.parentId,
+            icon: newFolder.metadata.icon,
+            color: newFolder.metadata.color,
+            source: newFolder.metadata.source,
           });
           
           console.log('✅ Carpeta creada exitosamente en backend:', newFolder.name);
@@ -300,15 +299,13 @@ export const useDriveStore = create<DriveState>()(
         
         try {
           // Persistir en backend y esperar respuesta
-          await apiCall('/folders/create', {
-            method: 'POST',
-            body: JSON.stringify({
-              id: newSubfolder.id,
-              name: newSubfolder.name,
-              parentId: newSubfolder.parentId,
-              icon: newSubfolder.metadata.icon,
-              color: newSubfolder.metadata.color,
-            }),
+          const client = createBrowserControlFileClient();
+          await client.folders.create({
+            id: newSubfolder.id,
+            name: newSubfolder.name,
+            parentId: newSubfolder.parentId,
+            icon: newSubfolder.metadata.icon,
+            color: newSubfolder.metadata.color,
           });
           
           console.log('✅ Subcarpeta creada exitosamente en backend:', newSubfolder.name);

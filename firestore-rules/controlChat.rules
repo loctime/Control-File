@@ -1,9 +1,256 @@
-// ========= CONTROLCHAT =========
+/* ========= CONTROL CHAT HELPERS ========= */
+
+function workspaceDoc(workspaceId) {
+  return get(/databases/$(db)/documents/workspaces/$(workspaceId));
+}
+
+function userProfileDoc(userId) {
+  return get(/databases/$(db)/documents/users/$(userId));
+}
+
+function isWorkspaceOwner(workspaceId) {
+  return isAuth() && workspaceDoc(workspaceId).data.ownerId == uid();
+}
+
+function isWorkspaceMember(workspaceId) {
+  return isAuth()
+    && exists(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(uid()));
+}
+
+function workspaceMemberDoc(workspaceId, userId) {
+  return get(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(userId));
+}
+
+function isWorkspaceAdmin(workspaceId) {
+  return isAuth()
+    && exists(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(uid()))
+    && workspaceMemberDoc(workspaceId, uid()).data.role == "admin";
+}
+
+function isWorkspaceManager(workspaceId) {
+  return isWorkspaceOwner(workspaceId) || isWorkspaceAdmin(workspaceId);
+}
+
+function validWorkspaceCreate(workspaceId) {
+  return isAuth()
+    && request.resource.data.ownerId == uid()
+    && (!("id" in request.resource.data) || request.resource.data.id == workspaceId);
+}
+
+function validWorkspaceUpdate(workspaceId) {
+  return isWorkspaceOwner(workspaceId)
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.ownerId == uid();
+}
+
+function validMembershipCreate(workspaceId, userId) {
+  return isWorkspaceManager(workspaceId)
+    && request.resource.data.workspaceId == workspaceId
+    && request.resource.data.userId == userId
+    && request.resource.data.role in ["owner", "admin", "member"];
+}
+
+function validMembershipUpdate(workspaceId, userId) {
+  return isWorkspaceManager(workspaceId)
+    && request.resource.data.workspaceId == resource.data.workspaceId
+    && request.resource.data.userId == resource.data.userId
+    && request.resource.data.role in ["owner", "admin", "member"];
+}
+
+function validWorkspaceAttachmentCreate(workspaceId) {
+  return isWorkspaceMember(workspaceId)
+    && request.resource.data.workspaceId == workspaceId
+    && request.resource.data.ownerId == uid();
+}
+
+function validWorkspaceAttachmentUpdate(workspaceId) {
+  return isWorkspaceMember(workspaceId)
+    && request.resource.data.workspaceId == resource.data.workspaceId
+    && request.resource.data.ownerId == resource.data.ownerId;
+}
+
+function legacyMigrationPending(userId) {
+  return isAuth()
+    && uid() == userId
+    && (
+      !exists(/databases/$(db)/documents/users/$(userId))
+      || !("migrationVersion" in userProfileDoc(userId).data)
+      || userProfileDoc(userId).data.migrationVersion < 2
+    );
+}
+
+function noteOwnerFromRequest() {
+  return isAuth() && request.resource.data.ownerId == uid();
+}
+
+function noteOwnerFromResource() {
+  return isAuth() && resource.data.ownerId == uid();
+}
+
+
+/* ========= CONTROL CHAT DATA ========= */
+
+match /users/{userId} {
+  allow read, write: if isAuth() && uid() == userId;
+
+  match /preferences/{docId} {
+    allow read, write: if isAuth() && uid() == userId;
+  }
+
+  match /notifications/{notificationId} {
+    allow read, write: if isAuth() && uid() == userId;
+  }
+}
+
+
+match /workspaces/{workspaceId} {
+
+  allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  allow create: if validWorkspaceCreate(workspaceId);
+  allow update: if validWorkspaceUpdate(workspaceId);
+  allow delete: if isWorkspaceOwner(workspaceId);
+
+
+  match /members/{userId} {
+
+    allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+
+    allow create: if validMembershipCreate(workspaceId, userId);
+
+    allow update: if validMembershipUpdate(workspaceId, userId);
+
+    allow delete: if isWorkspaceManager(workspaceId) && !(
+      resource.data.userId == workspaceDoc(workspaceId).data.ownerId
+      && !isWorkspaceOwner(workspaceId)
+    );
+  }
+
+
+  match /conversations/{conversationId} {
+
+    allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+    allow create, update, delete: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+
+
+    match /members/{userId} {
+      allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+      allow create, update, delete: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+    }
+
+
+    match /messages/{messageId} {
+
+      allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+      allow create, update, delete: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+
+
+      match /reactions/{reactionId} {
+        allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+        allow create, update, delete: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+      }
+    }
+
+
+    match /threads/{threadId} {
+      allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+    }
+
+    match /pinned/{pinId} {
+      allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+    }
+
+  }
+
+
+  match /attachments/{attachmentId} {
+
+    allow read: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+
+    allow create: if validWorkspaceAttachmentCreate(workspaceId);
+
+    allow update: if validWorkspaceAttachmentUpdate(workspaceId);
+
+    allow delete: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+
+  }
+
+
+  match /notes/{noteId} {
+
+    allow read, write: if noteOwnerFromResource() || noteOwnerFromRequest();
+
+    match /links/{linkId} {
+      allow read, write: if noteOwnerFromResource() || noteOwnerFromRequest();
+    }
+
+  }
+
+
+  match /documents/{documentId} {
+
+    allow read, write: if noteOwnerFromResource() || noteOwnerFromRequest();
+
+    match /blocks/{blockId} {
+      allow read, write: if noteOwnerFromResource() || noteOwnerFromRequest();
+    }
+
+  }
+
+
+  match /links/{linkId} {
+    allow read, write: if noteOwnerFromResource() || noteOwnerFromRequest();
+  }
+
+
+  match /tags/{tagId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /graphNodes/{nodeId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /graphEdges/{edgeId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /notifications/{notificationId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /summaries/{summaryId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /embeddings/{embeddingId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /jobs/{jobId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /events/{eventId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+  match /searchIndex/{indexId} {
+    allow read, write: if isWorkspaceMember(workspaceId) || isWorkspaceOwner(workspaceId);
+  }
+
+}
+
+
+/* ========= LEGACY MIGRATION ========= */
 
 match /apps/control-chat/users/{userId} {
-  allow read, write: if isAuth() && userId == uid();
+
+  allow read: if legacyMigrationPending(userId);
+  allow write: if false;
 
   match /messages/{messageId} {
-    allow read, write: if isAuth() && userId == uid();
+    allow read: if legacyMigrationPending(userId);
+    allow write: if false;
   }
+
 }
