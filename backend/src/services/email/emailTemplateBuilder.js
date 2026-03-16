@@ -252,6 +252,13 @@ function buildGlobalSummaryHeader(meta, dateKey) {
 }
 
 function buildSpeedIncidentCards(doc) {
+  const events = Array.isArray(doc.events) ? doc.events : [];
+  const eventsById = new Map(
+    events
+      .filter((e) => e && e.eventId)
+      .map((e) => [e.eventId, e]),
+  );
+
   const speedIncidents = Array.isArray(doc.speedIncidents)
     ? [...doc.speedIncidents].sort((a, b) => new Date(b?.lastEventAt || 0) - new Date(a?.lastEventAt || 0))
     : [];
@@ -261,12 +268,40 @@ function buildSpeedIncidentCards(doc) {
     .map((incident) => {
       const causeSubtype = incident.causeSubtype || (incident.driverName ? null : "NO_KEY_DETECTED");
       const causeText = causeSubtype ? getHumanExplanation(causeSubtype) : "";
+      const durationSeconds = incident.durationSeconds || 0;
+      const durationMinutes = Math.round(durationSeconds / 60);
+      const durationLabel =
+        durationMinutes > 0
+          ? `${durationMinutes} minutos`
+          : `${durationSeconds} segundos`;
+      const incidentEvents = Array.isArray(incident.eventIds)
+        ? incident.eventIds
+            .map((id) => eventsById.get(id))
+            .filter((e) => e && e.eventTimestamp != null)
+            .sort((a, b) => new Date(a.eventTimestamp) - new Date(b.eventTimestamp))
+        : [];
+      const incidentEventsHtml = incidentEvents.length
+        ? `<div style="font-size:12px;margin-top:8px;"><strong>Eventos que componen el incidente:</strong>
+        <ul style="margin:4px 0 0 18px;padding:0;">
+          ${incidentEvents
+            .map(
+              (e) =>
+                `<li style="margin:2px 0;">${escapeHtml(
+                  e.speed != null ? `${e.speed} km/h` : "- km/h",
+                )} – ${escapeHtml(formatDateTimeArgentina(e.eventTimestamp))}</li>`,
+            )
+            .join("")}
+        </ul>
+        </div>`
+        : "";
+
       return `
       <div style="margin-top:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;background:#fff7ed;">
-        <div style="font-size:13px;font-weight:700;color:#9a3412;">Exceso de velocidad detectado</div>
+        <div style="font-size:13px;font-weight:700;color:#9a3412;">Exceso de velocidad constante detectado</div>
         <div style="font-size:12px;margin-top:6px;">Velocidad maxima: <strong>${incident.maxSpeed ?? "-"} km/h</strong></div>
         <div style="font-size:12px;">Cantidad de eventos: <strong>${incident.groupedEventsCount ?? 0}</strong></div>
-        <div style="font-size:12px;">Duracion estimada: <strong>${Math.round((incident.durationSeconds || 0) / 60)} minutos</strong></div>
+        <div style="font-size:12px;">Duracion estimada: <strong>${durationLabel}</strong></div>
+        ${incidentEventsHtml}
         <div style="font-size:12px;">Ubicacion: <strong>${escapeHtml(incident.location || "Sin ubicacion")}</strong></div>
         <div style="font-size:12px;">Conductor: <strong>${escapeHtml(incident.driverName || "No identificado")}</strong></div>
         ${causeText ? `<div style="font-size:12px;margin-top:6px;"><strong>Causa probable:</strong> ${escapeHtml(causeText)}</div>` : ""}
@@ -293,10 +328,10 @@ function buildVehicleSection(doc) {
     .sort((a, b) => new Date(b.eventTimestamp) - new Date(a.eventTimestamp));
 
   const speedIncidents = Array.isArray(doc.speedIncidents) ? doc.speedIncidents : [];
-  const groupedSpeedEventIds = new Set(
+  const incidentEventIds = new Set(
     speedIncidents.flatMap((incident) => (Array.isArray(incident?.eventIds) ? incident.eventIds : [])),
   );
-  const tableEvents = sortedEvents.filter((e) => !groupedSpeedEventIds.has(e.eventId));
+  const tableEvents = sortedEvents;
   const displayedEventsCount = tableEvents.length + speedIncidents.length;
   const totalEventsCount = Number.isFinite(doc?.totalEventsCount) ? Number(doc.totalEventsCount) : displayedEventsCount;
   const storedEventsCount = Number.isFinite(doc?.storedEventsCount) ? Number(doc.storedEventsCount) : events.length;
@@ -306,7 +341,8 @@ function buildVehicleSection(doc) {
 
   const rowsHtml = tableEvents
     .map((e) => {
-      const typeLabel = getTypeLabel(e);
+      const isInIncident = e && e.eventId && incidentEventIds.has(e.eventId);
+      const typeLabel = `${getTypeLabel(e)}${isInIncident ? " ⚠" : ""}`;
       const explanationText = buildExplanationText(e.eventSubtype, e.reasonRaw || e.reason || null);
       return `
       <tr>
