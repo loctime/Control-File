@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\modules\\\\emailAlerts\\\\vehicles.routes.js\")"
+    ]
+  }
+}

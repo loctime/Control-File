@@ -12,9 +12,11 @@ The email domain manages vehicle event alerts for ControlAudit. It is a **read/w
 
 ## Authentication Model
 
-> **This domain uses a different auth model than the rest of the backend.**
+> **This domain uses two different auth models depending on the endpoint group.**
 
-Email endpoints use a **shared secret token**, not Firebase ID tokens.
+### Group A — System / cron endpoints (x-local-token)
+
+Used by internal cron jobs and local ingestion scripts.
 
 | Header | Value | Required |
 |---|---|---|
@@ -23,6 +25,16 @@ Email endpoints use a **shared secret token**, not Firebase ID tokens.
 If `LOCAL_EMAIL_TOKEN` is not set in the environment, all requests are rejected with `500`.
 
 Do NOT send `Authorization: Bearer ...` — it is not used here.
+
+### Group B — User-facing endpoints (Firebase ID Token)
+
+Used by the frontend on behalf of a logged-in responsable.
+
+| Header | Value | Required |
+|---|---|---|
+| `Authorization` | `Bearer <firebase-id-token>` | Yes |
+
+Additionally, the user's email must exist in `apps/emails/access` (synced via `POST /api/admin/sync-access-users`). If not found, the response is `403 USER_NOT_AUTHORIZED`.
 
 ---
 
@@ -35,7 +47,7 @@ POST /api/email/email-inbound (Resend webhook)
     ↓
 Parser extracts vehicle events
     ↓
-Stored in apps/emails/dailyAlerts/{dateKey}/{plate}
+Stored in apps/emails/dailyAlerts/{dateKey}/vehicles/{plate}
     ↓
 External cron polls GET /api/email/get-pending-daily-alerts
     ↓
@@ -153,14 +165,159 @@ Ingest an email from a local Outlook script (alternative to Resend inbound).
 
 ---
 
+### GET /api/email/my-alerts
+
+Paginates alerts for the authenticated responsable. Reads from the responsables index, not from `dailyAlerts` directly.
+
+**Auth:** Firebase ID Token (Group B)
+
+**Query params:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `limit` | number | `50` | Max items per page. Capped at `200`. |
+| `startAfter` | string | — | Alert document ID to use as cursor for next page. |
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "alerts": [
+    {
+      "plate": "ABC123",
+      "dateKey": "2026-03-20",
+      "riskScore": 74,
+      "alertSent": false
+    }
+  ]
+}
+```
+
+**Source:** `apps/emails/responsables/{email}/alerts` — ordered by `createdAt` desc.
+
+**Notes:**
+- Returns only alerts where the authenticated user is a responsable.
+- Pagination is cursor-based: pass the last `alertId` as `startAfter` for the next page.
+- `alertSent: false` means the daily email for that vehicle/day has not been sent yet.
+
+---
+
+### GET /api/email/my-alerts-vehicles
+
+Returns vehicles where the authenticated user is a responsable, enriched with risk data from the alerts index.
+
+**Auth:** Firebase ID Token (Group B)
+
+**Query params:** None
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "vehicles": [
+    {
+      "plate": "ABC123",
+      "operationName": "Operación Norte",
+      "lastEvent": "2026-03-20",
+      "riskScore": 74
+    }
+  ]
+}
+```
+
+**Sources:**
+- `apps/emails/responsables/{email}/alerts` — to compute `riskScore` and `lastEvent` per plate.
+- `apps/emails/vehicles` — filtered by `responsablesNormalized array-contains email`, to get vehicle metadata.
+
+**Notes:**
+- `operationName` falls back to `operacion` field if `operationName` is absent.
+- `lastEvent` is the most recent `dateKey` (YYYY-MM-DD) found in the alerts index for that plate.
+- `riskScore` is the maximum `riskScore` seen across all alerts for that plate (not today-only).
+- A vehicle appears in the list even if it has no alerts (riskScore will be `0`, lastEvent will be `null`).
+
+---
+
+### GET /api/email/my-stats
+
+Aggregated alert statistics for the authenticated responsable. Reads all alerts without pagination.
+
+**Auth:** Firebase ID Token (Group B)
+
+**Query params:** None
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "stats": {
+    "totalAlerts": 42,
+    "alertsToday": 3,
+    "alertsPending": 10,
+    "alertsSent": 32,
+    "maxRisk": 95,
+    "avgRisk": 61.4
+  }
+}
+```
+
+**Source:** `apps/emails/responsables/{email}/alerts` (full collection scan, no limit).
+
+**Field descriptions:**
+- `totalAlerts` — total alert documents for this responsable across all dates.
+- `alertsToday` — count where `dateKey` equals today's date (server-side `YYYY-MM-DD`).
+- `alertsPending` — count where `alertSent !== true`.
+- `alertsSent` — count where `alertSent === true`.
+- `maxRisk` — highest `riskScore` across all alerts.
+- `avgRisk` — mean `riskScore` across alerts that have `riskScore > 0`.
+
+---
+
+### GET /api/email/my-risk
+
+Returns vehicles grouped by plate with alert count and max risk score, sorted by risk descending.
+
+**Auth:** Firebase ID Token (Group B)
+
+**Query params:** None
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "vehicles": [
+    {
+      "plate": "ABC123",
+      "alerts": 7,
+      "maxRisk": 95
+    },
+    {
+      "plate": "XYZ456",
+      "alerts": 2,
+      "maxRisk": 40
+    }
+  ]
+}
+```
+
+**Source:** `apps/emails/responsables/{email}/alerts` (full collection scan, no limit).
+
+**Sort order:** Primary by `maxRisk` descending, secondary by `plate` ascending (alphabetical).
+
+**Notes:**
+- Only includes plates that appear at least once in the alerts index.
+- Unlike `my-alerts-vehicles`, does NOT cross-reference `apps/emails/vehicles` — purely derived from the alerts index.
+
+---
+
 ## Firestore Collections
 
 | Collection | Purpose |
 |---|---|
-| `apps/emails/dailyAlerts/{dateKey}` | Subcollection of daily alert summaries per date (YYYY-MM-DD) |
-| `apps/emails/vehicles/{plate}` | Vehicle records with responsible email lists |
-| `apps/emails/config/config` | Global email recipient config (generalRecipients, ccRecipients, reportRecipients) |
-| `apps/emails/access` | Synced access users list (rebuilt by `syncAccessUsers()`) |
+| `apps/emails/dailyAlerts/{dateKey}/vehicles/{plate}` | Daily alert document per vehicle per date. Contains `events[]`, `summary`, `incidentSummary`, `riskScore`, `alertSent`, `responsables`. |
+| `apps/emails/vehicles/{plate}` | Vehicle master records with `responsables`, `responsablesNormalized`, `operationName`. |
+| `apps/emails/responsables/{email}/alerts/{alertId}` | Alert index per responsable. One document per (plate × dateKey). Fields: `plate`, `dateKey`, `riskScore`, `alertSent`, `createdAt`. Used by `my-alerts`, `my-stats`, `my-risk`. |
+| `apps/emails/config/config` | Global email recipient config (generalRecipients, ccRecipients, reportRecipients). |
+| `apps/emails/access` | Synced access users list (rebuilt by `POST /api/admin/sync-access-users`). |
 
 ---
 
