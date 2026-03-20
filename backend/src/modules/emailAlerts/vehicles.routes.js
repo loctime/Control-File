@@ -139,6 +139,7 @@ router.get("/vehicles/events", authMiddleware, async (req, res) => {
       for (const doc of vehicleDocs) {
         const data = doc.data() || {};
         const docPlate = data.plate || doc.id;
+        const operationName = data.operationName || data.operacion || null;
         const rawEvents = Array.isArray(data.events) ? data.events : [];
 
         for (const event of rawEvents) {
@@ -152,6 +153,7 @@ router.get("/vehicles/events", authMiddleware, async (req, res) => {
 
           allEvents.push({
             plate: docPlate,
+            operationName,
             dateKey,
             eventType: event.eventSubtype || event.type || null,
             eventTimestamp: event.eventTimestamp || null,
