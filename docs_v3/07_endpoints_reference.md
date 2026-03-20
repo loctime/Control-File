@@ -28,6 +28,8 @@
 | `POST` | `/api/uploads/presign` | Required | Create upload session |
 | `POST` | `/api/uploads/confirm` | Required | Confirm completed upload |
 | `POST` | `/api/controlfile/upload` | Required | Single-step upload (body passthrough) |
+| `GET` | `/api/files/list` | Required | List files and folders (paginated, with cache) |
+| `POST` | `/api/files/replace` | Required | Replace file contents (same ID, multipart) |
 | `POST` | `/api/files/delete` | Required | Soft-delete a file |
 | `POST` | `/api/files/restore` | Required | Restore file from trash *(backend-direct)* |
 | `POST` | `/api/files/permanent-delete` | Required | Permanently delete one file *(backend-direct)* |
@@ -52,6 +54,15 @@
 | `GET` | `/api/users/profile` | Required | Get user profile |
 | `PUT` | `/api/users/profile` | Required | Update user profile |
 | `POST` | `/api/admin/create-user` | Required (admin) | Create Firebase Auth user (backend-to-backend) |
+| `PATCH` | `/api/admin/vehicle-alerts` | Required (admin) | Update vehicle alert responsables |
+| `GET` | `/api/admin/email-config` | Required (admin) | Get email alert recipient config |
+| `PATCH` | `/api/admin/email-config` | Required (admin) | Update email alert recipient config |
+| `POST` | `/api/admin/sync-access-users` | Required (admin) | Sync email access user list |
+| `POST` | `/api/feedback` | Required | Create feedback with screenshot |
+| `GET` | `/api/feedback` | Required | List feedback with filters |
+| `PATCH` | `/api/feedback/:id` | Required | Update feedback status/assignment |
+| `POST` | `/upload` | Required | External file upload (ControlAudit, no quota check) |
+| `POST` | `/v1/external/upload` | Required | Same as above (versioned path) |
 | `GET` | `/api/superdev/list-owners` | Superdev | List all owners (ControlAudit-scoped) |
 | `POST` | `/api/superdev/impersonate` | Superdev | Generate impersonation token (ControlAudit-scoped) |
 
@@ -123,9 +134,9 @@ For multipart (≥128MB):
 }
 ```
 
-**Errors:** `401` invalid token · `402` quota exceeded · `500` server error
+**Errors:** `401` invalid token · `413` quota exceeded (`size > limits.storageBytes`) · `500` server error
 
-**Side effects:** Creates `uploadSessions/{id}` · Adds to `pendingBytes`
+**Side effects:** Creates `uploadSessions/{id}` (platform account guard checked — no `pendingBytes` update)
 
 ---
 
@@ -166,7 +177,7 @@ Confirm upload. Create file record. Adjust quota.
 
 **Errors:** `401` · `404` session not found · `409` already completed · `500`
 
-**Side effects:** Creates `files/{fileId}` · `usedBytes += size` · `pendingBytes -= size`
+**Side effects:** Creates `files/{fileId}` · Sets session `status = "completed"` (no quota field updates)
 
 ---
 
@@ -295,7 +306,7 @@ Rename a file or folder.
 ```json
 {
   "fileId": "firestoreDocId",
-  "name": "new-name.pdf"
+  "newName": "new-name.pdf"
 }
 ```
 
@@ -303,6 +314,71 @@ Rename a file or folder.
 ```json
 { "success": true }
 ```
+
+---
+
+### GET /api/files/list
+
+List files and folders in a directory with cursor pagination.
+
+**Auth:** Required
+**Backend:** `GET /v1/files/list`
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `parentId` | string\|`"null"` | (all) | Parent folder ID. Pass `"null"` string for root items |
+| `pageSize` | number | `100` | Items per page (max `200`) |
+| `cursor` | string | — | Last item ID from previous page |
+
+**Response `200`:**
+```json
+{
+  "items": [
+    { "id": "docId", "type": "file", "name": "report.pdf", "size": 1024, ... },
+    { "id": "foldId", "type": "folder", "name": "My Docs", ... }
+  ],
+  "nextPage": "lastItemId"
+}
+```
+
+`nextPage` is `null` when no more items. Items are sorted by `updatedAt` descending.
+
+**Notes:**
+- Excludes soft-deleted items (`deletedAt != null`)
+- Responses may be served from TanStack cache layer
+
+---
+
+### POST /api/files/replace
+
+Replace the contents of an existing file without changing its ID or metadata structure. File is uploaded as multipart/form-data.
+
+**Auth:** Required
+**Backend:** `POST /v1/files/replace`
+**Content-Type:** `multipart/form-data`
+
+**Form fields:**
+
+| Field | Required | Description |
+|---|---|---|
+| `fileId` | Yes | Firestore doc ID of the file to replace |
+| `file` | Yes | New file content (the replacement binary) |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Archivo reemplazado",
+  "size": 2048576,
+  "mime": "image/png"
+}
+```
+
+**Validations:** Ownership · `deletedAt == null`
+
+**Side effects:** Uploads to **same `bucketKey`** (overwrites B2 object) · Updates `files/{id}.size`, `.mime`, `.etag`, `.updatedAt` · Adjusts `users/{uid}.usedBytes` by size delta
 
 ---
 
@@ -784,6 +860,202 @@ Create a Firebase Auth user and set custom claims. **Backend-to-backend only —
 **What it does:** Creates Firebase Auth user · Sets custom claims `{ appId, role, ownerId }`
 
 **What it does NOT do:** Write app Firestore · Apply business logic · Create user documents
+
+> **Response status:** `201` when user was created, `200` when email already existed and UID was reused.
+
+---
+
+### PATCH /api/admin/vehicle-alerts
+
+Update vehicle alert responsables (email recipients) and sync access list.
+
+**Auth:** Required — `role: "admin"` or `"supermax"`
+
+**Request (single vehicle):**
+```json
+{
+  "plate": "ABC123",
+  "responsables": ["user@example.com", "other@example.com"]
+}
+```
+
+**Request (multiple vehicles):**
+```json
+{
+  "vehicles": [
+    { "plate": "ABC123", "responsables": ["user@example.com"] },
+    { "plate": "XYZ789", "responsables": ["other@example.com"] }
+  ]
+}
+```
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "vehiclesUpdated": 2,
+  "sync": { ... }
+}
+```
+
+**Side effects:** Writes `apps/emails/vehicles/{plate}` · Triggers `syncAccessUsers()` to rebuild `apps/emails/access`
+
+---
+
+### GET /api/admin/email-config
+
+Get global email alert recipient configuration.
+
+**Auth:** Required — `role: "admin"` or `"supermax"`
+
+**Response `200`:**
+```json
+{
+  "ok": true,
+  "config": {
+    "generalRecipients": ["alerts@example.com"],
+    "ccRecipients": ["mgmt@example.com"],
+    "reportRecipients": ["reports@example.com"]
+  }
+}
+```
+
+Reads from `apps/emails/config/config`. Returns empty arrays if document does not exist.
+
+---
+
+### PATCH /api/admin/email-config
+
+Update global email alert recipient lists.
+
+**Auth:** Required — `role: "admin"` or `"supermax"`
+
+**Request:**
+```json
+{
+  "generalRecipients": ["alerts@example.com"],
+  "ccRecipients": [],
+  "reportRecipients": ["reports@example.com"]
+}
+```
+
+At least one array field required. All provided arrays replace existing values.
+
+**Response `200`:**
+```json
+{ "ok": true, "sync": { ... } }
+```
+
+**Side effects:** Writes `apps/emails/config/config` · Triggers `syncAccessUsers()`
+
+---
+
+### POST /api/admin/sync-access-users
+
+Manually trigger sync of email access users. Updates `apps/emails/access` from vehicle responsables and config recipients.
+
+**Auth:** Required — `role: "admin"` or `"supermax"`
+
+**Response `200`:**
+```json
+{ "ok": true, ... }
+```
+
+---
+
+## Feedback
+
+---
+
+### POST /api/feedback
+
+Create a feedback item with screenshot attachment.
+
+**Auth:** Required
+**Backend:** `POST /v1/feedback` (or `/api/feedback`)
+**Content-Type:** `multipart/form-data`
+
+**Form fields:**
+
+| Field | Required | Description |
+|---|---|---|
+| `payload` | Yes | JSON string: `{ appId, tenantId?, userRole?, comment, context, clientRequestId?, source? }` |
+| `screenshot` | Yes | PNG/JPEG image (max 10MB) |
+
+**Response `201`** (new) or **`200`** (idempotent — same `clientRequestId`):
+```json
+{
+  "success": true,
+  "feedbackId": "firestoreDocId",
+  "screenshotFileId": "firestoreFileId",
+  "status": "open",
+  "createdAt": "2026-03-20T10:00:00.000Z"
+}
+```
+
+**Errors:** `400` validation error · `401` no auth · `403` permission denied · `500`
+
+---
+
+### GET /api/feedback
+
+List feedback items with filters and pagination.
+
+**Auth:** Required
+**Backend:** `GET /v1/feedback`
+
+**Query parameters:**
+
+| Param | Required | Description |
+|---|---|---|
+| `appId` | Yes | Filter by app |
+| `tenantId` | No | Filter by tenant |
+| `status` | No | `open` \| `in_progress` \| `resolved` \| `archived` |
+| `createdBy` | No | UID of creator |
+| `assignedTo` | No | UID of assignee |
+| `fromDate` | No | Start timestamp (ms) |
+| `toDate` | No | End timestamp (ms) |
+| `cursor` | No | Last document ID for pagination |
+| `pageSize` | No | Default `20`, max `100` |
+
+**Response `200`:**
+```json
+{
+  "items": [
+    { "id": "...", "appId": "...", "status": "open", "comment": "...", "createdAt": "...", ... }
+  ],
+  "pagination": { "cursor": "lastId", "hasMore": true }
+}
+```
+
+---
+
+### PATCH /api/feedback/:feedbackId
+
+Update feedback status, assignment, or internal notes.
+
+**Auth:** Required — must be creator or assignee of the feedback item
+
+**Request:**
+```json
+{
+  "status": "in_progress",
+  "assignedTo": "uid",
+  "internalNotes": "Investigated — reproduced in staging"
+}
+```
+
+All fields optional. At least one required.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "feedback": { ... }
+}
+```
+
+**Errors:** `400` no fields or invalid · `401` · `403` not creator/assignee · `404` not found · `500`
 
 ---
 

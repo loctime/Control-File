@@ -41,15 +41,20 @@ Creates an `uploadSessions` document, validates quota, and returns a presigned B
 | `parentId` | string\|null | No | Target folder ID. `null` = root |
 
 **Quota validation (performed here, before any upload):**
+
+Quota is checked via `requireStorage(account, size)` using the **platform account** (`platform/accounts/accounts/{uid}`):
+
 ```
-usedBytes + pendingBytes + size <= planQuotaBytes
+size > account.limits.storageBytes  →  413 QuotaExceeded
 ```
 
-If quota is exceeded, the request fails with `402` — no session is created.
+This is a **hard cap check** against the total plan limit (`limits.storageBytes`), not against remaining space. It does **not** subtract already-used bytes. See [10_platform_and_billing.md](./10_platform_and_billing.md) for the full dual quota system explanation.
+
+If quota is exceeded, the request fails with `413` — no session is created.
 
 **Side effects:**
 - Creates `uploadSessions/{sessionId}` with `status: "pending"`
-- Updates `users/{uid}.pendingBytes += size`
+- Does **not** update `users/{uid}.pendingBytes` (pendingBytes is a legacy field not updated by current code)
 
 **Response `200`:**
 ```json
@@ -86,7 +91,7 @@ For multipart uploads (≥ 128 MB):
 | Status | Description |
 |---|---|
 | `401` | Invalid or missing Firebase token |
-| `402` | Quota exceeded |
+| `413` | Quota exceeded (`size > limits.storageBytes`) |
 | `500` | Internal error |
 
 ---
@@ -162,9 +167,8 @@ Verifies the file exists in B2, creates the permanent `files/{fileId}` document,
 **Side effects:**
 - Completes B2 multipart upload (if applicable)
 - Creates `files/{fileId}` document with `type: "file"`, all metadata
-- Updates `users/{uid}.usedBytes += size`
-- Updates `users/{uid}.pendingBytes -= size`
 - Sets session `status = "completed"`
+- Does **not** update `users/{uid}.usedBytes` or `pendingBytes` (quota accounting is handled by the platform account system, not the users collection)
 
 **Response `200`:**
 ```json
@@ -240,15 +244,13 @@ Sessions expire after **24 hours**. Expired sessions with `pendingBytes` still r
 
 ## Quota During Upload
 
-`pendingBytes` prevents over-quota uploads when multiple uploads are in flight simultaneously:
+Quota is enforced by the **platform account guard** at presign time:
 
 ```
-Timeline:
-  T=0s   User A starts 500MB upload → pendingBytes += 500MB
-  T=5s   User A starts another 500MB upload
-         Check: usedBytes + pendingBytes(500) + 500 <= planQuota
-         If quota is 1GB and usedBytes=0: 0 + 500 + 500 = 1000 ✓ allowed
-         Hypothetically if usedBytes=200MB: 200 + 500 + 500 = 1200 > 1000 ✗ rejected
+requireStorage(account, requestedFileSize)
+  → if requestedFileSize > account.limits.storageBytes: throw QuotaExceededError (413)
 ```
 
-This prevents a race condition where two simultaneous uploads would both pass quota checks but together exceed the limit.
+The check compares the **individual file size** against the **total plan limit** (`limits.storageBytes`). It does not track cumulative used space — that is a known limitation of the current implementation. See [10_platform_and_billing.md](./10_platform_and_billing.md) for the dual quota system and its implications.
+
+> **Note:** The `users/{uid}` collection has `usedBytes` and `pendingBytes` fields that are referenced in older documentation. These fields exist in Firestore but are not updated by the current upload code paths. They may be populated by the `POST /user/plan` flow and legacy code.

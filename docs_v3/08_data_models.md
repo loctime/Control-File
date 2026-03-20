@@ -7,14 +7,17 @@
 
 ## Overview
 
-ControlFile uses **four Firestore collections**:
+ControlFile uses these Firestore collections:
 
 | Collection | Purpose |
 |---|---|
 | `files` | All files and folders (unified, `type` field differentiates) |
 | `shares` | Public share links, indexed by token |
 | `uploadSessions` | Temporary upload state during 3-step upload flow |
-| `users` | Per-user quota and plan data |
+| `users` | Per-user quota and plan data (`usedBytes`, `planQuotaBytes`, `planId`) |
+| `userSettings` | Per-user settings: billing interval, taskbar items |
+| `platform/accounts/accounts/{uid}` | Platform account: active status, plan limits (used by quota guard) |
+| `feedback` | User feedback submissions with screenshots |
 
 ---
 
@@ -184,26 +187,78 @@ Per-user quota and plan tracking. Document ID equals the Firebase UID.
 interface UserDocument {
   planQuotaBytes: number;   // Total quota in bytes (e.g. 1073741824 = 1 GB)
   usedBytes: number;        // Bytes used by active (non-trashed) files
-  pendingBytes: number;     // Bytes reserved for in-progress uploads
+  pendingBytes: number;     // Bytes reserved for in-progress uploads (legacy, not updated by current upload code)
   planId: string;           // Current plan identifier (e.g. "free", "pro")
 }
 ```
 
 ### Quota Accounting
 
+> **Important:** The presign endpoint does NOT use `users` collection for quota checking. It uses `platform/accounts/accounts/{uid}.limits.storageBytes`. See below.
+
+Events that DO update `users` fields:
+
 | Event | `usedBytes` | `pendingBytes` |
 |---|---|---|
-| `POST /uploads/presign` | — | += `size` |
-| `POST /uploads/confirm` | += `size` | -= `size` |
 | `POST /files/delete` (soft) | -= `size` | — |
 | `POST /files/restore` | += `size` | — |
-| `POST /files/permanent-delete` | — (already decremented) | — |
 | `POST /files/empty-trash` | -= `sum(sizes)` | — |
+| `POST /files/replace` | += `(newSize - oldSize)` | — |
+| `POST /user/plan` | — | — (reads `usedBytes` for plan downgrade check) |
 
-**Validation formula (enforced before presign):**
+Events that do NOT update `users` fields (contrary to older documentation):
+- `POST /uploads/presign` — uses platform account guard instead
+- `POST /uploads/confirm` — creates `files` doc only, no quota field updates
+
+---
+
+## `platform/accounts/accounts/{uid}` Subcollection
+
+> **Path:** `db.collection('platform').doc('accounts').collection('accounts').doc(uid)`
+
+Platform account document used by the quota guard at upload presign time. Document ID equals the Firebase UID.
+
+```typescript
+interface PlatformAccountDocument {
+  status: "active" | "suspended";  // Account status. Suspended accounts cannot upload.
+  planId: string;                   // Plan identifier (e.g. "FREE_5GB")
+  limits: {
+    storageBytes: number;           // Hard cap in bytes. Default: 5368709120 (5 GB)
+  };
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+}
 ```
-usedBytes + pendingBytes + newFileSize <= planQuotaBytes
+
+### Auto-Creation
+
+If an account document does not exist when `POST /uploads/presign` is called, it is automatically created with:
+```json
+{
+  "status": "active",
+  "planId": "FREE_5GB",
+  "limits": { "storageBytes": 5368709120 }
+}
 ```
+
+### Quota Guard Logic
+
+```typescript
+function requireStorage(account, requestedBytes) {
+  if (requestedBytes > account.limits.storageBytes) {
+    throw new QuotaExceededError(account, requestedBytes);  // statusCode: 413
+  }
+}
+```
+
+This is a **hard cap check** — it compares the individual file size against the total plan limit. It does NOT track cumulative used space. Two separate systems exist:
+
+| System | Collection | Used By | What it checks |
+|---|---|---|---|
+| Platform account guard | `platform/accounts/accounts/{uid}` | `POST /uploads/presign` | `fileSize > limits.storageBytes` |
+| Users quota fields | `users/{uid}` | `POST /files/restore`, `/user/plan` | `usedBytes + fileSize <= planQuotaBytes` |
+
+These two systems are not reconciled. See [10_platform_and_billing.md](./10_platform_and_billing.md).
 
 ---
 

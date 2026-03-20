@@ -94,12 +94,38 @@ This allows the frontend and backend to be deployed independently while sharing 
 
 The actual ControlFile backend is a Node.js + Express server. It:
 
-- Mounts all routes under `/v1/` (with legacy `/api/` for users)
 - Verifies Firebase ID tokens on protected routes
 - Manages upload sessions via Firestore
 - Generates presigned URLs via the AWS S3 SDK (B2 is S3-compatible)
 - Streams files from B2 for the image proxy endpoint
-- Handles quota accounting in the `users` Firestore collection
+- Enforces quota via platform account guard (`platform/accounts/accounts/{uid}`)
+
+### Route Prefix Rules
+
+Most domains are mounted on **both** `/api/` and `/v1/`. Several domains break this rule:
+
+| Domain | Prefix(es) | Note |
+|---|---|---|
+| files | `/api/files`, `/v1/files` | Standard dual prefix |
+| folders | `/api/folders`, `/v1/folders` | Standard dual prefix |
+| uploads | `/api/uploads`, `/v1/uploads` | Standard dual prefix |
+| shares | `/api/shares`, `/v1/shares` | Standard dual prefix |
+| users (profile) | `/api/users`, `/v1/users` | Standard dual prefix |
+| user (settings) | `/api/user` only | **No `/v1/`** — collision with users.js |
+| platform | `/api/platform`, `/v1/platform` | Standard dual prefix |
+| billing | `/api/billing`, `/v1/billing` | Standard dual prefix |
+| admin | `/api/admin`, `/v1/admin` | Standard dual prefix |
+| training | `/api/training`, `/v1/training` | Standard dual prefix |
+| chat | `/api/chat`, `/v1/chat` | Standard dual prefix |
+| audio | `/api/audio`, `/v1/audio` | Standard dual prefix |
+| superdev | `/api/superdev`, `/v1/superdev` | Standard dual prefix |
+| **email** | `/api/email/` **only** | No `/v1/` prefix |
+| **dashboard** | `/api/dashboard/` **only** | No `/v1/` prefix |
+| **logistics** | `/api/logistics/v2` **only** | No `/v1/` prefix; versioned internally |
+| **horarios** | `/api/horarios/` **only** | No `/v1/` prefix |
+| **repositories** | `/repositories/`, `/v1/repositories/` | **No `/api/`** prefix |
+| **external upload** | `POST /upload`, `/v1/external/upload` | Bare path + `/v1/external/` |
+| health | `/health`, `/api/health`, `/v1/health` | Triple mount |
 
 ---
 
@@ -112,7 +138,7 @@ B2 is accessed via the AWS S3-compatible API using `@aws-sdk/client-s3`.
 - All access is via:
   - **Presigned URLs** (time-limited, expire in 5 min for downloads, 1h for uploads)
   - **Backend proxy stream** (for the `/api/shares/{token}/image` endpoint only)
-- `bucketKey` is the canonical B2 object path: `users/{userId}/files/{timestamp}-{name}`
+- `bucketKey` is the canonical B2 object path for presign uploads: `{uid}/{parentPath}/{timestamp}_{randomId}_{sanitizedFileName}`. External uploads use `audits/{companyId}/{auditId}/{uuid}{ext}`.
 
 ---
 
@@ -127,7 +153,9 @@ Firestore stores all metadata. It does not store file content.
 | `files` | All files and folders (unified, differentiated by `type`) |
 | `shares` | Public share links, indexed by token |
 | `uploadSessions` | Temporary upload session state |
-| `users` | User quota and plan data |
+| `users` | User plan data (`planQuotaBytes`, `usedBytes`, `pendingBytes`) |
+| `userSettings` | Per-user settings: billing interval, taskbar items |
+| `platform/accounts/accounts/{uid}` | Platform account: active plan, `limits.storageBytes` (used by quota guard) |
 
 **Security model:** `files` allows public read (needed for Cloudflare Worker share access). Real security is enforced by the backend, not Firestore rules alone. See [Data Models](./08_data_models.md) for full rules.
 
@@ -144,19 +172,20 @@ An optional Cloudflare Worker can sit in front of public share endpoints. It act
 ```
 1. App calls POST /api/uploads/presign (with Firebase ID Token)
 2. Backend validates token → gets uid
-3. Backend checks quota: usedBytes + pendingBytes + size <= planQuotaBytes
-4. Backend creates uploadSessions/{sessionId}, adds pendingBytes
-5. Backend generates B2 presigned PUT URL (1h TTL)
-6. Backend returns { uploadSessionId, url }
+3. Backend loads platform account (platform/accounts/accounts/{uid})
+4. Backend checks quota: requireStorage(account, size) — size > limits.storageBytes → 413
+5. Backend creates uploadSessions/{sessionId} with status "pending"
+6. Backend generates B2 presigned PUT URL (1h TTL)
+7. Backend returns { uploadSessionId, url }
 
-7. Client PUTs file directly to B2 presigned URL
+8. Client PUTs file directly to B2 presigned URL
    (Backend is not in this path)
 
-8. App calls POST /api/uploads/confirm (with sessionId)
-9. Backend verifies file exists in B2
-10. Backend creates files/{fileId} document
-11. Backend updates usedBytes += size, pendingBytes -= size
-12. Backend returns { fileId }
+9. App calls POST /api/uploads/confirm (with sessionId)
+10. Backend verifies file exists in B2
+11. Backend creates files/{fileId} document
+12. Backend sets session status = "completed"
+13. Backend returns { fileId }
 ```
 
 ---

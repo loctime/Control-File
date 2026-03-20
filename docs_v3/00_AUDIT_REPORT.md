@@ -156,3 +156,62 @@ Multiple existing docs include React hooks, Next.js component examples, and fron
 | Missing shares/ list proxy | Low | Noted |
 | App-specific framing | High | Eliminated |
 | Frontend leakage | High | Eliminated |
+
+---
+
+## Phase 2 Audit – Full Backend Domain Coverage
+
+**Date:** 2026-03-20
+**Scope:** All backend route files and module directories verified against running code
+
+### Additional Bugs Fixed in Phase 2
+
+| ID | File | Bug | Fix |
+|---|---|---|---|
+| B1 | `05_uploads.md` | Quota formula stated as `usedBytes + pendingBytes + size <= planQuotaBytes`. Actual code: `size > account.limits.storageBytes` (hard cap, no remaining space calculation) | Corrected formula; added platform account guard explanation |
+| B2 | `05_uploads.md`, `07_endpoints_reference.md` | Quota exceeded error code stated as `402`. Actual: `413` (`QuotaExceededError.statusCode = 413`) | Fixed to `413` |
+| B3 | `02_architecture.md` | Route prefix stated as universal dual `/api/` + `/v1/`. Reality: email, dashboard, logistics, horarios are `/api/` only; repositories has no `/api/`; external upload has no standard prefix | Added route prefix exceptions table |
+| B4 | `07_endpoints_reference.md` | Missing ~15 endpoints | Added: `GET /files/list`, `POST /files/replace`, admin email-config endpoints, feedback CRUD, external upload paths |
+| B5 | `08_data_models.md` | Missing `platform/accounts/accounts/{uid}` collection | Added with full schema and quota guard logic |
+| B6 | `05_uploads.md`, `07_endpoints_reference.md`, `08_data_models.md` | Confirm endpoint stated to update `usedBytes` and `pendingBytes`. Actual code: creates `files` doc only, no quota field updates | Corrected side effects in all three files |
+| B7 | `07_endpoints_reference.md` | Rename endpoint body uses `name`. Actual code: `newName` | Fixed field name |
+| B8 | `02_architecture.md` | `bucketKey` format stated as `users/{userId}/files/{timestamp}-{name}`. Actual: `{uid}/{parentPath}/{timestamp}_{randomId}_{sanitizedFileName}` | Corrected format |
+
+### New Domains Documented (Phase 2)
+
+| File | Domain |
+|---|---|
+| `10_platform_and_billing.md` | Platform accounts, Stripe billing, dual quota system |
+| `11_uploads_external.md` | External upload (ControlAudit), quota bypass, 7-day TTL |
+| `12_email_domain.md` | Email alerts, x-local-token auth, Resend inbound webhook |
+| `13_logistics.md` | Logistics v2: remitos, recepciones, devoluciones, pedidos internos |
+| `14_training.md` | Training: catalog, plans, sessions, attendance, dashboard |
+| `15_chat_and_repositories.md` | Repository indexing (GitHub), chat queries |
+| `16_audio.md` | Audio mastering (FFmpeg processing) |
+| `17_dashboard_and_horarios.md` | Fleet monitoring dashboard, weekly schedule image upload |
+| `18_users_extended.md` | user.js vs users.js collision, settings, taskbar, plan endpoint |
+| `19_internal_and_debug.md` | Debug endpoints, cache middleware, create-user disambiguation |
+
+### Critical Findings (Phase 2)
+
+**Dual quota systems (data integrity risk):**
+- Upload presign uses `platform/accounts/accounts/{uid}.limits.storageBytes` (hard cap, individual file size check only)
+- Restore/plan endpoints use `users/{uid}.usedBytes` + `planQuotaBytes` (cumulative tracking)
+- External upload bypasses both systems entirely
+- These three paths are not reconciled — total storage usage in `users.usedBytes` may not reflect actual B2 usage
+
+**External upload quota bypass:**
+- `POST /upload` / `POST /v1/external/upload` performs no quota check
+- `users/{uid}.usedBytes` is never updated by external uploads
+- B2 usage from `audits/...` bucket path is invisible to all quota systems
+
+**Route collision (user.js vs users.js):**
+- Both mount handlers for `/users/...` paths
+- `users.js` takes precedence on `/v1/users`
+- `user.js` settings/taskbar/plan routes only accessible via `/api/user/`
+- `/v1/user/settings` returns 404
+
+**Naming discrepancy (plans.json vs Firestore):**
+- `plans.json`: `plan.quotaBytes`
+- `users/{uid}`: `planQuotaBytes`
+- Bridged in `POST /api/user/plan` but creates ongoing maintenance risk
