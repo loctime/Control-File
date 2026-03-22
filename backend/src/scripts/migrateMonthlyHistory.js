@@ -5,11 +5,27 @@
  * Lee: apps/emails/dailyAlerts/{dateKey}/vehicles/{plate}
  * Escribe: apps/emails/monthlyHistory/{YYYY-MM}/vehicles/{plate}
  *
+ * Credenciales: usa backend/serviceAccountKey-controlfile.json si existe;
+ * si no, las mismas variables que el resto del backend (GOOGLE_SERVICE_ACCOUNT_KEY, etc.).
+ *
  * Ejecutar con:
  *   node backend/src/scripts/migrateMonthlyHistory.js
  */
 
-require("dotenv").config({ path: require("path").resolve(__dirname, "../../.env") });
+const path = require("path");
+const fs = require("fs");
+
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+
+const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, "../../serviceAccountKey-controlfile.json");
+if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+  process.env.GOOGLE_SERVICE_ACCOUNT_KEY = fs.readFileSync(SERVICE_ACCOUNT_PATH, "utf8");
+} else if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY && !process.env.FB_ADMIN_APPDATA) {
+  console.error(
+    "❌ [MIGRATE] No hay credenciales: coloca serviceAccountKey-controlfile.json en backend/ o define GOOGLE_SERVICE_ACCOUNT_KEY / FB_ADMIN_APPDATA."
+  );
+  process.exit(1);
+}
 
 const admin = require("../firebaseAdmin");
 const db = admin.firestore();
