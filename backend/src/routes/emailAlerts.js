@@ -784,5 +784,91 @@ router.get("/email/debug-pending-alerts", async (req, res) => {
   }
 });
 
+/**
+ * GET /email/vehicles/events-history
+ *
+ * Devuelve el historial de eventos de vehículos agrupados por mes.
+ * Query params:
+ *   - months: número entero (default 6, máximo 12)
+ *   - plate: string opcional (filtra una patente específica)
+ */
+router.get("/email/vehicles/events-history", async (req, res) => {
+  try {
+    if (!validateLocalToken(req)) {
+      logger.warn("[EVENTS-HISTORY] Intento no autorizado desde:", req.ip);
+      return res.status(401).json({ error: "no autorizado" });
+    }
+
+    const rawMonths = parseInt(req.query.months, 10);
+    const months = Number.isFinite(rawMonths) && rawMonths >= 1 ? Math.min(rawMonths, 12) : 6;
+    const plateFilter = typeof req.query.plate === "string" && req.query.plate.trim().length > 0
+      ? normalizePlate(req.query.plate.trim())
+      : null;
+
+    // Calcular monthKeys desde hace (months-1) meses hasta el mes actual inclusive
+    const argNow = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/Argentina/Buenos_Aires",
+    });
+    const [cy, cm] = argNow.split("-").map(Number);
+    const monthKeys = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(cy, cm - 1 - i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      monthKeys.push(`${y}-${m}`);
+    }
+
+    const MONTHLY_HISTORY_REF = db
+      .collection("apps")
+      .doc("emails")
+      .collection("monthlyHistory");
+
+    const allEvents = [];
+
+    for (const monthKey of monthKeys) {
+      try {
+        if (plateFilter) {
+          const docSnap = await MONTHLY_HISTORY_REF.doc(monthKey)
+            .collection("vehicles")
+            .doc(plateFilter)
+            .get();
+          if (docSnap.exists) {
+            const data = docSnap.data();
+            const events = Array.isArray(data.events) ? data.events : [];
+            allEvents.push(...events);
+          }
+        } else {
+          const vehiclesSnap = await MONTHLY_HISTORY_REF.doc(monthKey)
+            .collection("vehicles")
+            .get();
+          for (const vehicleDoc of vehiclesSnap.docs) {
+            const data = vehicleDoc.data();
+            const events = Array.isArray(data.events) ? data.events : [];
+            allEvents.push(...events);
+          }
+        }
+      } catch (monthErr) {
+        logger.error(
+          `[EVENTS-HISTORY] Error leyendo monthKey=${monthKey}: ${monthErr.message}`
+        );
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      events: allEvents,
+      total: allEvents.length,
+      monthKeys,
+      plate: plateFilter,
+    });
+  } catch (err) {
+    logger.error("[EVENTS-HISTORY] Error:", err.message, err.stack);
+    return res.status(500).json({
+      error: "error interno",
+      message: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+});
+
 module.exports = router;
 

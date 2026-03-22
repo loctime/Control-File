@@ -1202,6 +1202,74 @@ function isFromAllowedDomain(from, allowedDomains) {
   return domains.some((d) => domain === d || domain.endsWith("." + d));
 }
 
+/**
+ * Crea o actualiza el documento mensual en
+ * apps/emails/monthlyHistory/{YYYY-MM}/vehicles/{plate}
+ * Deduplicación por eventId. Solo agrega eventos nuevos.
+ * @param {string} dateKey - Fecha YYYY-MM-DD
+ * @param {string} plate - Patente ya normalizada
+ * @param {object} vehicle - { brand, model, operationName, responsables, responsablesNormalized }
+ * @param {Array<object>} eventSummaries - Array de eventSummary (mismo formato que upsertDailyAlertBatch)
+ */
+async function upsertMonthlyHistoryBatch(dateKey, plate, vehicle, eventSummaries) {
+  if (!eventSummaries || eventSummaries.length === 0) return;
+
+  const db = getDb();
+  const monthKey = dateKey.slice(0, 7);
+  const normalized = normalizePlate(plate);
+
+  const vehicleRef = db
+    .collection("apps")
+    .doc("emails")
+    .collection("monthlyHistory")
+    .doc(monthKey)
+    .collection("vehicles")
+    .doc(normalized);
+
+  const responsables = Array.isArray(vehicle.responsables) ? vehicle.responsables : [];
+  const responsablesNormalized =
+    Array.isArray(vehicle.responsablesNormalized) && vehicle.responsablesNormalized.length > 0
+      ? vehicle.responsablesNormalized
+      : normalizeEmailArray(responsables);
+
+  await db.runTransaction(async (tx) => {
+    const docSnap = await tx.get(vehicleRef);
+    const existingData = docSnap.exists ? docSnap.data() : null;
+    const existingEventIds = new Set(
+      Array.isArray(existingData?.eventIdsSeen) ? existingData.eventIdsSeen.filter(Boolean) : []
+    );
+
+    const newSummaries = (Array.isArray(eventSummaries) ? eventSummaries : []).filter(
+      (e) => e.eventId && !existingEventIds.has(e.eventId)
+    );
+
+    if (newSummaries.length === 0) return;
+
+    const newEventIds = newSummaries.map((e) => e.eventId).filter(Boolean);
+    const FieldValue = admin.firestore.FieldValue;
+
+    const payload = {
+      plate: normalized,
+      monthKey,
+      brand: vehicle.brand || existingData?.brand || "",
+      model: vehicle.model || existingData?.model || "",
+      operationName: vehicle.operationName || vehicle.operacion || existingData?.operationName || existingData?.operacion || null,
+      responsables: responsables.length > 0 ? responsables : (existingData?.responsables ?? []),
+      responsablesNormalized: responsablesNormalized.length > 0 ? responsablesNormalized : (existingData?.responsablesNormalized ?? []),
+      events: FieldValue.arrayUnion(...newSummaries),
+      eventIdsSeen: FieldValue.arrayUnion(...newEventIds),
+      totalEventsCount: (existingData?.totalEventsCount ?? 0) + newSummaries.length,
+      lastEventAt: FieldValue.serverTimestamp(),
+    };
+
+    if (!existingData) {
+      payload.createdAt = FieldValue.serverTimestamp();
+    }
+
+    tx.set(vehicleRef, payload, { merge: true });
+  });
+}
+
 module.exports = {
   generateDeterministicEventId,
   saveVehicleEvents,
@@ -1220,4 +1288,5 @@ module.exports = {
   groupSpeedingIncidents,
   getSpeedSeverity,
   buildDailyAlertVehicleProjection,
+  upsertMonthlyHistoryBatch,
 };

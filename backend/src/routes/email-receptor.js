@@ -11,6 +11,7 @@ const {
   getVehicle,
   createVehicleFromEvent,
   upsertDailyAlertBatch,
+  upsertMonthlyHistoryBatch,
   updateDailyMetaBatch,
   buildEventSummary,
   formatDateKey,
@@ -362,6 +363,7 @@ router.post("/email-local-ingest", async (req, res) => {
           if (bucket.eventSummaries.length === 0) continue;
           try {
             const result = await upsertDailyAlertBatch(dateKey, plate, bucket.vehicle, bucket.eventSummaries);
+            await upsertMonthlyHistoryBatch(dateKey, plate, bucket.vehicle, bucket.eventSummaries);
             if (result.metaDeltas) {
               dailyAlertWrites++;
               const prev = metaByDate.get(dateKey) || {};

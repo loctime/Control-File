@@ -3,14 +3,15 @@
   "configurations": [
     {
       "name": "Frontend (Next.js)",
-      "runtimeExecutable": "npm.cmd",
-      "runtimeArgs": ["run", "dev:frontend"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm run dev:frontend"],
       "port": 3000
     },
     {
       "name": "Backend (Express/nodemon)",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["backend/src/index.js"],
+      "runtimeArgs": ["src/index.js"],
+      "cwd": "backend",
       "port": 3001
     }
   ]

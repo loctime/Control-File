@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "mcp__Claude_Preview__preview_start",
-      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\modules\\\\emailAlerts\\\\vehicles.routes.js\")"
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\modules\\\\emailAlerts\\\\vehicles.routes.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\services\\\\vehicleEventService.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\routes\\\\email-receptor.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\routes\\\\emailAlerts.js\")",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(node --check \"C:\\\\Users\\\\User\\\\Desktop\\\\controlFile\\\\backend\\\\src\\\\scripts\\\\migrateMonthlyHistory.js\")"
     ]
   }
 }
