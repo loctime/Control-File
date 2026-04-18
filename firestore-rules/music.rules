@@ -1,0 +1,28 @@
+// ========= MUSIC APP =========
+
+// Users can only access their own music data
+match /apps/{appId}/usuarios/{uid}/{document=**} {
+  allow read, write: if isAuth() && uid() == uid;
+}
+
+// Profile data
+match /apps/{appId}/usuarios/{uid}/perfil/{profileId} {
+  allow read, write: if isAuth() && uid() == uid;
+  allow create: if isAuth() && uid() == uid;
+}
+
+// Analysis data
+match /apps/{appId}/usuarios/{uid}/analisis/{analysisId} {
+  allow read, write: if isAuth() && uid() == uid;
+  allow create: if isAuth() && uid() == uid 
+    && nonEmptyString('timestamp')
+    && isTs('timestamp');
+}
+
+// Known artists and ratings
+match /apps/{appId}/usuarios/{uid}/artistasConocidos/{artistId} {
+  allow read, write: if isAuth() && uid() == uid;
+  allow create: if isAuth() && uid() == uid
+    && nonEmptyString('nombre')
+    && nonEmptyString('pais');
+}

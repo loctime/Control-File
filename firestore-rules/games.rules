@@ -1,0 +1,10 @@
+// ========= JUEGOS APP =========
+
+// Perfil del jugador y estadísticas: solo el dueño (mismo uid que en la ruta)
+match /apps/juegos/players/{uid} {
+  allow read, write: if isAuth() && uid() == uid;
+
+  match /gameStats/{gameId} {
+    allow read, write: if isAuth() && uid() == uid;
+  }
+}

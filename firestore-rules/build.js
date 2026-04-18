@@ -18,6 +18,8 @@ const files = [
   'repo.rules',
   'emails.rules',
   'valentin.rules',
+  'music.rules',
+  'games.rules',
   'controlrepo.rules',
   'controlChat.rules',
 
