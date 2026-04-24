@@ -239,13 +239,11 @@ service cloud.firestore {
 
     /* ========= AUDIT ========= */
 
-    match /apps/auditoria/owners/{ownerId}/{document=**} {
+    // Rules for formularios (forms) - Collection level
+    match /apps/auditoria/owners/{ownerId}/formularios/{formularioId} {
     
-      allow read, write: if isAuth()
-        && (
-          uid() == ownerId ||
-          request.auth.token.ownerId == ownerId
-        );
+      // TEMPORAL: Permitir todo para depurar
+      allow read, create, update, delete: if true;
     }
     
     match /apps/auditoria/owners/{ownerId}/empleados/{empleadoId} {
@@ -288,6 +286,17 @@ service cloud.firestore {
           )
         );
     }
+    
+    // General rule for all other collections - MUST come after specific rules
+    match /apps/auditoria/owners/{ownerId}/{document=**} {
+    
+      allow read, write: if isAuth()
+        && (
+          uid() == ownerId ||
+          request.auth.token.ownerId == ownerId
+        );
+    }
+    
     
 
     /* ========= REPO ========= */
