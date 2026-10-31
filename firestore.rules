@@ -370,263 +370,64 @@ service cloud.firestore {
 
     /* ========= CONTROLCHAT ========= */
 
-    /* ========= CONTROL CHAT HELPERS ========= */
-    
-    function workspace(workspaceId) {
-      return get(/databases/$(db)/documents/workspaces/$(workspaceId));
+    function isOwner(userId) {
+      return isAuth() && uid() == userId;
     }
     
-    function member(workspaceId, userId) {
-      return get(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(userId));
-    }
-    
-    function isWorkspaceOwner(workspaceId) {
-      return isAuth() && workspace(workspaceId).data.ownerId == uid();
-    }
-    
-    function isWorkspaceMember(workspaceId) {
-      return isAuth() &&
-        exists(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(uid()));
-    }
-    
-    function isWorkspaceAdmin(workspaceId) {
-      return isWorkspaceMember(workspaceId) &&
-        member(workspaceId, uid()).data.role == "admin";
-    }
-    
-    function isWorkspaceManager(workspaceId) {
-      return isWorkspaceOwner(workspaceId) || isWorkspaceAdmin(workspaceId);
-    }
-    
-    function workspaceUser(workspaceId) {
-      return isWorkspaceOwner(workspaceId) || isWorkspaceMember(workspaceId);
-    }
-    
-    // Permitir lectura cuando el doc no existe (creación inicial del workspace/conversación)
-    function workspaceExists(workspaceId) {
-      return exists(/databases/$(db)/documents/workspaces/$(workspaceId));
-    }
-    function workspaceMemberExists(workspaceId, userId) {
-      return exists(/databases/$(db)/documents/workspaces/$(workspaceId)/members/$(userId));
-    }
-    function conversationExists(workspaceId, conversationId) {
-      return exists(/databases/$(db)/documents/workspaces/$(workspaceId)/conversations/$(conversationId));
-    }
-    function conversationMemberExists(workspaceId, conversationId, userId) {
-      return exists(/databases/$(db)/documents/workspaces/$(workspaceId)/conversations/$(conversationId)/members/$(userId));
-    }
-    
-    function messageAuthor() {
-      return isAuth() && resource.data.authorId == uid();
-    }
-    
-    function legacyMigrationPending(userId) {
-      return isAuth()
-        && uid() == userId
-        && (
-          !exists(/databases/$(db)/documents/users/$(userId)) ||
-          !("migrationVersion" in get(/databases/$(db)/documents/users/$(userId)).data) ||
-          get(/databases/$(db)/documents/users/$(userId)).data.migrationVersion < 2
-        );
-    }
-    
-    
-    /* ========= USERS ========= */
-    
-    match /users/{userId} {
-    
-      allow read, write: if isAuth() && uid() == userId;
-    
-      match /preferences/{docId} {
-        allow read, write: if isAuth() && uid() == userId;
-      }
-    
-      match /notifications/{notificationId} {
-        allow read, write: if isAuth() && uid() == userId;
-      }
-    }
-    
-    
-    /* ========= WORKSPACES ========= */
-    
-    match /workspaces/{workspaceId} {
-    
-      allow read: if isAuth() && (
-        !workspaceExists(workspaceId) ||
-        workspaceUser(workspaceId)
+    function validReplyFields(data) {
+      // Las tres propiedades de reply deben estar todas presentes o todas
+      // ausentes; cuando estan presentes deben ser strings (replyToId no vacio).
+      let replyKeys = ['replyToId', 'replyToText', 'replyToAuthor'];
+      return !data.keys().hasAny(replyKeys) || (
+        data.keys().hasAll(replyKeys)
+        && data.replyToId is string && data.replyToId.size() > 0
+        && data.replyToText is string
+        && data.replyToAuthor is string
       );
-    
-      allow create: if isAuth() &&
-        request.resource.data.ownerId == uid();
-    
-      allow update: if isWorkspaceOwner(workspaceId) &&
-        request.resource.data.ownerId == resource.data.ownerId;
-    
-      allow delete: if isWorkspaceOwner(workspaceId);
-    
-    
-      match /members/{userId} {
-    
-        allow read: if isAuth() && (
-          (userId == uid() && !workspaceMemberExists(workspaceId, userId)) ||
-          workspaceUser(workspaceId)
-        );
-    
-        allow create: if isWorkspaceManager(workspaceId) &&
-          request.resource.data.userId == userId;
-    
-        allow update: if isWorkspaceManager(workspaceId);
-    
-        allow delete: if isWorkspaceManager(workspaceId) &&
-          resource.data.userId != workspace(workspaceId).data.ownerId;
-      }
-    
-    
-      match /conversations/{conversationId} {
-    
-        allow read: if isAuth() && (
-          !conversationExists(workspaceId, conversationId) ||
-          workspaceUser(workspaceId)
-        );
-    
-        allow create: if workspaceUser(workspaceId);
-    
-        allow update: if workspaceUser(workspaceId);
-    
-        allow delete: if isWorkspaceManager(workspaceId);
-    
-    
-        match /members/{userId} {
-          allow read: if isAuth() && (
-            (userId == uid() && !conversationMemberExists(workspaceId, conversationId, userId)) ||
-            workspaceUser(workspaceId)
-          );
-          allow create, update, delete: if workspaceUser(workspaceId);
-        }
-    
-    
-        match /messages/{messageId} {
-    
-          allow read: if workspaceUser(workspaceId);
-    
-          allow create: if workspaceUser(workspaceId);
-    
-          allow update: if messageAuthor();
-    
-          allow delete: if messageAuthor() || isWorkspaceManager(workspaceId);
-    
-    
-          match /reactions/{reactionId} {
-            allow read: if workspaceUser(workspaceId);
-            allow write: if workspaceUser(workspaceId);
-          }
-        }
-    
-    
-        match /threads/{threadId} {
-          allow read, write: if workspaceUser(workspaceId);
-        }
-    
-        match /pinned/{pinId} {
-          allow read, write: if workspaceUser(workspaceId);
-        }
-      }
-    
-    
-      match /attachments/{attachmentId} {
-    
-        allow read: if workspaceUser(workspaceId);
-    
-        allow create: if workspaceUser(workspaceId) &&
-          request.resource.data.ownerId == uid();
-    
-        allow update: if workspaceUser(workspaceId) &&
-          request.resource.data.ownerId == resource.data.ownerId;
-    
-        allow delete: if workspaceUser(workspaceId);
-      }
-    
-    
-      match /notes/{noteId} {
-    
-        allow read: if resource.data.ownerId == uid();
-    
-        allow create: if request.resource.data.ownerId == uid();
-    
-        allow update, delete: if resource.data.ownerId == uid();
-    
-    
-        match /links/{linkId} {
-          allow read, write: if resource.data.ownerId == uid();
-        }
-      }
-    
-    
-      match /documents/{documentId} {
-    
-        allow read: if resource.data.ownerId == uid();
-    
-        allow create: if request.resource.data.ownerId == uid();
-    
-        allow update, delete: if resource.data.ownerId == uid();
-    
-    
-        match /blocks/{blockId} {
-          allow read, write: if resource.data.ownerId == uid();
-        }
-      }
-    
-    
-      match /tags/{tagId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /graphNodes/{nodeId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /graphEdges/{edgeId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /notifications/{notificationId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /summaries/{summaryId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /embeddings/{embeddingId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /jobs/{jobId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /events/{eventId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
-      match /searchIndex/{indexId} {
-        allow read, write: if workspaceUser(workspaceId);
-      }
-    
     }
     
-    
-    /* ========= LEGACY MIGRATION ========= */
+    function validCreateMessage(data) {
+      return data.keys().hasOnly([
+          'type',
+          'text',
+          'createdAt',
+          'device',
+          'starred',
+          'author',
+          'replyToId',
+          'replyToText',
+          'replyToAuthor'
+        ])
+        && data.type in ['text', 'link']
+        && data.device in ['mobile', 'desktop']
+        && data.starred is bool
+        && data.createdAt is timestamp
+        && data.text is string
+        && data.text.size() > 0
+        && data.text.size() <= 2000
+        && (data.type != 'link' || data.text.matches('^https?://.+'))
+        && data.author is string
+        && data.author.size() > 0
+        && data.author.size() <= 200
+        && validReplyFields(data);
+    }
     
     match /apps/control-chat/users/{userId} {
-    
-      allow read: if legacyMigrationPending(userId);
-    
-      allow write: if false;
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
     
       match /messages/{messageId} {
-        allow read: if legacyMigrationPending(userId);
-        allow write: if false;
+        allow read: if isOwner(userId);
+    
+        allow create: if isOwner(userId)
+          && validCreateMessage(request.resource.data);
+    
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['starred'])
+          && request.resource.data.starred is bool;
+    
+        allow delete: if isOwner(userId);
       }
     }
 
@@ -637,14 +438,6 @@ service cloud.firestore {
        =============================== */
     
     /* ========= HELPERS LOCALES ========= */
-    
-    // Obtiene el ownerId del usuario autenticado desde su documento
-    function horariosUserOwnerId() {
-      return isAuth()
-        && exists(/databases/$(db)/documents/apps/horarios/users/$(uid()))
-        ? get(/databases/$(db)/documents/apps/horarios/users/$(uid())).data.ownerId
-        : null;
-    }
     
     // Verifica si el usuario autenticado puede actuar en nombre de un ownerId dado.
     // Puede si: es el propio owner, o es un colaborador con ese ownerId, o tiene rol admin.
@@ -686,9 +479,12 @@ service cloud.firestore {
       return horariosIsAdmin() || horariosIsOperador();
     }
     
-    // Shortcut: cualquier rol activo del sistema (admin, operador, delivery)
-    function horariosIsAnyRole() {
-      return horariosIsAdmin() || horariosIsOperador() || horariosIsDelivery();
+    // Cualquier rol con acceso de escritura sobre stock (admin, operador, factory, manager, maxdev)
+    function horariosIsStaff() {
+      return isAuth()
+        && exists(/databases/$(db)/documents/apps/horarios/users/$(uid()))
+        && get(/databases/$(db)/documents/apps/horarios/users/$(uid())).data.role
+          in ['admin', 'operador', 'factory', 'manager', 'maxdev'];
     }
     
     
@@ -939,6 +735,74 @@ service cloud.firestore {
     }
     
     /* ===============================
+       GROUPS + CONVERSACIONES + MENSAJES
+       (sistema de mensajería interna)
+       =============================== */
+    
+    match /apps/horarios/groups/{groupId} {
+      allow read: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosCanActFor(resource.data.ownerId)
+        );
+    
+      allow create: if isAuth()
+        && (
+          request.resource.data.ownerId == uid()
+          || horariosCanActFor(request.resource.data.ownerId)
+        );
+    
+      allow update, delete: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosCanActFor(resource.data.ownerId)
+        );
+    }
+    
+    match /apps/horarios/conversaciones/{convId} {
+      allow read: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosCanActFor(resource.data.ownerId)
+        );
+    
+      allow create: if isAuth()
+        && (
+          request.resource.data.ownerId == uid()
+          || horariosCanActFor(request.resource.data.ownerId)
+        );
+    
+      allow update: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosCanActFor(resource.data.ownerId)
+        );
+    
+      allow delete: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosIsAdmin()
+          && horariosCanActFor(resource.data.ownerId)
+        );
+    }
+    
+    match /apps/horarios/mensajes/{msgId} {
+      allow read: if isAuth()
+        && (
+          resource.data.ownerId == uid()
+          || horariosCanActFor(resource.data.ownerId)
+        );
+    
+      allow create: if isAuth()
+        && (
+          request.resource.data.ownerId == uid()
+          || horariosCanActFor(request.resource.data.ownerId)
+        );
+    
+      allow update, delete: if false;
+    }
+    
+    /* ===============================
        TASKS
        =============================== */
     
@@ -1064,39 +928,12 @@ service cloud.firestore {
     
     /* ===============================
        STOCK UBICACIONES (stock por sucursal)
-       Cada usuario puede leer y editar solo el stock de su locationId.
-       Admin puede leer y editar todos.
+       Cualquier usuario autenticado puede leer y escribir.
+       El frontend controla los permisos por rol.
        =============================== */
     
     match /apps/horarios/stock_ubicaciones/{docId} {
-      // Admin ve todo el stock de su ownerId.
-      // Operador/delivery solo ve el stock de su locationId.
-     allow read: if isAuth()
-      && horariosCanActFor(resource.data.ownerId);
-    
-      // Crear: admin o operador, dentro de su ownerId
-      allow create: if horariosIsAdminOrOperador()
-        && horariosCanActFor(request.resource.data.ownerId);
-    
-      // Actualizar: admin (cualquier ubicación) o operador (solo su locationId)
-      allow update: if (
-      horariosIsAdmin()
-      && horariosCanActFor(resource.data.ownerId)
-    ) || (
-      horariosIsOperador()
-      && horariosCanActFor(resource.data.ownerId)
-    );
-    
-      // Borrar: admin o operador (solo su locationId)
-      allow delete: if horariosCanActFor(resource.data.ownerId)
-        && (
-          horariosIsAdmin()
-          || (
-            horariosIsOperador()
-            && resource.data.locationId ==
-              get(/databases/$(db)/documents/apps/horarios/users/$(uid())).data.locationId
-          )
-        );
+      allow read, write: if isAuth();
     }
     
     /* ===============================
@@ -1141,17 +978,28 @@ service cloud.firestore {
        =============================== */
     
     match /apps/horarios/remitos_log/{docId} {
-      // Todos los colaboradores pueden leer remitos de su ownerId (delivery también)
-      allow read: if horariosCanActFor(resource.data.ownerId);
+      // Owner, admin, operador, y delivery asignado pueden leer
+      allow read: if horariosCanActFor(resource.data.ownerId)
+        || (horariosIsDelivery() && resource.data.assignedDeliveryId == uid());
     
-      // Solo admin puede crear remitos (es quien despacha desde fábrica)
       allow create: if horariosIsAdminOrOperador()
-      && horariosCanActFor(request.resource.data.ownerId);
+        && horariosCanActFor(request.resource.data.ownerId);
     
-      // Admin actualiza estado del remito (preparado → en_camino → entregado)
-      // Delivery puede marcar en_camino
+      // Validación por rol para actualizaciones específicas
       allow update: if horariosCanActFor(resource.data.ownerId)
-        && (horariosIsAdmin() || horariosIsDelivery());
+        && (
+          // Admin puede actualizar cualquier campo
+          (horariosIsAdmin() && true)
+          // Operador solo puede confirmar entrega
+          || (horariosIsOperador() 
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado", "entregadoAt"])
+              && request.resource.data.estado == "entregado")
+          // Delivery solo puede marcar "en_camino"
+          || (horariosIsDelivery() 
+              && resource.data.assignedDeliveryId == uid()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado", "enCaminoAt"])
+              && request.resource.data.estado == "en_camino")
+        );
     
       allow delete: if false;
     }
@@ -1347,6 +1195,24 @@ service cloud.firestore {
     
     
     
+
+    /* ========= INJECT ========= */
+
+    // Reglas para la app control-inject
+    
+    // Documento usuario de la app
+    match /apps/control-inject/users/{userId} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+    
+    // Patrones del usuario
+    match /apps/control-inject/users/{userId}/patrones/{patronId} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+    match /apps/control-inject/usage_logs/{docId} {
+      allow create: if request.auth != null;
+      allow read:   if request.auth != null;
+    }
 
     /* ========= DENY POR DEFECTO ========= */
 

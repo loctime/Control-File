@@ -27,7 +27,10 @@ const files = [
   'horarios.rules',
 
   // Mapping (NUEVO)
-  'mapping.rules'
+  'mapping.rules',
+
+  // Inject
+  'inject.rules'
 ];
 
 // Header Firestore
